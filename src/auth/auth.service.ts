@@ -1,8 +1,16 @@
-import { Injectable } from '@nestjs/common';
-import { UsersService } from '../users/users.service';
-import { hash, compare } from 'bcrypt';
+import {
+  Injectable,
+  ConflictException,
+  UnauthorizedException,
+  NotFoundException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { UsersService } from '../users/users.service';
+import { RegisterDto } from './dto/register.dto';
+import { LoginDto } from './dto/login.dto';
+import { JwtPayload } from './jwt.strategy';
 import { Role } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class AuthService {
@@ -11,35 +19,50 @@ export class AuthService {
     private readonly jwtService: JwtService,
   ) {}
 
-  async register(name: string, email: string, password: string, role: Role) {
-    try {
-      const hashedPassword = await hash(password, 10);
-      return this.usersService.createUser({
-        name,
-        email,
-
-        password: hashedPassword,
-        role,
-      });
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    } catch (error) {
-      throw new Error('Erro ao registrar usuário');
+  async register(dto: RegisterDto) {
+    const existingUser = await this.usersService.findByEmail(dto.email);
+    if (existingUser) {
+      throw new ConflictException('Email já está em uso');
     }
+
+    const hashedPassword = await bcrypt.hash(dto.password, 10);
+
+    const user = await this.usersService.createUser({
+      name: dto.name,
+      email: dto.email,
+      password: hashedPassword,
+      role: dto.role ?? Role.ATENDENTE,
+    });
+
+    return user;
   }
 
-  async login(
-    email: string,
-    password: string,
-  ): Promise<{ access_token: string }> {
-    const user = await this.usersService.findByEmail(email);
-    if (!user) throw new Error('Usuário não encontrado');
+  async login(dto: LoginDto): Promise<{ access_token: string }> {
+    const user = await this.usersService.findByEmail(dto.email);
+    if (!user) {
+      throw new UnauthorizedException('Credenciais inválidas');
+    }
 
-    const valid = await compare(password, user.password);
-    if (!valid) throw new Error('Senha incorreta');
+    const valid = await bcrypt.compare(dto.password, user.password);
+    if (!valid) {
+      throw new UnauthorizedException('Credenciais inválidas');
+    }
 
-    const payload = { sub: user.id, role: user.role };
+    const payload: JwtPayload = {
+      sub: user.id,
+      role: user.role,
+    };
 
-    const accessToken = this.jwtService.sign(payload);
-    return { access_token: accessToken };
+    return {
+      access_token: this.jwtService.sign(payload),
+    };
+  }
+
+  async getProfile(userId: string) {
+    const user = await this.usersService.findById(userId);
+    if (!user) {
+      throw new NotFoundException('Usuário não encontrado');
+    }
+    return user;
   }
 }

@@ -3,7 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AuthService } from './auth.service';
 import { UsersService } from '../users/users.service';
 import { JwtService } from '@nestjs/jwt';
-import * as bcrypt from 'bcrypt'; // Import bcrypt
+import * as bcrypt from 'bcrypt';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -28,7 +28,6 @@ describe('AuthService', () => {
         { provide: UsersService, useValue: mockUsersService },
         {
           provide: JwtService,
-
           useValue: mockJwtService as unknown as JwtService,
         },
       ],
@@ -43,23 +42,29 @@ describe('AuthService', () => {
 
   it('should register a user', async () => {
     mockUsersService.createUser.mockResolvedValue({ id: '1', name: 'Test' });
-    const result = await service.register(
-      'Test',
-      'test@example.com',
-      '123',
-      'ADMIN',
-    );
+    const result = await service.register({
+      name: 'Test',
+      email: 'test@example.com',
+      password: '123456',
+      role: 'ADMIN',
+    });
     expect(result).toEqual({ id: '1', name: 'Test' });
+    expect(mockUsersService.createUser).toHaveBeenCalled();
   });
 
   it('should login a user and return token', async () => {
+    const hashedPassword = await bcrypt.hash('123456', 10);
     mockUsersService.findByEmail.mockResolvedValue({
       id: '1',
       email: 'test@example.com',
-      password: await bcrypt.hash('123', 10),
+      password: hashedPassword,
       role: 'ADMIN',
     });
-    const result = await service.login('test@example.com', '123');
+    const result = await service.login({
+      email: 'test@example.com',
+      password: '123456',
+    });
     expect(result).toHaveProperty('access_token');
+    expect(mockJwtService.sign).toHaveBeenCalled();
   });
 });

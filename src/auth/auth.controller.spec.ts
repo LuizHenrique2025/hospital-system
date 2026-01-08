@@ -25,24 +25,32 @@ describe('AuthController', () => {
   });
 
   it('should call register', async () => {
-    mockAuthService.register.mockResolvedValue('user-created');
+    mockAuthService.register.mockResolvedValue({ id: '1', name: 'Test' });
     const result = await controller.register({
       name: 'Test',
       email: 'test@example.com',
-      password: '123',
+      password: '123456',
       role: 'ADMIN',
     });
-    expect(result).toBe('user-created');
-    expect(mockAuthService.register).toHaveBeenCalled();
+    expect(result).toEqual({ id: '1', name: 'Test' });
+    expect(mockAuthService.register).toHaveBeenCalledWith({
+      name: 'Test',
+      email: 'test@example.com',
+      password: '123456',
+      role: 'ADMIN',
+    });
   });
 
   it('should call login', async () => {
     mockAuthService.login.mockResolvedValue({ access_token: 'token' });
     const result = await controller.login({
       email: 'test@example.com',
-      password: '123',
+      password: '123456',
     });
     expect(result).toEqual({ access_token: 'token' });
-    expect(mockAuthService.login).toHaveBeenCalled();
+    expect(mockAuthService.login).toHaveBeenCalledWith({
+      email: 'test@example.com',
+      password: '123456',
+    });
   });
 });
