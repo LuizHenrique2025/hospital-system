@@ -28,7 +28,8 @@ describe('AuthService', () => {
         { provide: UsersService, useValue: mockUsersService },
         {
           provide: JwtService,
-          useValue: mockJwtService as JwtService,
+
+          useValue: mockJwtService as unknown as JwtService,
         },
       ],
     }).compile();
