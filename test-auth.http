@@ -1,0 +1,23 @@
+### 1. REGISTRAR NOVO USUÁRIO
+POST http://localhost:3000/auth/register
+Content-Type: application/json
+
+{
+  "name": "Teste Manual",
+  "email": "teste@manual.com",
+  "password": "123456",
+  "role": "ADMIN"
+}
+
+### 2. FAZER LOGIN (copie o access_token da resposta)
+POST http://localhost:3000/auth/login
+Content-Type: application/json
+
+{
+  "email": "teste@manual.com",
+  "password": "123456"
+}
+
+### 3. GET PROFILE (substitua SEU_TOKEN_AQUI pelo token do login)
+GET http://localhost:3000/auth/profile
+Authorization: Bearer SEU_TOKEN_AQUI

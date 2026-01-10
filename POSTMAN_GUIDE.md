@@ -1,26 +1,196 @@
-# 🚀 Guia de Testes no Postman - Hospital System API
+# 📚 Guia de Configuração do Postman - Hospital System API
+
+## 🚀 Passo a Passo para Configurar
+
+### 1. Importar a Collection no Postman
+
+1. Abra o Postman
+2. Clique em **Import** (botão no canto superior esquerdo)
+3. Selecione o arquivo `Hospital_System_API.postman_collection.json`
+4. Clique em **Import**
+
+### 2. Iniciar o Servidor
+
+Antes de testar, certifique-se de que o servidor está rodando:
+
+```powershell
+npm run start:dev
+```
+
+O servidor iniciará em: `http://localhost:3000`
+
+### 3. Como Usar a Collection
+
+#### 🔐 **Fluxo de Autenticação**
+
+1. **Registrar um usuário ADMIN primeiro:**
+   - Vá em `Auth > Register (Registrar Usuário)`
+   - Use o body:
+     ```json
+     {
+       "name": "Admin Sistema",
+       "email": "admin@hospital.com",
+       "password": "admin123",
+       "role": "ADMIN"
+     }
+     ```
+   - Clique em **Send**
+
+2. **Fazer Login:**
+   - Vá em `Auth > Login`
+   - Use o body:
+     ```json
+     {
+       "email": "admin@hospital.com",
+       "password": "admin123"
+     }
+     ```
+   - Clique em **Send**
+   - ✅ **O token será salvo AUTOMATICAMENTE** na variável `accessToken`
+
+3. **Testar Perfil:**
+   - Vá em `Auth > Get Profile (Perfil)`
+   - Clique em **Send**
+   - Você verá seus dados de usuário
+
+#### 👥 **Gerenciamento de Usuários**
+
+Todas as requisições de usuários já estão configuradas com autenticação automática!
+
+1. **Criar Usuário (apenas ADMIN):**
+   - `Users > Create User (Criar Usuário - ADMIN)`
+   - Clique em **Send**
+
+2. **Listar Usuários:**
+   - `Users > Get All Users (Listar Usuários)`
+   - Clique em **Send**
+
+3. **Buscar por ID:**
+   - `Users > Get User By ID (Buscar por ID)`
+   - Substitua `USER_ID_AQUI` pelo ID real do usuário
+   - Clique em **Send**
+
+4. **Atualizar Usuário:**
+   - `Users > Update User (PUT - ADMIN)` - atualização completa
+   - `Users > Partial Update User (PATCH - ADMIN)` - atualização parcial
+   - Substitua `USER_ID_AQUI` pelo ID real
+   - Clique em **Send**
+
+5. **Deletar Usuário:**
+   - `Users > Delete User (ADMIN)`
+   - Substitua `USER_ID_AQUI` pelo ID real
+   - Clique em **Send**
+
+## 🎯 Variáveis da Collection
+
+A collection possui duas variáveis:
+
+- **baseUrl**: `http://localhost:3000` (URL base da API)
+- **accessToken**: (vazio inicialmente, preenchido automaticamente após login)
+
+### Como Alterar a URL Base
+
+Se sua API estiver em outra porta:
+
+1. Clique no nome da collection "Hospital System API"
+2. Vá em **Variables**
+3. Altere o valor de `baseUrl`
+4. Clique em **Save**
+
+## 🔑 Roles Disponíveis
+
+- **ADMIN**: Acesso total (criar, editar, deletar usuários)
+- **MEDICO**: Visualizar usuários
+- **ENFERMEIRO**: Acesso limitado
+- **ATENDENTE**: Acesso limitado
+
+## 📝 Exemplos de Dados
+
+### Registrar Usuário ATENDENTE
+```json
+{
+  "name": "João Silva",
+  "email": "joao@example.com",
+  "password": "senha123",
+  "role": "ATENDENTE"
+}
+```
+
+### Registrar Usuário MEDICO
+```json
+{
+  "name": "Dra. Maria Santos",
+  "email": "maria@example.com",
+  "password": "senha123",
+  "role": "MEDICO"
+}
+```
+
+### Login
+```json
+{
+  "email": "admin@hospital.com",
+  "password": "admin123"
+}
+```
+
+### Atualização Parcial (PATCH)
+```json
+{
+  "name": "Nome Atualizado"
+}
+```
+
+## ⚡ Recursos Automáticos da Collection
+
+✅ **Token JWT salvado automaticamente** após login  
+✅ **Autenticação Bearer configurada** em todas as rotas protegidas  
+✅ **Scripts de teste** que salvam dados importantes  
+✅ **Descrições detalhadas** em cada endpoint  
+✅ **Query parameters** pré-configurados (paginação)
+
+## 🛠️ Troubleshooting
+
+### Erro 401 (Não Autorizado)
+- Verifique se você fez login
+- O token deve estar salvo automaticamente
+- Caso contrário, faça login novamente
+
+### Erro 403 (Sem Permissão)
+- Você está tentando acessar um endpoint que requer role ADMIN
+- Faça login com um usuário ADMIN
+
+### Erro 404 (Não Encontrado)
+- Verifique se o ID do usuário existe
+- Copie um ID válido da lista de usuários
+
+### Servidor não responde
+- Certifique-se de que o servidor está rodando: `npm run start:dev`
+- Verifique se a porta 3000 está livre
+- Verifique o console do servidor para erros
+
+## 📖 Documentação Swagger
+
+Você também pode usar a documentação interativa do Swagger:
+
+```
+http://localhost:3000/api/docs
+```
+
+## 🎓 Dicas
+
+1. **Sempre faça login primeiro** antes de testar rotas protegidas
+2. **Use o Swagger** para ver os schemas detalhados
+3. **Salve IDs de usuários** criados para usar em outras requisições
+4. **Scripts automáticos** facilitam muito o workflow - o token é salvo automaticamente!
+
+---
 
 ## 📋 Pré-requisitos
 
 1. Aplicação rodando na porta 3000
 2. Banco de dados PostgreSQL configurado e rodando
 3. Arquivo `.env` configurado com as variáveis de ambiente
-
-## 🔧 Configuração Inicial
-
-### 1. Criar arquivo `.env` (copiar do `.env.example`):
-```env
-PORT=3000
-JWT_SECRET=your-super-secret-key-change-in-production
-JWT_EXPIRES_IN=1h
-FRONTEND_URL=http://localhost:3000
-DATABASE_URL=postgresql://user:password@localhost:5432/hospital_db?schema=public
-```
-
-### 2. Iniciar a aplicação:
-```bash
-npm run start:dev
-```
 
 ## 📡 Endpoints Disponíveis
 

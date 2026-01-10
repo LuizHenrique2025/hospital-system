@@ -25,12 +25,10 @@ export class AuthService {
       throw new ConflictException('Email já está em uso');
     }
 
-    const hashedPassword = await bcrypt.hash(dto.password, 10);
-
     const user = await this.usersService.createUser({
       name: dto.name,
       email: dto.email,
-      password: hashedPassword,
+      password: dto.password,
       role: dto.role ?? Role.ATENDENTE,
     });
 

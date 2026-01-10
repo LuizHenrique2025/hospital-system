@@ -1,0 +1,443 @@
+{
+	"info": {
+		"_postman_id": "hospital-system-api-2026",
+		"name": "Hospital System API",
+		"description": "Collection completa para testar a API do Sistema Hospitalar",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Auth",
+			"item": [
+				{
+					"name": "Register (Registrar Usuário)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// Salvar o token automaticamente se o registro for bem-sucedido",
+									"if (pm.response.code === 201) {",
+									"    console.log('✅ Usuário registrado com sucesso');",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"João Silva\",\n  \"email\": \"joao@example.com\",\n  \"password\": \"senha123\",\n  \"role\": \"ATENDENTE\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/auth/register",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"auth",
+								"register"
+							]
+						},
+						"description": "Registra um novo usuário no sistema.\n\n**Roles disponíveis:**\n- ADMIN\n- MEDICO\n- ENFERMEIRO\n- ATENDENTE"
+					},
+					"response": []
+				},
+				{
+					"name": "Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// Salvar o token JWT automaticamente após login",
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.collectionVariables.set('accessToken', jsonData.access_token);",
+									"    console.log('✅ Login realizado! Token salvo:', jsonData.access_token.substring(0, 20) + '...');",
+									"    console.log('✅ Agora você pode usar o endpoint Get Profile!');",
+									"} else {",
+									"    console.error('❌ Erro no login:', pm.response.json());",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"joao@example.com\",\n  \"password\": \"senha123\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/auth/login",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"auth",
+								"login"
+							]
+						},
+						"description": "Faz login e retorna um token JWT.\n\nO token será salvo automaticamente na variável `accessToken`."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Profile (Perfil)",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"// Debug: verificar se o token existe",
+									"const token = pm.collectionVariables.get('accessToken');",
+									"if (!token || token === '') {",
+									"    console.error('❌ Token não encontrado! Faça login primeiro.');",
+									"    console.log('📌 Vá em: Auth > Login e faça login antes de usar este endpoint.');",
+									"} else {",
+									"    console.log('✅ Token encontrado:', token.substring(0, 20) + '...');",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    console.log('✅ Perfil obtido com sucesso!');",
+									"} else if (pm.response.code === 401) {",
+									"    console.error('❌ Erro 401: Token inválido ou expirado');",
+									"    console.log('💡 Solução: Faça login novamente em Auth > Login');",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{accessToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/auth/profile",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"auth",
+								"profile"
+							]
+						},
+						"description": "Retorna o perfil do usuário autenticado.\n\n**Requer autenticação:** Bearer Token"
+					},
+					"response": []
+				}
+			],
+			"description": "Endpoints de autenticação"
+		},
+		{
+			"name": "Users",
+			"item": [
+				{
+					"name": "Create User (Criar Usuário - ADMIN)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{accessToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Maria Santos\",\n  \"email\": \"maria@example.com\",\n  \"password\": \"senha123\",\n  \"role\": \"MEDICO\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/users",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"users"
+							]
+						},
+						"description": "Cria um novo usuário.\n\n**Permissão:** Apenas ADMIN\n\n**Roles disponíveis:**\n- ADMIN\n- MEDICO\n- ENFERMEIRO\n- ATENDENTE"
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Users (Listar Usuários)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{accessToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/users?page=1&limit=10",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"users"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Número da página (padrão: 1)"
+								},
+								{
+									"key": "limit",
+									"value": "10",
+									"description": "Itens por página (padrão: 10)"
+								}
+							]
+						},
+						"description": "Lista todos os usuários com paginação.\n\n**Permissão:** ADMIN ou MEDICO"
+					},
+					"response": []
+				},
+				{
+					"name": "Get User By ID (Buscar por ID)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{accessToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/users/:id",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"users",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "USER_ID_AQUI",
+									"description": "ID do usuário (UUID)"
+								}
+							]
+						},
+						"description": "Busca um usuário específico por ID.\n\n**Permissão:** ADMIN ou MEDICO\n\n**Nota:** Substitua `:id` pelo UUID do usuário"
+					},
+					"response": []
+				},
+				{
+					"name": "Update User (PUT - ADMIN)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{accessToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"João Silva Atualizado\",\n  \"email\": \"joao.novo@example.com\",\n  \"role\": \"MEDICO\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/users/:id",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"users",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "USER_ID_AQUI",
+									"description": "ID do usuário (UUID)"
+								}
+							]
+						},
+						"description": "Atualiza um usuário completamente.\n\n**Permissão:** Apenas ADMIN"
+					},
+					"response": []
+				},
+				{
+					"name": "Partial Update User (PATCH - ADMIN)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{accessToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Nome Atualizado\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/users/:id",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"users",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "USER_ID_AQUI",
+									"description": "ID do usuário (UUID)"
+								}
+							]
+						},
+						"description": "Atualiza parcialmente um usuário.\n\n**Permissão:** Apenas ADMIN"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete User (ADMIN)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{accessToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/users/:id",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"users",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "USER_ID_AQUI",
+									"description": "ID do usuário (UUID)"
+								}
+							]
+						},
+						"description": "Deleta um usuário do sistema.\n\n**Permissão:** Apenas ADMIN"
+					},
+					"response": []
+				}
+			],
+			"description": "Endpoints de gerenciamento de usuários"
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:3000",
+			"type": "string"
+		},
+		{
+			"key": "accessToken",
+			"value": "",
+			"type": "string"
+		}
+	]
+}
