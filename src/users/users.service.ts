@@ -4,7 +4,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
-import { User, Role } from '@prisma/client';
+import { User, Role, Prisma } from '@prisma/client';
 import { UserResponseDto } from './dto/user-response.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { PaginationDto, PaginatedResponseDto } from './dto/pagination.dto';
@@ -86,14 +86,12 @@ export class UsersService {
         password: hashedPassword,
       },
     });
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password: _, ...userWithoutPassword } = user;
     return userWithoutPassword;
   }
 
-  async updateUser(
-    id: string,
-    data: UpdateUserDto,
-  ): Promise<UserResponseDto> {
+  async updateUser(id: string, data: UpdateUserDto): Promise<UserResponseDto> {
     const user = await this.findById(id);
     if (!user) {
       throw new NotFoundException('Usuário não encontrado');
@@ -107,9 +105,8 @@ export class UsersService {
       }
     }
 
-    const updateData: any = { ...data };
+    const updateData: Prisma.UserUpdateInput = { ...data };
 
-    // Hash da senha se fornecida
     if (data.password) {
       updateData.password = await bcrypt.hash(data.password, 10);
     }

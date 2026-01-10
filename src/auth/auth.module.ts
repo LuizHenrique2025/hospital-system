@@ -7,15 +7,19 @@ import { UsersModule } from '../users/users.module';
 import { JwtStrategy } from './jwt.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
+import type { StringValue } from 'ms';
 
 @Module({
   imports: [
     UsersModule,
     JwtModule.registerAsync({
       useFactory: (configService: ConfigService) => {
-        const secret = configService.get<string>('jwt.secret') || process.env.JWT_SECRET;
-        const expiresIn = configService.get<string>('jwt.expiresIn') || process.env.JWT_EXPIRES_IN || '1h';
-        
+        const secret =
+          configService.get<string>('jwt.secret') || process.env.JWT_SECRET;
+        const expiresInValue = (configService.get<string>('jwt.expiresIn') ||
+          process.env.JWT_EXPIRES_IN ||
+          '1h') as StringValue;
+
         if (!secret) {
           throw new Error('JWT_SECRET não está configurado');
         }
@@ -23,9 +27,9 @@ import { RolesGuard } from './guards/roles.guard';
         return {
           secret,
           signOptions: {
-            expiresIn,
+            expiresIn: expiresInValue,
           },
-        } as any;
+        };
       },
       inject: [ConfigService],
     }),
