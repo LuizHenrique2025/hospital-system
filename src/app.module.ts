@@ -1,9 +1,14 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD, Reflector } from '@nestjs/core';
+import { PrismaModule } from './prisma/prisma.module';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
+import { PatientsModule } from './patients/patients.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
+import { NursesModule } from './nurses/nurses.module';
+import { AppointmentsModule } from './appointments/appointments.module';
+import { DoctorsModule } from './doctors/doctors.module';
 import configuration from './config/configuration';
 
 @Module({
@@ -13,8 +18,13 @@ import configuration from './config/configuration';
       load: [configuration],
       envFilePath: '.env',
     }),
+    PrismaModule,
     UsersModule,
     AuthModule,
+    PatientsModule,
+    NursesModule,
+    AppointmentsModule,
+    DoctorsModule,
   ],
   providers: [
     {

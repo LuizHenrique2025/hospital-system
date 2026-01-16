@@ -10,7 +10,40 @@ datasource db {
 enum Role {
   ADMIN
   MEDICO
+  ENFERMEIRO
   ATENDENTE
+}
+
+enum Gender {
+  MASCULINO
+  FEMININO
+  OUTRO
+}
+
+enum BloodType {
+  A_POSITIVO
+  A_NEGATIVO
+  B_POSITIVO
+  B_NEGATIVO
+  AB_POSITIVO
+  AB_NEGATIVO
+  O_POSITIVO
+  O_NEGATIVO
+}
+
+enum AppointmentStatus {
+  AGENDADA
+  CONFIRMADA
+  REALIZADA
+  CANCELADA
+  NAO_COMPARECEU
+}
+
+enum AppointmentType {
+  PRIMEIRA_CONSULTA
+  RETORNO
+  URGENCIA
+  EXAME
 }
 
 model User {
@@ -21,4 +54,85 @@ model User {
   role      Role     @default(ATENDENTE)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  doctor Doctor?
+  nurse  Nurse?
+}
+
+model Patient {
+  id            String     @id @default(uuid())
+  name          String
+  cpf           String     @unique
+  rg            String?
+  birthDate     DateTime
+  gender        Gender
+  bloodType     BloodType?
+  phone         String
+  email         String?
+  address       String?
+  city          String?
+  state         String?
+  zipCode       String?
+  emergencyContact String?
+  emergencyPhone   String?
+  allergies     String?
+  medicalHistory String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  appointments Appointment[]
+
+  @@map("patients")
+}
+
+model Doctor {
+  id            String   @id @default(uuid())
+  userId        String   @unique
+  crm           String   @unique
+  crmUf         String
+  specialties   String[]
+  phone         String?
+  bio           String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+
+  @@map("doctors")
+}
+
+model Nurse {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  coren     String   @unique
+  corenUf   String
+  sector    String?
+  shift     String?
+  phone     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("nurses")
+}
+
+model Appointment {
+  id              String            @id @default(uuid())
+  patientId       String
+  doctorId        String
+  appointmentDate DateTime
+  status          AppointmentStatus @default(AGENDADA)
+  type            AppointmentType   @default(PRIMEIRA_CONSULTA)
+  notes           String?
+  diagnosis       String?
+  prescription    String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor  Doctor  @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@map("appointments")
 }
