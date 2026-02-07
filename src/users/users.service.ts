@@ -1,140 +1,66 @@
 import {
   Injectable,
-  NotFoundException,
   ConflictException,
+  UnauthorizedException,
+  NotFoundException,
 } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
-import { User, Role, Prisma } from '@prisma/client';
-import { UserResponseDto } from './dto/user-response.dto';
-import { UpdateUserDto } from './dto/update-user.dto';
-import { PaginationDto, PaginatedResponseDto } from './dto/pagination.dto';
+import { JwtService } from '@nestjs/jwt';
+import { Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
+import { UsersService } from '../users/users.service';
+import { RegisterDto } from './dto/register.dto';
+import { LoginDto } from './dto/login.dto';
+import { JwtPayload } from './types/jwt-payload.type';
+
 @Injectable()
-export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+export class AuthService {
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly jwtService: JwtService,
+  ) {}
 
-  async findByEmail(email: string): Promise<User | null> {
-    return this.prisma.user.findUnique({ where: { email } });
-  }
-
-  async findAll(
-    pagination?: PaginationDto,
-  ): Promise<PaginatedResponseDto<UserResponseDto>> {
-    const page = pagination?.page || 1;
-    const limit = pagination?.limit || 10;
-    const skip = (page - 1) * limit;
-
-    const [users, total] = await Promise.all([
-      this.prisma.user.findMany({
-        skip,
-        take: limit,
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          role: true,
-          createdAt: true,
-          updatedAt: true,
-        },
-        orderBy: {
-          createdAt: 'desc',
-        },
-      }),
-      this.prisma.user.count(),
-    ]);
-
-    return {
-      data: users,
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
-    };
-  }
-
-  async findById(id: string): Promise<UserResponseDto | null> {
-    const user = await this.prisma.user.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
-    return user;
-  }
-
-  async createUser(data: {
-    name: string;
-    email: string;
-    password: string;
-    role: Role;
-  }): Promise<UserResponseDto> {
-    const existingUser = await this.findByEmail(data.email);
+  async register(dto: RegisterDto) {
+    const existingUser = await this.usersService.findByEmail(dto.email);
     if (existingUser) {
       throw new ConflictException('Email já está em uso');
     }
 
-    const hashedPassword = await bcrypt.hash(data.password, 10);
-    const user = await this.prisma.user.create({
-      data: {
-        ...data,
-        password: hashedPassword,
-      },
+    // Cadastro público não aceita role do cliente
+    return this.usersService.createUser({
+      name: dto.name,
+      email: dto.email,
+      password: dto.password,
+      role: Role.ATENDENTE,
     });
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { password: _, ...userWithoutPassword } = user;
-    return userWithoutPassword;
   }
 
-  async updateUser(id: string, data: UpdateUserDto): Promise<UserResponseDto> {
-    const user = await this.findById(id);
+  async login(dto: LoginDto): Promise<{ access_token: string }> {
+    const user = await this.usersService.findAuthUserByEmail(dto.email);
+    if (!user) {
+      throw new UnauthorizedException('Credenciais inválidas');
+    }
+
+    const valid = await bcrypt.compare(dto.password, user.password);
+    if (!valid) {
+      throw new UnauthorizedException('Credenciais inválidas');
+    }
+
+    const payload: JwtPayload = {
+      sub: user.id,
+      role: user.role,
+    };
+
+    return {
+      access_token: this.jwtService.sign(payload),
+    };
+  }
+
+  async getProfile(userId: string) {
+    const user = await this.usersService.findById(userId);
     if (!user) {
       throw new NotFoundException('Usuário não encontrado');
     }
-
-    // Verificar se email está sendo alterado e se já existe
-    if (data.email && data.email !== user.email) {
-      const existingUser = await this.findByEmail(data.email);
-      if (existingUser) {
-        throw new ConflictException('Email já está em uso');
-      }
-    }
-
-    const updateData: Prisma.UserUpdateInput = { ...data };
-
-    if (data.password) {
-      updateData.password = await bcrypt.hash(data.password, 10);
-    }
-
-    const updatedUser = await this.prisma.user.update({
-      where: { id },
-      data: updateData,
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
-
-    return updatedUser;
-  }
-
-  async deleteUser(id: string): Promise<void> {
-    const user = await this.findById(id);
-    if (!user) {
-      throw new NotFoundException('Usuário não encontrado');
-    }
-
-    await this.prisma.user.delete({
-      where: { id },
-    });
+    return user;
   }
 }

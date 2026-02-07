@@ -1,32 +1,38 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
-import { Role } from '@prisma/client';
 
-export interface JwtPayload {
-  sub: string;
-  role: Role;
-}
+import { JwtPayload } from './types/jwt-payload.type';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor(private configService: ConfigService) {
+  constructor(private readonly configService: ConfigService) {
     const secret = configService.get<string>('jwt.secret');
+
+    /**
+     * Isso é erro de configuração do servidor (500), não erro do usuário (401).
+     * Se 'jwt.secret' não estiver configurado, a API deve falhar claramente.
+     */
     if (!secret) {
-      throw new UnauthorizedException(
-        'JWT_SECRET não está configurado. Configure a variável de ambiente JWT_SECRET.',
+      throw new InternalServerErrorException(
+        "JWT secret não está configurado. Verifique a configuração 'jwt.secret' (ex: variável de ambiente JWT_SECRET).",
       );
     }
 
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       secretOrKey: secret,
+      ignoreExpiration: false,
     });
   }
 
   validate(payload: JwtPayload) {
-    if (!payload.sub || !payload.role) {
+    if (!payload?.sub || !payload?.role) {
       throw new UnauthorizedException('Token inválido');
     }
 

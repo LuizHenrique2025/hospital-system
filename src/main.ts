@@ -8,9 +8,10 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
 
-  // Configuração CORS
+  app.setGlobalPrefix('api');
+
   app.enableCors({
-    origin: configService.get<string>('cors.origin'),
+    origin: configService.get<string>('cors.origin') ?? true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
   });
@@ -20,25 +21,15 @@ async function bootstrap() {
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
+      transformOptions: { enableImplicitConversion: true },
     }),
   );
 
-  // Configuração Swagger
   const config = new DocumentBuilder()
     .setTitle('Hospital System API')
     .setDescription('API para gerenciamento de sistema hospitalar')
     .setVersion('1.0')
-    .addBearerAuth(
-      {
-        type: 'http',
-        scheme: 'bearer',
-        bearerFormat: 'JWT',
-        name: 'JWT',
-        description: 'Enter JWT token',
-        in: 'header',
-      },
-      'JWT-auth',
-    )
+    .addBearerAuth()
     .addTag('auth', 'Endpoints de autenticação')
     .addTag('users', 'Endpoints de usuários')
     .addTag('patients', 'Endpoints de pacientes')
@@ -46,9 +37,7 @@ async function bootstrap() {
 
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document, {
-    swaggerOptions: {
-      persistAuthorization: true,
-    },
+    swaggerOptions: { persistAuthorization: true },
   });
 
   const port = configService.get<number>('port') || 3000;
@@ -56,4 +45,5 @@ async function bootstrap() {
   console.log(`🚀 Aplicação rodando na porta ${port}`);
   console.log(`📚 Documentação Swagger: http://localhost:${port}/api/docs`);
 }
+
 void bootstrap();

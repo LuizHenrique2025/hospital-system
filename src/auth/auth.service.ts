@@ -5,12 +5,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { Role } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
+
 import { UsersService } from '../users/users.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
-import { JwtPayload } from './jwt.strategy';
-import { Role } from '@prisma/client';
-import * as bcrypt from 'bcrypt';
+import { JwtPayload } from './types/jwt-payload.type';
 
 @Injectable()
 export class AuthService {
@@ -25,14 +26,24 @@ export class AuthService {
       throw new ConflictException('Email já está em uso');
     }
 
+    /**
+     * Segurança (importante):
+     * - Cadastro público NÃO deve aceitar role vindo do cliente.
+     * - Role deve ser padrão (ex.: ATENDENTE ou PACIENTE).
+     * - Criação de usuários com roles elevadas deve ser rota protegida (ADMIN).
+     */
     const user = await this.usersService.createUser({
       name: dto.name,
       email: dto.email,
       password: dto.password,
-      role: dto.role ?? Role.ATENDENTE,
+      role: Role.ATENDENTE,
     });
 
-    return user;
+    // Evitar vazar hash de senha (mesmo que seja só hash)
+    // Ideal: o UsersService já retornar um "safe user" (UserResponseDto).
+    // Aqui garantimos na marra:
+    const { password, ...safeUser } = user as any;
+    return safeUser;
   }
 
   async login(dto: LoginDto): Promise<{ access_token: string }> {
@@ -61,6 +72,9 @@ export class AuthService {
     if (!user) {
       throw new NotFoundException('Usuário não encontrado');
     }
-    return user;
+
+    // Evitar vazar senha no profile também
+    const { password, ...safeUser } = user as any;
+    return safeUser;
   }
 }
