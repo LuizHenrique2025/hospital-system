@@ -10,7 +10,10 @@ import {
 } from 'class-validator';
 
 export class CreateDoctorDto {
-  @ApiProperty({ example: 'user-uuid-here', description: 'ID do usuário com role MEDICO' })
+  @ApiProperty({
+    example: 'user-uuid-here',
+    description: 'ID do usuário com role MEDICO',
+  })
   @IsUUID()
   @IsNotEmpty()
   userId: string;

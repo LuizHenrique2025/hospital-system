@@ -1,29 +1,30 @@
 import {
-  Controller,
-  Get,
-  Post,
-  Patch,
-  Delete,
   Body,
-  Param,
-  UseGuards,
+  Controller,
+  Delete,
+  Get,
   HttpCode,
   HttpStatus,
+  Param,
+  Patch,
+  Post,
+  UseGuards,
 } from '@nestjs/common';
 import {
-  ApiTags,
   ApiBearerAuth,
   ApiOperation,
-  ApiResponse,
   ApiParam,
+  ApiResponse,
+  ApiTags,
 } from '@nestjs/swagger';
-import { NursesService } from './nurses.service';
-import { CreateNurseDto } from './dto/create-nurse.dto';
-import { UpdateNurseDto } from './dto/update-nurse.dto';
+import { Role } from '@prisma/client';
+
+import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
-import { Role } from '@prisma/client';
+import { CreateNurseDto } from './dto/create-nurse.dto';
+import { UpdateNurseDto } from './dto/update-nurse.dto';
+import { NursesService } from './nurses.service';
 
 @ApiTags('Enfermeiros')
 @ApiBearerAuth()
@@ -36,7 +37,7 @@ export class NursesController {
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Criar perfil de enfermeiro' })
   @ApiResponse({ status: 201, description: 'Enfermeiro criado com sucesso' })
-  @ApiResponse({ status: 409, description: 'COREN já cadastrado' })
+  @ApiResponse({ status: 409, description: 'COREN ja cadastrado' })
   createNurse(@Body() createNurseDto: CreateNurseDto) {
     return this.nursesService.createNurse(createNurseDto);
   }
@@ -49,46 +50,37 @@ export class NursesController {
     return this.nursesService.findAll();
   }
 
+  @Get('user/:userId')
+  @Roles(Role.ADMIN, Role.ENFERMEIRO)
+  @ApiOperation({ summary: 'Buscar enfermeiro por ID do usuario' })
+  @ApiParam({ name: 'userId', description: 'ID do usuario' })
+  findByUserId(@Param('userId') userId: string) {
+    return this.nursesService.findByUserId(userId);
+  }
+
   @Get(':id')
   @Roles(Role.ADMIN, Role.MEDICO, Role.ENFERMEIRO, Role.ATENDENTE)
   @ApiOperation({ summary: 'Buscar enfermeiro por ID' })
   @ApiParam({ name: 'id', description: 'ID do enfermeiro' })
   @ApiResponse({ status: 200, description: 'Enfermeiro encontrado' })
-  @ApiResponse({ status: 404, description: 'Enfermeiro não encontrado' })
+  @ApiResponse({ status: 404, description: 'Enfermeiro nao encontrado' })
   findOne(@Param('id') id: string) {
     return this.nursesService.findOne(id);
-  }
-
-  @Get('user/:userId')
-  @Roles(Role.ADMIN, Role.ENFERMEIRO)
-  @ApiOperation({ summary: 'Buscar enfermeiro por ID do usuário' })
-  @ApiParam({ name: 'userId', description: 'ID do usuário' })
-  @ApiResponse({ status: 200, description: 'Enfermeiro encontrado' })
-  @ApiResponse({ status: 404, description: 'Enfermeiro não encontrado' })
-  findByUserId(@Param('userId') userId: string) {
-    return this.nursesService.findByUserId(userId);
   }
 
   @Patch(':id')
   @Roles(Role.ADMIN)
   @ApiOperation({ summary: 'Atualizar enfermeiro' })
   @ApiParam({ name: 'id', description: 'ID do enfermeiro' })
-  @ApiResponse({ status: 200, description: 'Enfermeiro atualizado' })
-  @ApiResponse({ status: 404, description: 'Enfermeiro não encontrado' })
-  updateNurse(
-    @Param('id') id: string,
-    @Body() updateNurseDto: UpdateNurseDto,
-  ) {
+  updateNurse(@Param('id') id: string, @Body() updateNurseDto: UpdateNurseDto) {
     return this.nursesService.updateNurse(id, updateNurseDto);
   }
 
   @Delete(':id')
   @Roles(Role.ADMIN)
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Deletar enfermeiro (somente ADMIN)' })
+  @ApiOperation({ summary: 'Deletar enfermeiro' })
   @ApiParam({ name: 'id', description: 'ID do enfermeiro' })
-  @ApiResponse({ status: 200, description: 'Enfermeiro excluído' })
-  @ApiResponse({ status: 404, description: 'Enfermeiro não encontrado' })
   deleteNurse(@Param('id') id: string) {
     return this.nursesService.deleteNurse(id);
   }

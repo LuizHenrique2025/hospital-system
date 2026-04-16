@@ -11,6 +11,7 @@ describe('AuthService', () => {
   const mockUsersService = {
     createUser: jest.fn(),
     findByEmail: jest.fn(),
+    findAuthUserByEmail: jest.fn(),
   };
 
   const mockJwtService = {
@@ -54,7 +55,7 @@ describe('AuthService', () => {
 
   it('should login a user and return token', async () => {
     const hashedPassword = await bcrypt.hash('123456', 10);
-    mockUsersService.findByEmail.mockResolvedValue({
+    mockUsersService.findAuthUserByEmail.mockResolvedValue({
       id: '1',
       email: 'test@example.com',
       password: hashedPassword,

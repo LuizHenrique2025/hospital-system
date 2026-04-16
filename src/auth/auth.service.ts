@@ -1,16 +1,17 @@
 import {
-  Injectable,
   ConflictException,
-  UnauthorizedException,
+  Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
+import { UserResponseDto } from '../users/dto/user-response.dto';
 import { UsersService } from '../users/users.service';
-import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { RegisterDto } from './dto/register.dto';
 import { JwtPayload } from './types/jwt-payload.type';
 
 @Injectable()
@@ -20,41 +21,32 @@ export class AuthService {
     private readonly jwtService: JwtService,
   ) {}
 
-  async register(dto: RegisterDto) {
+  async register(dto: RegisterDto): Promise<UserResponseDto> {
     const existingUser = await this.usersService.findByEmail(dto.email);
+
     if (existingUser) {
-      throw new ConflictException('Email já está em uso');
+      throw new ConflictException('Email ja esta em uso');
     }
 
-    /**
-     * Segurança (importante):
-     * - Cadastro público NÃO deve aceitar role vindo do cliente.
-     * - Role deve ser padrão (ex.: ATENDENTE ou PACIENTE).
-     * - Criação de usuários com roles elevadas deve ser rota protegida (ADMIN).
-     */
-    const user = await this.usersService.createUser({
+    return this.usersService.createUser({
       name: dto.name,
       email: dto.email,
       password: dto.password,
       role: Role.ATENDENTE,
     });
-
-    // Evitar vazar hash de senha (mesmo que seja só hash)
-    // Ideal: o UsersService já retornar um "safe user" (UserResponseDto).
-    // Aqui garantimos na marra:
-    const { password, ...safeUser } = user as any;
-    return safeUser;
   }
 
   async login(dto: LoginDto): Promise<{ access_token: string }> {
-    const user = await this.usersService.findByEmail(dto.email);
+    const user = await this.usersService.findAuthUserByEmail(dto.email);
+
     if (!user) {
-      throw new UnauthorizedException('Credenciais inválidas');
+      throw new UnauthorizedException('Credenciais invalidas');
     }
 
     const valid = await bcrypt.compare(dto.password, user.password);
+
     if (!valid) {
-      throw new UnauthorizedException('Credenciais inválidas');
+      throw new UnauthorizedException('Credenciais invalidas');
     }
 
     const payload: JwtPayload = {
@@ -67,14 +59,13 @@ export class AuthService {
     };
   }
 
-  async getProfile(userId: string) {
+  async getProfile(userId: string): Promise<UserResponseDto> {
     const user = await this.usersService.findById(userId);
+
     if (!user) {
-      throw new NotFoundException('Usuário não encontrado');
+      throw new NotFoundException('Usuario nao encontrado');
     }
 
-    // Evitar vazar senha no profile também
-    const { password, ...safeUser } = user as any;
-    return safeUser;
+    return user;
   }
 }

@@ -1,33 +1,33 @@
 import {
-  Controller,
-  Get,
-  Post,
-  Put,
-  Patch,
-  Delete,
   Body,
-  Param,
-  Query,
-  UseGuards,
+  Controller,
+  Delete,
+  Get,
   HttpCode,
   HttpStatus,
+  Param,
+  Patch,
+  Post,
+  Put,
+  Query,
+  UseGuards,
 } from '@nestjs/common';
 import {
-  ApiTags,
   ApiBearerAuth,
   ApiOperation,
-  ApiResponse,
   ApiParam,
-  ApiQuery,
+  ApiResponse,
+  ApiTags,
 } from '@nestjs/swagger';
-import { PatientsService } from './patients.service';
-import { CreatePatientDto } from './dto/create-patient.dto';
-import { UpdatePatientDto } from './dto/update-patient.dto';
-import { QueryPatientDto } from './dto/query-patient.dto';
+import { Role } from '@prisma/client';
+
+import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
-import { Role } from '@prisma/client';
+import { CreatePatientDto } from './dto/create-patient.dto';
+import { QueryPatientDto } from './dto/query-patient.dto';
+import { UpdatePatientDto } from './dto/update-patient.dto';
+import { PatientsService } from './patients.service';
 
 @ApiTags('Pacientes')
 @ApiBearerAuth()
@@ -40,7 +40,7 @@ export class PatientsController {
   @Roles(Role.ADMIN, Role.ATENDENTE)
   @ApiOperation({ summary: 'Criar novo paciente' })
   @ApiResponse({ status: 201, description: 'Paciente criado com sucesso' })
-  @ApiResponse({ status: 409, description: 'CPF já cadastrado' })
+  @ApiResponse({ status: 409, description: 'CPF ja cadastrado' })
   createPatient(@Body() createPatientDto: CreatePatientDto) {
     return this.patientsService.createPatient(createPatientDto);
   }
@@ -53,32 +53,30 @@ export class PatientsController {
     return this.patientsService.findAll(query);
   }
 
-  @Get(':id')
-  @Roles(Role.ADMIN, Role.MEDICO, Role.ATENDENTE)
-  @ApiOperation({ summary: 'Buscar paciente por ID' })
-  @ApiParam({ name: 'id', description: 'ID do paciente' })
-  @ApiResponse({ status: 200, description: 'Paciente encontrado' })
-  @ApiResponse({ status: 404, description: 'Paciente não encontrado' })
-  findOne(@Param('id') id: string) {
-    return this.patientsService.findOne(id);
-  }
-
   @Get('cpf/:cpf')
   @Roles(Role.ADMIN, Role.MEDICO, Role.ATENDENTE)
   @ApiOperation({ summary: 'Buscar paciente por CPF' })
   @ApiParam({ name: 'cpf', description: 'CPF do paciente' })
   @ApiResponse({ status: 200, description: 'Paciente encontrado' })
-  @ApiResponse({ status: 404, description: 'Paciente não encontrado' })
+  @ApiResponse({ status: 404, description: 'Paciente nao encontrado' })
   findByCpf(@Param('cpf') cpf: string) {
     return this.patientsService.findByCpf(cpf);
   }
 
+  @Get(':id')
+  @Roles(Role.ADMIN, Role.MEDICO, Role.ATENDENTE)
+  @ApiOperation({ summary: 'Buscar paciente por ID' })
+  @ApiParam({ name: 'id', description: 'ID do paciente' })
+  @ApiResponse({ status: 200, description: 'Paciente encontrado' })
+  @ApiResponse({ status: 404, description: 'Paciente nao encontrado' })
+  findOne(@Param('id') id: string) {
+    return this.patientsService.findOne(id);
+  }
+
   @Put(':id')
   @Roles(Role.ADMIN, Role.ATENDENTE)
-  @ApiOperation({ summary: 'Atualizar paciente completamente (PUT)' })
+  @ApiOperation({ summary: 'Atualizar paciente completamente' })
   @ApiParam({ name: 'id', description: 'ID do paciente' })
-  @ApiResponse({ status: 200, description: 'Paciente atualizado' })
-  @ApiResponse({ status: 404, description: 'Paciente não encontrado' })
   updatePatientPut(
     @Param('id') id: string,
     @Body() updatePatientDto: UpdatePatientDto,
@@ -88,10 +86,8 @@ export class PatientsController {
 
   @Patch(':id')
   @Roles(Role.ADMIN, Role.ATENDENTE)
-  @ApiOperation({ summary: 'Atualizar paciente parcialmente (PATCH)' })
+  @ApiOperation({ summary: 'Atualizar paciente parcialmente' })
   @ApiParam({ name: 'id', description: 'ID do paciente' })
-  @ApiResponse({ status: 200, description: 'Paciente atualizado' })
-  @ApiResponse({ status: 404, description: 'Paciente não encontrado' })
   updatePatientPatch(
     @Param('id') id: string,
     @Body() updatePatientDto: UpdatePatientDto,
@@ -102,10 +98,8 @@ export class PatientsController {
   @Delete(':id')
   @Roles(Role.ADMIN)
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Deletar paciente (somente ADMIN)' })
+  @ApiOperation({ summary: 'Deletar paciente' })
   @ApiParam({ name: 'id', description: 'ID do paciente' })
-  @ApiResponse({ status: 200, description: 'Paciente excluído' })
-  @ApiResponse({ status: 404, description: 'Paciente não encontrado' })
   deletePatient(@Param('id') id: string) {
     return this.patientsService.deletePatient(id);
   }

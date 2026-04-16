@@ -27,7 +27,7 @@ export class AuthController {
     type: UserResponseDto,
   })
   @ApiResponse({ status: 409, description: 'Email já está em uso' })
-  async register(@Body() dto: RegisterDto) {
+  async register(@Body() dto: RegisterDto): Promise<UserResponseDto> {
     return this.authService.register(dto);
   }
 
@@ -48,7 +48,7 @@ export class AuthController {
     },
   })
   @ApiResponse({ status: 401, description: 'Credenciais inválidas' })
-  async login(@Body() dto: LoginDto) {
+  async login(@Body() dto: LoginDto): Promise<{ access_token: string }> {
     return this.authService.login(dto);
   }
 
@@ -63,7 +63,9 @@ export class AuthController {
   })
   @ApiResponse({ status: 401, description: 'Não autorizado' })
   @ApiResponse({ status: 404, description: 'Usuário não encontrado' })
-  async getProfile(@GetUser() user: { userId: string; role: string }) {
+  async getProfile(
+    @GetUser() user: { userId: string; role: string },
+  ): Promise<UserResponseDto> {
     return this.authService.getProfile(user.userId);
   }
 }

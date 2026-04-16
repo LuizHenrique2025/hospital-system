@@ -1,66 +1,142 @@
 import {
-  Injectable,
   ConflictException,
-  UnauthorizedException,
+  Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
-import { Role } from '@prisma/client';
+import { Prisma, Role, User } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
-import { UsersService } from '../users/users.service';
-import { RegisterDto } from './dto/register.dto';
-import { LoginDto } from './dto/login.dto';
-import { JwtPayload } from './types/jwt-payload.type';
+import { PrismaService } from '../prisma/prisma.service';
+import { PaginationDto, PaginatedResponseDto } from './dto/pagination.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
+import { UserResponseDto } from './dto/user-response.dto';
+
+type AuthUser = Pick<User, 'id' | 'email' | 'password' | 'role'>;
 
 @Injectable()
-export class AuthService {
-  constructor(
-    private readonly usersService: UsersService,
-    private readonly jwtService: JwtService,
-  ) {}
+export class UsersService {
+  constructor(private readonly prisma: PrismaService) {}
 
-  async register(dto: RegisterDto) {
-    const existingUser = await this.usersService.findByEmail(dto.email);
-    if (existingUser) {
-      throw new ConflictException('Email já está em uso');
-    }
-
-    // Cadastro público não aceita role do cliente
-    return this.usersService.createUser({
-      name: dto.name,
-      email: dto.email,
-      password: dto.password,
-      role: Role.ATENDENTE,
+  async findByEmail(email: string): Promise<AuthUser | null> {
+    return this.prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+        password: true,
+        role: true,
+      },
     });
   }
 
-  async login(dto: LoginDto): Promise<{ access_token: string }> {
-    const user = await this.usersService.findAuthUserByEmail(dto.email);
-    if (!user) {
-      throw new UnauthorizedException('Credenciais inválidas');
-    }
+  async findAuthUserByEmail(email: string): Promise<AuthUser | null> {
+    return this.findByEmail(email);
+  }
 
-    const valid = await bcrypt.compare(dto.password, user.password);
-    if (!valid) {
-      throw new UnauthorizedException('Credenciais inválidas');
-    }
+  async findAll(
+    pagination?: PaginationDto,
+  ): Promise<PaginatedResponseDto<UserResponseDto>> {
+    const page = pagination?.page ?? 1;
+    const limit = pagination?.limit ?? 10;
+    const skip = (page - 1) * limit;
 
-    const payload: JwtPayload = {
-      sub: user.id,
-      role: user.role,
-    };
+    const [users, total] = await Promise.all([
+      this.prisma.user.findMany({
+        skip,
+        take: limit,
+        select: this.safeUserSelect(),
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.user.count(),
+    ]);
 
     return {
-      access_token: this.jwtService.sign(payload),
+      data: users,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
     };
   }
 
-  async getProfile(userId: string) {
-    const user = await this.usersService.findById(userId);
-    if (!user) {
-      throw new NotFoundException('Usuário não encontrado');
+  async findById(id: string): Promise<UserResponseDto | null> {
+    return this.prisma.user.findUnique({
+      where: { id },
+      select: this.safeUserSelect(),
+    });
+  }
+
+  async createUser(data: {
+    name: string;
+    email: string;
+    password: string;
+    role: Role;
+  }): Promise<UserResponseDto> {
+    const existingUser = await this.findByEmail(data.email);
+
+    if (existingUser) {
+      throw new ConflictException('Email ja esta em uso');
     }
-    return user;
+
+    const hashedPassword = await bcrypt.hash(data.password, 10);
+
+    return this.prisma.user.create({
+      data: {
+        ...data,
+        password: hashedPassword,
+      },
+      select: this.safeUserSelect(),
+    });
+  }
+
+  async updateUser(id: string, data: UpdateUserDto): Promise<UserResponseDto> {
+    const user = await this.findById(id);
+
+    if (!user) {
+      throw new NotFoundException('Usuario nao encontrado');
+    }
+
+    if (data.email && data.email !== user.email) {
+      const existingUser = await this.findByEmail(data.email);
+
+      if (existingUser) {
+        throw new ConflictException('Email ja esta em uso');
+      }
+    }
+
+    const updateData: Prisma.UserUpdateInput = { ...data };
+
+    if (data.password) {
+      updateData.password = await bcrypt.hash(data.password, 10);
+    }
+
+    return this.prisma.user.update({
+      where: { id },
+      data: updateData,
+      select: this.safeUserSelect(),
+    });
+  }
+
+  async deleteUser(id: string): Promise<void> {
+    const user = await this.findById(id);
+
+    if (!user) {
+      throw new NotFoundException('Usuario nao encontrado');
+    }
+
+    await this.prisma.user.delete({
+      where: { id },
+    });
+  }
+
+  private safeUserSelect(): Prisma.UserSelect {
+    return {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      createdAt: true,
+      updatedAt: true,
+    };
   }
 }
