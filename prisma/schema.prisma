@@ -90,13 +90,20 @@ model Doctor {
   userId        String   @unique
   crm           String   @unique
   crmUf         String
+  sectorId      String?
   specialties   String[]
   phone         String?
+  address       String?
+  city          String?
+  state         String?
+  zipCode       String?
+  documents     String[] @default([])
   bio           String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sector       Sector?       @relation(fields: [sectorId], references: [id], onDelete: SetNull)
   appointments Appointment[]
 
   @@map("doctors")
@@ -107,15 +114,36 @@ model Nurse {
   userId    String   @unique
   coren     String   @unique
   corenUf   String
-  sector    String?
+  sectorId  String?
   shift     String?
   phone     String?
+  address   String?
+  city      String?
+  state     String?
+  zipCode   String?
+  documents String[] @default([])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sector Sector? @relation(fields: [sectorId], references: [id], onDelete: SetNull)
 
   @@map("nurses")
+}
+
+model Sector {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  code        String   @unique
+  description String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  doctors Doctor[]
+  nurses  Nurse[]
+
+  @@map("sectors")
 }
 
 model Appointment {

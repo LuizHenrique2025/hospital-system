@@ -1,8 +1,8 @@
 import {
+  BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
-  ConflictException,
-  BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateNurseDto } from './dto/create-nurse.dto';
@@ -19,11 +19,11 @@ export class NursesService {
     });
 
     if (!user) {
-      throw new NotFoundException('Usuário não encontrado');
+      throw new NotFoundException('Usuario nao encontrado');
     }
 
     if (user.role !== Role.ENFERMEIRO) {
-      throw new BadRequestException('Usuário deve ter role ENFERMEIRO');
+      throw new BadRequestException('Usuario deve ter role ENFERMEIRO');
     }
 
     const existingNurse = await this.prisma.nurse.findUnique({
@@ -31,7 +31,7 @@ export class NursesService {
     });
 
     if (existingNurse) {
-      throw new ConflictException('Usuário já possui perfil de enfermeiro');
+      throw new ConflictException('Usuario ja possui perfil de enfermeiro');
     }
 
     const existingCoren = await this.prisma.nurse.findUnique({
@@ -39,20 +39,25 @@ export class NursesService {
     });
 
     if (existingCoren) {
-      throw new ConflictException('COREN já cadastrado');
+      throw new ConflictException('COREN ja cadastrado');
     }
 
-    const nurse = await this.prisma.nurse.create({
-      data: dto,
-      include: { user: true },
-    });
+    if (dto.sectorId) {
+      await this.ensureSectorExists(dto.sectorId);
+    }
 
-    return nurse;
+    return this.prisma.nurse.create({
+      data: {
+        ...dto,
+        documents: dto.documents ?? [],
+      },
+      include: this.defaultInclude(),
+    });
   }
 
   async findAll() {
     return this.prisma.nurse.findMany({
-      include: { user: { select: { id: true, name: true, email: true } } },
+      include: this.defaultInclude(),
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -60,11 +65,11 @@ export class NursesService {
   async findOne(id: string) {
     const nurse = await this.prisma.nurse.findUnique({
       where: { id },
-      include: { user: { select: { id: true, name: true, email: true } } },
+      include: this.defaultInclude(),
     });
 
     if (!nurse) {
-      throw new NotFoundException('Enfermeiro não encontrado');
+      throw new NotFoundException('Enfermeiro nao encontrado');
     }
 
     return nurse;
@@ -73,11 +78,11 @@ export class NursesService {
   async findByUserId(userId: string) {
     const nurse = await this.prisma.nurse.findUnique({
       where: { userId },
-      include: { user: { select: { id: true, name: true, email: true } } },
+      include: this.defaultInclude(),
     });
 
     if (!nurse) {
-      throw new NotFoundException('Enfermeiro não encontrado');
+      throw new NotFoundException('Enfermeiro nao encontrado');
     }
 
     return nurse;
@@ -92,17 +97,19 @@ export class NursesService {
       });
 
       if (existingCoren && existingCoren.id !== id) {
-        throw new ConflictException('COREN já está em uso');
+        throw new ConflictException('COREN ja esta em uso');
       }
     }
 
-    const nurse = await this.prisma.nurse.update({
+    if (dto.sectorId) {
+      await this.ensureSectorExists(dto.sectorId);
+    }
+
+    return this.prisma.nurse.update({
       where: { id },
       data: dto,
-      include: { user: { select: { id: true, name: true, email: true } } },
+      include: this.defaultInclude(),
     });
-
-    return nurse;
   }
 
   async deleteNurse(id: string) {
@@ -112,6 +119,37 @@ export class NursesService {
       where: { id },
     });
 
-    return { message: 'Enfermeiro excluído com sucesso' };
+    return { message: 'Enfermeiro excluido com sucesso' };
+  }
+
+  private async ensureSectorExists(sectorId: string) {
+    const sector = await this.prisma.sector.findUnique({
+      where: { id: sectorId },
+    });
+
+    if (!sector) {
+      throw new NotFoundException('Setor nao encontrado');
+    }
+  }
+
+  private defaultInclude() {
+    return {
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+        },
+      },
+      sector: {
+        select: {
+          id: true,
+          name: true,
+          code: true,
+          active: true,
+        },
+      },
+    };
   }
 }

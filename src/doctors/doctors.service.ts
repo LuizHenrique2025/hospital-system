@@ -1,8 +1,8 @@
 import {
+  BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
-  ConflictException,
-  BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateDoctorDto } from './dto/create-doctor.dto';
@@ -19,11 +19,11 @@ export class DoctorsService {
     });
 
     if (!user) {
-      throw new NotFoundException('Usuário não encontrado');
+      throw new NotFoundException('Usuario nao encontrado');
     }
 
     if (user.role !== Role.MEDICO) {
-      throw new BadRequestException('Usuário deve ter role MEDICO');
+      throw new BadRequestException('Usuario deve ter role MEDICO');
     }
 
     const existingDoctor = await this.prisma.doctor.findUnique({
@@ -31,7 +31,7 @@ export class DoctorsService {
     });
 
     if (existingDoctor) {
-      throw new ConflictException('Usuário já possui perfil de médico');
+      throw new ConflictException('Usuario ja possui perfil de medico');
     }
 
     const existingCrm = await this.prisma.doctor.findUnique({
@@ -39,20 +39,25 @@ export class DoctorsService {
     });
 
     if (existingCrm) {
-      throw new ConflictException('CRM já cadastrado');
+      throw new ConflictException('CRM ja cadastrado');
     }
 
-    const doctor = await this.prisma.doctor.create({
-      data: dto,
-      include: { user: true },
-    });
+    if (dto.sectorId) {
+      await this.ensureSectorExists(dto.sectorId);
+    }
 
-    return doctor;
+    return this.prisma.doctor.create({
+      data: {
+        ...dto,
+        documents: dto.documents ?? [],
+      },
+      include: this.defaultInclude(),
+    });
   }
 
   async findAll() {
     return this.prisma.doctor.findMany({
-      include: { user: { select: { id: true, name: true, email: true } } },
+      include: this.defaultInclude(),
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -60,11 +65,11 @@ export class DoctorsService {
   async findOne(id: string) {
     const doctor = await this.prisma.doctor.findUnique({
       where: { id },
-      include: { user: { select: { id: true, name: true, email: true } } },
+      include: this.defaultInclude(),
     });
 
     if (!doctor) {
-      throw new NotFoundException('Médico não encontrado');
+      throw new NotFoundException('Medico nao encontrado');
     }
 
     return doctor;
@@ -73,11 +78,11 @@ export class DoctorsService {
   async findByUserId(userId: string) {
     const doctor = await this.prisma.doctor.findUnique({
       where: { userId },
-      include: { user: { select: { id: true, name: true, email: true } } },
+      include: this.defaultInclude(),
     });
 
     if (!doctor) {
-      throw new NotFoundException('Médico não encontrado');
+      throw new NotFoundException('Medico nao encontrado');
     }
 
     return doctor;
@@ -92,17 +97,19 @@ export class DoctorsService {
       });
 
       if (existingCrm && existingCrm.id !== id) {
-        throw new ConflictException('CRM já está em uso');
+        throw new ConflictException('CRM ja esta em uso');
       }
     }
 
-    const doctor = await this.prisma.doctor.update({
+    if (dto.sectorId) {
+      await this.ensureSectorExists(dto.sectorId);
+    }
+
+    return this.prisma.doctor.update({
       where: { id },
       data: dto,
-      include: { user: { select: { id: true, name: true, email: true } } },
+      include: this.defaultInclude(),
     });
-
-    return doctor;
   }
 
   async deleteDoctor(id: string) {
@@ -112,6 +119,37 @@ export class DoctorsService {
       where: { id },
     });
 
-    return { message: 'Médico excluído com sucesso' };
+    return { message: 'Medico excluido com sucesso' };
+  }
+
+  private async ensureSectorExists(sectorId: string) {
+    const sector = await this.prisma.sector.findUnique({
+      where: { id: sectorId },
+    });
+
+    if (!sector) {
+      throw new NotFoundException('Setor nao encontrado');
+    }
+  }
+
+  private defaultInclude() {
+    return {
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+        },
+      },
+      sector: {
+        select: {
+          id: true,
+          name: true,
+          code: true,
+          active: true,
+        },
+      },
+    };
   }
 }

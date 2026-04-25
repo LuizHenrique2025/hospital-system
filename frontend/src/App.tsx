@@ -20,9 +20,11 @@ import { API_URL, apiRequest } from './lib/api';
 import type {
   Appointment,
   Doctor,
+  Nurse,
   PaginatedResponse,
   Patient,
   Role,
+  Sector,
   UserProfile,
 } from './lib/types';
 
@@ -35,6 +37,8 @@ type DashboardCache = {
   patients: Patient[];
   patientTotal: number;
   doctors: Doctor[];
+  nurses: Nurse[];
+  sectors: Sector[];
   appointments: Appointment[];
 };
 
@@ -63,9 +67,38 @@ type DoctorFormState = {
   password: string;
   crm: string;
   crmUf: string;
+  sectorId: string;
   specialties: string;
   phone: string;
+  address: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  documents: string;
   bio: string;
+};
+
+type NurseFormState = {
+  name: string;
+  email: string;
+  password: string;
+  coren: string;
+  corenUf: string;
+  sectorId: string;
+  shift: string;
+  phone: string;
+  address: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  documents: string;
+};
+
+type SectorFormState = {
+  name: string;
+  code: string;
+  description: string;
+  active: boolean;
 };
 
 type AppointmentFormState = {
@@ -164,9 +197,38 @@ const initialDoctorForm: DoctorFormState = {
   password: '',
   crm: '',
   crmUf: 'SP',
+  sectorId: '',
   specialties: '',
   phone: '',
+  address: '',
+  city: '',
+  state: '',
+  zipCode: '',
+  documents: '',
   bio: '',
+};
+
+const initialNurseForm: NurseFormState = {
+  name: '',
+  email: '',
+  password: '',
+  coren: '',
+  corenUf: 'SC',
+  sectorId: '',
+  shift: '',
+  phone: '',
+  address: '',
+  city: '',
+  state: '',
+  zipCode: '',
+  documents: '',
+};
+
+const initialSectorForm: SectorFormState = {
+  name: '',
+  code: '',
+  description: '',
+  active: true,
 };
 
 const initialAppointmentForm: AppointmentFormState = {
@@ -202,6 +264,8 @@ function App() {
   });
   const [patientForm, setPatientForm] = useState(initialPatientForm);
   const [doctorForm, setDoctorForm] = useState(initialDoctorForm);
+  const [nurseForm, setNurseForm] = useState(initialNurseForm);
+  const [sectorForm, setSectorForm] = useState(initialSectorForm);
   const [appointmentForm, setAppointmentForm] = useState(initialAppointmentForm);
   const [patients, setPatients] = useState<Patient[]>(
     cachedDashboard?.patients ?? [],
@@ -212,6 +276,8 @@ function App() {
   const [doctors, setDoctors] = useState<Doctor[]>(
     cachedDashboard?.doctors ?? [],
   );
+  const [nurses, setNurses] = useState<Nurse[]>(cachedDashboard?.nurses ?? []);
+  const [sectors, setSectors] = useState<Sector[]>(cachedDashboard?.sectors ?? []);
   const [appointments, setAppointments] = useState<Appointment[]>(
     cachedDashboard?.appointments ?? [],
   );
@@ -225,7 +291,14 @@ function App() {
       setIsBusy(true);
 
       try {
-        const [profile, patientResponse, doctorResponse, appointmentResponse] =
+        const [
+          profile,
+          patientResponse,
+          doctorResponse,
+          nurseResponse,
+          sectorResponse,
+          appointmentResponse,
+        ] =
           await Promise.all([
             apiRequest<UserProfile>('/auth/profile', { token }),
             apiRequest<PaginatedResponse<Patient>>(
@@ -235,6 +308,8 @@ function App() {
               },
             ),
             apiRequest<Doctor[]>('/doctors', { token }),
+            apiRequest<Nurse[]>('/nurses', { token }),
+            apiRequest<Sector[]>('/sectors', { token }),
             apiRequest<Appointment[]>('/appointments', { token }),
           ]);
 
@@ -246,23 +321,27 @@ function App() {
         const nextSession = { token, profile };
 
         startTransition(() => {
-          setSession(nextSession);
-          setPatients(nextPatients);
-          setPatientTotal(nextPatientTotal);
-          setDoctors(doctorResponse);
-          setAppointments(appointmentResponse);
-        });
+            setSession(nextSession);
+            setPatients(nextPatients);
+            setPatientTotal(nextPatientTotal);
+            setDoctors(doctorResponse);
+            setNurses(nurseResponse);
+            setSectors(sectorResponse);
+            setAppointments(appointmentResponse);
+          });
 
         localStorage.setItem(storageKey, JSON.stringify(nextSession));
         localStorage.setItem(
           dashboardCacheKey,
           JSON.stringify({
-            patients: nextPatients,
-            patientTotal: nextPatientTotal,
-            doctors: doctorResponse,
-            appointments: appointmentResponse,
-          }),
-        );
+              patients: nextPatients,
+              patientTotal: nextPatientTotal,
+              doctors: doctorResponse,
+              nurses: nurseResponse,
+              sectors: sectorResponse,
+              appointments: appointmentResponse,
+            }),
+          );
 
         setNotice({
           kind: 'success',
@@ -336,12 +415,16 @@ function App() {
   function handleLogout() {
     localStorage.removeItem(storageKey);
     localStorage.removeItem(dashboardCacheKey);
-    setSession(null);
-    setPatients([]);
-    setDoctors([]);
-    setAppointments([]);
-    setPatientTotal(0);
-    setAppointmentForm(initialAppointmentForm);
+      setSession(null);
+      setPatients([]);
+      setDoctors([]);
+      setNurses([]);
+      setSectors([]);
+      setAppointments([]);
+      setPatientTotal(0);
+      setNurseForm(initialNurseForm);
+      setSectorForm(initialSectorForm);
+      setAppointmentForm(initialAppointmentForm);
     setNotice({
       kind: 'info',
       text: 'Sessao encerrada. Volte quando quiser.',
@@ -418,11 +501,17 @@ function App() {
           userId: user.id,
           crm: doctorForm.crm,
           crmUf: doctorForm.crmUf.toUpperCase(),
+          sectorId: doctorForm.sectorId || undefined,
           specialties: doctorForm.specialties
             .split(',')
             .map((item) => item.trim())
             .filter(Boolean),
           phone: doctorForm.phone || undefined,
+          address: doctorForm.address || undefined,
+          city: doctorForm.city || undefined,
+          state: doctorForm.state || undefined,
+          zipCode: doctorForm.zipCode || undefined,
+          documents: parseDocumentReferences(doctorForm.documents),
           bio: doctorForm.bio || undefined,
         },
       });
@@ -441,6 +530,103 @@ function App() {
           error instanceof Error
             ? error.message
             : 'Nao foi possivel cadastrar o medico.',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function createNurse(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!session?.token) {
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const user = await apiRequest<UserProfile>('/users', {
+        token: session.token,
+        body: {
+          name: nurseForm.name,
+          email: nurseForm.email,
+          password: nurseForm.password,
+          role: 'ENFERMEIRO' satisfies Role,
+        },
+      });
+
+      await apiRequest<Nurse>('/nurses', {
+        token: session.token,
+        body: {
+          userId: user.id,
+          coren: nurseForm.coren,
+          corenUf: nurseForm.corenUf.toUpperCase(),
+          sectorId: nurseForm.sectorId || undefined,
+          shift: nurseForm.shift || undefined,
+          phone: nurseForm.phone || undefined,
+          address: nurseForm.address || undefined,
+          city: nurseForm.city || undefined,
+          state: nurseForm.state || undefined,
+          zipCode: nurseForm.zipCode || undefined,
+          documents: parseDocumentReferences(nurseForm.documents),
+        },
+      });
+
+      setNurseForm(initialNurseForm);
+      await loadDashboard(session.token);
+      setNotice({
+        kind: 'success',
+        text: 'Enfermeiro cadastrado com sucesso.',
+      });
+      navigate('/equipe');
+    } catch (error) {
+      setNotice({
+        kind: 'error',
+        text:
+          error instanceof Error
+            ? error.message
+            : 'Nao foi possivel cadastrar o enfermeiro.',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function createSector(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!session?.token) {
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      await apiRequest<Sector>('/sectors', {
+        token: session.token,
+        body: {
+          name: sectorForm.name,
+          code: sectorForm.code.toUpperCase(),
+          description: sectorForm.description || undefined,
+          active: sectorForm.active,
+        },
+      });
+
+      setSectorForm(initialSectorForm);
+      await loadDashboard(session.token);
+      setNotice({
+        kind: 'success',
+        text: 'Setor cadastrado com sucesso.',
+      });
+      navigate('/equipe');
+    } catch (error) {
+      setNotice({
+        kind: 'error',
+        text:
+          error instanceof Error
+            ? error.message
+            : 'Nao foi possivel cadastrar o setor.',
       });
     } finally {
       setIsSubmitting(false);
@@ -658,17 +844,25 @@ function App() {
         />
         <Route
           path="/equipe"
-          element={
-            <TeamPage
-              doctors={doctors}
-              form={doctorForm}
-              isSubmitting={isSubmitting}
-              onPrepareDoctor={prepareDoctorForScheduling}
-              onSubmit={createDoctor}
-              setForm={setDoctorForm}
-            />
-          }
-        />
+            element={
+              <TeamPage
+                doctors={doctors}
+                nurses={nurses}
+                sectors={sectors}
+                form={doctorForm}
+                nurseForm={nurseForm}
+                sectorForm={sectorForm}
+                isSubmitting={isSubmitting}
+                onNurseSubmit={createNurse}
+                onSectorSubmit={createSector}
+                onPrepareDoctor={prepareDoctorForScheduling}
+                onSubmit={createDoctor}
+                setForm={setDoctorForm}
+                setNurseForm={setNurseForm}
+                setSectorForm={setSectorForm}
+              />
+            }
+          />
         <Route path="*" element={<Navigate replace to="/central" />} />
       </Route>
     </Routes>
@@ -1902,6 +2096,8 @@ function CareRecordPanel({
     );
   }
 
+  const activeAppointment = appointment;
+
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -1909,7 +2105,7 @@ function CareRecordPanel({
       return;
     }
 
-    await onSaveCareRecord(appointment.id, normalizeCareRecord(form));
+    await onSaveCareRecord(activeAppointment.id, normalizeCareRecord(form));
   }
 
   async function applyQuickStatus(nextStatus: string) {
@@ -1923,7 +2119,7 @@ function CareRecordPanel({
     };
 
     setForm(nextForm);
-    await onSaveCareRecord(appointment.id, normalizeCareRecord(nextForm));
+    await onSaveCareRecord(activeAppointment.id, normalizeCareRecord(nextForm));
   }
 
   return (
@@ -1933,7 +2129,7 @@ function CareRecordPanel({
           <p className="eyebrow">Ficha rapida</p>
           <h2>Conduta e fechamento</h2>
         </div>
-        <span className="inline-badge">{humanizeEnum(appointment.type)}</span>
+        <span className="inline-badge">{humanizeEnum(activeAppointment.type)}</span>
       </div>
 
       <form className="section-block" onSubmit={handleSubmit}>
@@ -1960,7 +2156,7 @@ function CareRecordPanel({
           <div className="helper-block">
             <span>Resumo do status</span>
             <strong>{careStatusSummary(form.status)}</strong>
-            <span>{formatDateTime(appointment.appointmentDate)}</span>
+            <span>{formatDateTime(activeAppointment.appointmentDate)}</span>
           </div>
 
           <label className="field full-row">
@@ -2056,20 +2252,36 @@ function CareRecordPanel({
 
 type TeamPageProps = {
   doctors: Doctor[];
+  nurses: Nurse[];
+  sectors: Sector[];
   form: DoctorFormState;
+  nurseForm: NurseFormState;
+  sectorForm: SectorFormState;
   isSubmitting: boolean;
+  onNurseSubmit: (event: React.FormEvent<HTMLFormElement>) => Promise<void>;
+  onSectorSubmit: (event: React.FormEvent<HTMLFormElement>) => Promise<void>;
   onPrepareDoctor: (doctorId: string) => void;
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => Promise<void>;
   setForm: React.Dispatch<React.SetStateAction<DoctorFormState>>;
+  setNurseForm: React.Dispatch<React.SetStateAction<NurseFormState>>;
+  setSectorForm: React.Dispatch<React.SetStateAction<SectorFormState>>;
 };
 
 function TeamPage({
   doctors,
+  nurses,
+  sectors,
   form,
+  nurseForm,
+  sectorForm,
   isSubmitting,
+  onNurseSubmit,
+  onSectorSubmit,
   onPrepareDoctor,
   onSubmit,
   setForm,
+  setNurseForm,
+  setSectorForm,
 }: TeamPageProps) {
   const [search, setSearch] = useState('');
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
@@ -2077,174 +2289,653 @@ function TeamPage({
     () => doctors.filter((doctor) => matchDoctor(doctor, deferredSearch)),
     [deferredSearch, doctors],
   );
+  const filteredNurses = useMemo(
+    () => nurses.filter((nurse) => matchNurse(nurse, deferredSearch)),
+    [deferredSearch, nurses],
+  );
+  const filteredSectors = useMemo(
+    () => sectors.filter((sector) => matchSector(sector, deferredSearch)),
+    [deferredSearch, sectors],
+  );
+  const activeSectors = sectors.filter((sector) => sector.active).length;
 
   return (
-    <section className="page-grid module-grid">
-      <article className="panel">
-        <div className="page-header">
-          <div>
-            <p className="eyebrow">Equipe medica</p>
-            <h2>Busca e preparacao de agenda</h2>
-          </div>
-          <div className="toolbar-inline">
-            <input
-              className="search-input"
-              placeholder="Buscar por nome, CRM, email ou especialidade"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
-            <span className="inline-badge">{filteredDoctors.length} ativos</span>
-          </div>
-        </div>
+    <>
+      <section className="summary-strip">
+        <article className="summary-card">
+          <span>Medicos</span>
+          <strong>{doctors.length}</strong>
+          <small>cadastros assistenciais</small>
+        </article>
+        <article className="summary-card">
+          <span>Enfermagem</span>
+          <strong>{nurses.length}</strong>
+          <small>apoio operacional</small>
+        </article>
+        <article className="summary-card">
+          <span>Setores</span>
+          <strong>{sectors.length}</strong>
+          <small>estrutura organizacional</small>
+        </article>
+        <article className="summary-card">
+          <span>Setores ativos</span>
+          <strong>{activeSectors}</strong>
+          <small>alocacao corrente</small>
+        </article>
+      </section>
 
-        <div className="table-shell">
-          <div className="table-head doctors-grid">
-            <span>Profissional</span>
-            <span>CRM</span>
-            <span>Especialidades</span>
-            <span>Acao</span>
-          </div>
-
-          {filteredDoctors.length === 0 ? (
-            <p className="empty-state">Nenhum medico encontrado com esse filtro.</p>
-          ) : (
-            filteredDoctors.map((doctor) => (
-              <div className="table-row doctors-grid" key={doctor.id}>
-                <span>{doctor.user.name}</span>
-                <span>
-                  {doctor.crm}/{doctor.crmUf}
-                </span>
-                <span>{doctor.specialties.join(', ')}</span>
-                <button
-                  className="mini-button"
-                  onClick={() => onPrepareDoctor(doctor.id)}
-                  type="button"
-                >
-                  Usar na agenda
-                </button>
+      <section className="page-grid team-layout">
+        <div className="stack-column">
+          <article className="panel">
+            <div className="page-header">
+              <div>
+                <p className="eyebrow">Equipe assistencial</p>
+                <h2>Busca e preparacao de agenda</h2>
               </div>
-            ))
-          )}
-        </div>
-      </article>
+              <div className="toolbar-inline">
+                <input
+                  className="search-input"
+                  placeholder="Buscar por nome, conselho, email, especialidade ou setor"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                />
+                <span className="inline-badge">
+                  {filteredDoctors.length + filteredNurses.length} profissionais
+                </span>
+              </div>
+            </div>
 
-      <form className="panel form-panel" onSubmit={onSubmit}>
-        <div className="page-header">
-          <div>
-            <p className="eyebrow">Cadastro</p>
-            <h2>Novo medico</h2>
-          </div>
+            <div className="table-shell">
+              <div className="table-head doctors-grid">
+                <span>Profissional</span>
+                <span>Registro</span>
+                <span>Setor</span>
+                <span>Acao</span>
+              </div>
+
+              {filteredDoctors.length === 0 ? (
+                <p className="empty-state">Nenhum medico encontrado com esse filtro.</p>
+              ) : (
+                filteredDoctors.map((doctor) => (
+                  <div className="table-row doctors-grid" key={doctor.id}>
+                    <span>
+                      {doctor.user.name}
+                      <small>
+                        {doctor.specialties.length > 0
+                          ? doctor.specialties.join(', ')
+                          : 'Sem especialidade'}
+                      </small>
+                    </span>
+                    <span>
+                      {doctor.crm}/{doctor.crmUf}
+                    </span>
+                    <span>{doctor.sector?.name ?? 'Sem setor'}</span>
+                    <button
+                      className="mini-button"
+                      onClick={() => onPrepareDoctor(doctor.id)}
+                      type="button"
+                    >
+                      Usar na agenda
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </article>
+
+          <article className="panel">
+            <div className="page-header">
+              <div>
+                <p className="eyebrow">Enfermagem</p>
+                <h2>Setores e plantoes</h2>
+              </div>
+              <span className="inline-badge">{filteredNurses.length} ativos</span>
+            </div>
+
+            <div className="table-shell">
+              <div className="table-head nurses-grid">
+                <span>Profissional</span>
+                <span>COREN</span>
+                <span>Setor</span>
+                <span>Plantao</span>
+              </div>
+
+              {filteredNurses.length === 0 ? (
+                <p className="empty-state">
+                  Nenhum enfermeiro encontrado com esse filtro.
+                </p>
+              ) : (
+                filteredNurses.map((nurse) => (
+                  <div className="table-row nurses-grid" key={nurse.id}>
+                    <span>
+                      {nurse.user.name}
+                      <small>{nurse.user.email}</small>
+                    </span>
+                    <span>
+                      {nurse.coren}/{nurse.corenUf}
+                    </span>
+                    <span>{nurse.sector?.name ?? 'Sem setor'}</span>
+                    <span>{nurse.shift || 'Nao informado'}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </article>
+
+          <article className="panel">
+            <div className="page-header">
+              <div>
+                <p className="eyebrow">Setores</p>
+                <h2>Mapa de alocacao</h2>
+              </div>
+              <span className="inline-badge">{filteredSectors.length} visiveis</span>
+            </div>
+
+            <div className="list-shell">
+              {filteredSectors.length === 0 ? (
+                <p className="empty-state">Nenhum setor cadastrado ainda.</p>
+              ) : (
+                filteredSectors.map((sector) => (
+                  <div className="list-row" key={sector.id}>
+                    <div>
+                      <strong>
+                        {sector.name} ({sector.code})
+                      </strong>
+                      <span>
+                        {sector.description || 'Sem descricao operacional'}
+                      </span>
+                    </div>
+                    <div className="team-meta">
+                      <span>{sector.doctors?.length ?? 0} med.</span>
+                      <span>{sector.nurses?.length ?? 0} enf.</span>
+                      <span>{sector.active ? 'Ativo' : 'Inativo'}</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </article>
         </div>
 
-        <div className="section-block">
-          <p className="section-title">Usuario e acesso</p>
-          <div className="field-grid three-columns">
-            <label className="field">
-              <span>Nome</span>
-              <input
-                value={form.name}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, name: event.target.value }))
-                }
-                required
-              />
-            </label>
-            <label className="field">
-              <span>Email</span>
-              <input
-                type="email"
-                value={form.email}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, email: event.target.value }))
-                }
-                required
-              />
-            </label>
-            <label className="field">
-              <span>Senha inicial</span>
-              <input
-                type="password"
-                minLength={6}
-                value={form.password}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    password: event.target.value,
-                  }))
-                }
-                required
-              />
-            </label>
-          </div>
-        </div>
+        <div className="stack-column">
+          <form className="panel form-panel" onSubmit={onSubmit}>
+            <div className="page-header">
+              <div>
+                <p className="eyebrow">Cadastro profissional</p>
+                <h2>Novo medico</h2>
+              </div>
+            </div>
 
-        <div className="section-block">
-          <p className="section-title">Registro profissional</p>
-          <div className="field-grid three-columns">
-            <label className="field">
-              <span>CRM</span>
-              <input
-                value={form.crm}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, crm: event.target.value }))
-                }
-                required
-              />
-            </label>
-            <label className="field">
-              <span>UF do CRM</span>
-              <input
-                maxLength={2}
-                value={form.crmUf}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    crmUf: event.target.value.toUpperCase(),
-                  }))
-                }
-                required
-              />
-            </label>
-            <label className="field">
-              <span>Telefone</span>
-              <input
-                value={form.phone}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, phone: event.target.value }))
-                }
-              />
-            </label>
-            <label className="field full-row">
-              <span>Especialidades</span>
-              <input
-                placeholder="Cardiologia, Clinico Geral"
-                value={form.specialties}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    specialties: event.target.value,
-                  }))
-                }
-                required
-              />
-            </label>
-            <label className="field full-row">
-              <span>Bio</span>
-              <textarea
-                value={form.bio}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, bio: event.target.value }))
-                }
-              />
-            </label>
-          </div>
-        </div>
+            <div className="section-block">
+              <p className="section-title">Usuario e acesso</p>
+              <div className="field-grid three-columns">
+                <label className="field">
+                  <span>Nome</span>
+                  <input
+                    value={form.name}
+                    onChange={(event) =>
+                      setForm((current) => ({ ...current, name: event.target.value }))
+                    }
+                    required
+                  />
+                </label>
+                <label className="field">
+                  <span>Email</span>
+                  <input
+                    type="email"
+                    value={form.email}
+                    onChange={(event) =>
+                      setForm((current) => ({ ...current, email: event.target.value }))
+                    }
+                    required
+                  />
+                </label>
+                <label className="field">
+                  <span>Senha inicial</span>
+                  <input
+                    minLength={6}
+                    type="password"
+                    value={form.password}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        password: event.target.value,
+                      }))
+                    }
+                    required
+                  />
+                </label>
+              </div>
+            </div>
 
-        <button className="primary-button" disabled={isSubmitting} type="submit">
-          {isSubmitting ? 'Salvando...' : 'Cadastrar medico'}
-        </button>
-      </form>
-    </section>
+            <div className="section-block">
+              <p className="section-title">Registro e setor</p>
+              <div className="field-grid three-columns">
+                <label className="field">
+                  <span>CRM</span>
+                  <input
+                    value={form.crm}
+                    onChange={(event) =>
+                      setForm((current) => ({ ...current, crm: event.target.value }))
+                    }
+                    required
+                  />
+                </label>
+                <label className="field">
+                  <span>UF do CRM</span>
+                  <input
+                    maxLength={2}
+                    value={form.crmUf}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        crmUf: event.target.value.toUpperCase(),
+                      }))
+                    }
+                    required
+                  />
+                </label>
+                <label className="field">
+                  <span>Setor</span>
+                  <select
+                    value={form.sectorId}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        sectorId: event.target.value,
+                      }))
+                    }
+                  >
+                    <option value="">Selecione</option>
+                    {sectors.map((sector) => (
+                      <option key={sector.id} value={sector.id}>
+                        {sector.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Telefone</span>
+                  <input
+                    value={form.phone}
+                    onChange={(event) =>
+                      setForm((current) => ({ ...current, phone: event.target.value }))
+                    }
+                  />
+                </label>
+                <label className="field full-row">
+                  <span>Especialidades</span>
+                  <input
+                    placeholder="Cardiologia, Clinico Geral"
+                    value={form.specialties}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        specialties: event.target.value,
+                      }))
+                    }
+                    required
+                  />
+                </label>
+                <label className="field full-row">
+                  <span>Bio</span>
+                  <textarea
+                    value={form.bio}
+                    onChange={(event) =>
+                      setForm((current) => ({ ...current, bio: event.target.value }))
+                    }
+                  />
+                </label>
+              </div>
+            </div>
+
+            <div className="section-block">
+              <p className="section-title">Endereco e documentos</p>
+              <div className="field-grid two-columns">
+                <label className="field full-row">
+                  <span>Endereco</span>
+                  <input
+                    value={form.address}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        address: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <label className="field">
+                  <span>Cidade</span>
+                  <input
+                    value={form.city}
+                    onChange={(event) =>
+                      setForm((current) => ({ ...current, city: event.target.value }))
+                    }
+                  />
+                </label>
+                <label className="field">
+                  <span>UF</span>
+                  <input
+                    maxLength={2}
+                    value={form.state}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        state: event.target.value.toUpperCase(),
+                      }))
+                    }
+                  />
+                </label>
+                <label className="field">
+                  <span>CEP</span>
+                  <input
+                    value={form.zipCode}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        zipCode: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <label className="field full-row">
+                  <span>Documentos anexos</span>
+                  <textarea
+                    placeholder="Uma referencia por linha: CRM.pdf, contrato.pdf"
+                    value={form.documents}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        documents: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+              </div>
+            </div>
+
+            <button className="primary-button" disabled={isSubmitting} type="submit">
+              {isSubmitting ? 'Salvando...' : 'Cadastrar medico'}
+            </button>
+          </form>
+
+          <form className="panel form-panel" onSubmit={onNurseSubmit}>
+            <div className="page-header">
+              <div>
+                <p className="eyebrow">Cadastro profissional</p>
+                <h2>Novo enfermeiro</h2>
+              </div>
+            </div>
+
+            <div className="section-block">
+              <p className="section-title">Usuario e acesso</p>
+              <div className="field-grid three-columns">
+                <label className="field">
+                  <span>Nome</span>
+                  <input
+                    value={nurseForm.name}
+                    onChange={(event) =>
+                      setNurseForm((current) => ({
+                        ...current,
+                        name: event.target.value,
+                      }))
+                    }
+                    required
+                  />
+                </label>
+                <label className="field">
+                  <span>Email</span>
+                  <input
+                    type="email"
+                    value={nurseForm.email}
+                    onChange={(event) =>
+                      setNurseForm((current) => ({
+                        ...current,
+                        email: event.target.value,
+                      }))
+                    }
+                    required
+                  />
+                </label>
+                <label className="field">
+                  <span>Senha inicial</span>
+                  <input
+                    minLength={6}
+                    type="password"
+                    value={nurseForm.password}
+                    onChange={(event) =>
+                      setNurseForm((current) => ({
+                        ...current,
+                        password: event.target.value,
+                      }))
+                    }
+                    required
+                  />
+                </label>
+              </div>
+            </div>
+
+            <div className="section-block">
+              <p className="section-title">Registro e setor</p>
+              <div className="field-grid three-columns">
+                <label className="field">
+                  <span>COREN</span>
+                  <input
+                    value={nurseForm.coren}
+                    onChange={(event) =>
+                      setNurseForm((current) => ({
+                        ...current,
+                        coren: event.target.value,
+                      }))
+                    }
+                    required
+                  />
+                </label>
+                <label className="field">
+                  <span>UF do COREN</span>
+                  <input
+                    maxLength={2}
+                    value={nurseForm.corenUf}
+                    onChange={(event) =>
+                      setNurseForm((current) => ({
+                        ...current,
+                        corenUf: event.target.value.toUpperCase(),
+                      }))
+                    }
+                    required
+                  />
+                </label>
+                <label className="field">
+                  <span>Setor</span>
+                  <select
+                    value={nurseForm.sectorId}
+                    onChange={(event) =>
+                      setNurseForm((current) => ({
+                        ...current,
+                        sectorId: event.target.value,
+                      }))
+                    }
+                  >
+                    <option value="">Selecione</option>
+                    {sectors.map((sector) => (
+                      <option key={sector.id} value={sector.id}>
+                        {sector.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Plantao</span>
+                  <input
+                    placeholder="Diurno, Noturno..."
+                    value={nurseForm.shift}
+                    onChange={(event) =>
+                      setNurseForm((current) => ({
+                        ...current,
+                        shift: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <label className="field">
+                  <span>Telefone</span>
+                  <input
+                    value={nurseForm.phone}
+                    onChange={(event) =>
+                      setNurseForm((current) => ({
+                        ...current,
+                        phone: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+              </div>
+            </div>
+
+            <div className="section-block">
+              <p className="section-title">Endereco e documentos</p>
+              <div className="field-grid two-columns">
+                <label className="field full-row">
+                  <span>Endereco</span>
+                  <input
+                    value={nurseForm.address}
+                    onChange={(event) =>
+                      setNurseForm((current) => ({
+                        ...current,
+                        address: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <label className="field">
+                  <span>Cidade</span>
+                  <input
+                    value={nurseForm.city}
+                    onChange={(event) =>
+                      setNurseForm((current) => ({
+                        ...current,
+                        city: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <label className="field">
+                  <span>UF</span>
+                  <input
+                    maxLength={2}
+                    value={nurseForm.state}
+                    onChange={(event) =>
+                      setNurseForm((current) => ({
+                        ...current,
+                        state: event.target.value.toUpperCase(),
+                      }))
+                    }
+                  />
+                </label>
+                <label className="field">
+                  <span>CEP</span>
+                  <input
+                    value={nurseForm.zipCode}
+                    onChange={(event) =>
+                      setNurseForm((current) => ({
+                        ...current,
+                        zipCode: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <label className="field full-row">
+                  <span>Documentos anexos</span>
+                  <textarea
+                    placeholder="Uma referencia por linha: COREN.pdf, contrato.pdf"
+                    value={nurseForm.documents}
+                    onChange={(event) =>
+                      setNurseForm((current) => ({
+                        ...current,
+                        documents: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+              </div>
+            </div>
+
+            <button className="primary-button" disabled={isSubmitting} type="submit">
+              {isSubmitting ? 'Salvando...' : 'Cadastrar enfermeiro'}
+            </button>
+          </form>
+
+          <form className="panel form-panel" onSubmit={onSectorSubmit}>
+            <div className="page-header">
+              <div>
+                <p className="eyebrow">Estrutura</p>
+                <h2>Novo setor</h2>
+              </div>
+            </div>
+
+            <div className="field-grid two-columns">
+              <label className="field">
+                <span>Nome do setor</span>
+                <input
+                  value={sectorForm.name}
+                  onChange={(event) =>
+                    setSectorForm((current) => ({
+                      ...current,
+                      name: event.target.value,
+                    }))
+                  }
+                  required
+                />
+              </label>
+              <label className="field">
+                <span>Codigo</span>
+                <input
+                  value={sectorForm.code}
+                  onChange={(event) =>
+                    setSectorForm((current) => ({
+                      ...current,
+                      code: event.target.value.toUpperCase(),
+                    }))
+                  }
+                  required
+                />
+              </label>
+              <label className="field full-row">
+                <span>Descricao</span>
+                <textarea
+                  value={sectorForm.description}
+                  onChange={(event) =>
+                    setSectorForm((current) => ({
+                      ...current,
+                      description: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label className="field">
+                <span>Status</span>
+                <select
+                  value={sectorForm.active ? 'ATIVO' : 'INATIVO'}
+                  onChange={(event) =>
+                    setSectorForm((current) => ({
+                      ...current,
+                      active: event.target.value === 'ATIVO',
+                    }))
+                  }
+                >
+                  <option value="ATIVO">Ativo</option>
+                  <option value="INATIVO">Inativo</option>
+                </select>
+              </label>
+            </div>
+
+            <button className="primary-button" disabled={isSubmitting} type="submit">
+              {isSubmitting ? 'Salvando...' : 'Cadastrar setor'}
+            </button>
+          </form>
+        </div>
+      </section>
+    </>
   );
 }
 
@@ -2287,6 +2978,46 @@ function matchDoctor(doctor: Doctor, query: string) {
   return haystack.includes(query);
 }
 
+function matchNurse(nurse: Nurse, query: string) {
+  if (!query) {
+    return true;
+  }
+
+  const haystack = [
+    nurse.user.name,
+    nurse.user.email,
+    nurse.coren,
+    nurse.corenUf,
+    nurse.phone,
+    nurse.shift,
+    nurse.sector?.name,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  return haystack.includes(query);
+}
+
+function matchSector(sector: Sector, query: string) {
+  if (!query) {
+    return true;
+  }
+
+  const haystack = [
+    sector.name,
+    sector.code,
+    sector.description,
+    ...(sector.doctors?.map((doctor) => doctor.user.name) ?? []),
+    ...(sector.nurses?.map((nurse) => nurse.user.name) ?? []),
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  return haystack.includes(query);
+}
+
 function matchAppointment(appointment: Appointment, query: string) {
   if (!query) {
     return true;
@@ -2319,6 +3050,13 @@ function readStoredValue<T>(key: string) {
     localStorage.removeItem(key);
     return null;
   }
+}
+
+function parseDocumentReferences(value: string) {
+  return value
+    .split(/\r?\n|,|;/)
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function createCareRecordForm(

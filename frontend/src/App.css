@@ -421,6 +421,10 @@ textarea {
   grid-template-columns: minmax(0, 1.2fr) minmax(360px, 0.95fr);
 }
 
+.team-layout {
+  grid-template-columns: minmax(0, 1.15fr) minmax(380px, 1fr);
+}
+
 .stack-column {
   display: grid;
   gap: 16px;
@@ -479,6 +483,10 @@ textarea {
 
 .doctors-grid {
   grid-template-columns: 1.2fr 0.9fr 1.4fr 0.88fr;
+}
+
+.nurses-grid {
+  grid-template-columns: 1.1fr 0.9fr 1fr 0.9fr;
 }
 
 .care-grid {
@@ -595,6 +603,13 @@ textarea {
   background: rgba(47, 130, 246, 0.12);
   color: var(--accent-strong);
   font-weight: 700;
+}
+
+.team-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
 }
 
 .form-panel {

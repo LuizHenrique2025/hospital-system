@@ -9,6 +9,7 @@ import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { NursesModule } from './nurses/nurses.module';
 import { AppointmentsModule } from './appointments/appointments.module';
 import { DoctorsModule } from './doctors/doctors.module';
+import { SectorsModule } from './sectors/sectors.module';
 import configuration from './config/configuration';
 
 @Module({
@@ -25,6 +26,7 @@ import configuration from './config/configuration';
     NursesModule,
     AppointmentsModule,
     DoctorsModule,
+    SectorsModule,
   ],
   providers: [
     {
