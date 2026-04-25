@@ -64,6 +64,7 @@ describe('AuthService', () => {
     const result = await service.login({
       email: 'test@example.com',
       password: '123456',
+      
     });
     expect(result).toHaveProperty('access_token');
     expect(mockJwtService.sign).toHaveBeenCalled();

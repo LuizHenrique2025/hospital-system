@@ -66,6 +66,7 @@ export class NursesController {
   @ApiResponse({ status: 404, description: 'Enfermeiro nao encontrado' })
   findOne(@Param('id') id: string) {
     return this.nursesService.findOne(id);
+    
   }
 
   @Patch(':id')

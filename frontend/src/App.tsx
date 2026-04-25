@@ -77,6 +77,20 @@ type AppointmentFormState = {
   notes: string;
 };
 
+type CareRecordPayload = {
+  status?: string;
+  notes?: string;
+  diagnosis?: string;
+  prescription?: string;
+};
+
+type CareRecordFormState = {
+  status: string;
+  notes: string;
+  diagnosis: string;
+  prescription: string;
+};
+
 type ModuleItem = {
   path: string;
   label: string;
@@ -474,6 +488,46 @@ function App() {
     }
   }
 
+  async function saveCareRecord(
+    appointmentId: string,
+    payload: CareRecordPayload,
+  ) {
+    if (!session?.token) {
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      await apiRequest<Appointment>(`/appointments/${appointmentId}`, {
+        token: session.token,
+        method: 'PATCH',
+        body: {
+          status: payload.status,
+          notes: payload.notes || undefined,
+          diagnosis: payload.diagnosis || undefined,
+          prescription: payload.prescription || undefined,
+        },
+      });
+
+      await loadDashboard(session.token);
+      setNotice({
+        kind: 'success',
+        text: 'Atendimento atualizado com sucesso.',
+      });
+    } catch (error) {
+      setNotice({
+        kind: 'error',
+        text:
+          error instanceof Error
+            ? error.message
+            : 'Nao foi possivel atualizar o atendimento.',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   function preparePatientForScheduling(patientId: string) {
     setAppointmentForm((current) => ({
       ...current,
@@ -511,6 +565,8 @@ function App() {
   }
 
   const canCreateAppointment = patients.length > 0 && doctors.length > 0;
+  const canManageCare =
+    session?.profile.role === 'ADMIN' || session?.profile.role === 'ATENDENTE';
 
   if (!session) {
     return (
@@ -590,7 +646,15 @@ function App() {
         />
         <Route
           path="/atendimento"
-          element={<CarePage appointments={appointments} patients={patients} />}
+          element={
+            <CarePage
+              appointments={appointments}
+              canManageCare={canManageCare}
+              isSubmitting={isSubmitting}
+              onSaveCareRecord={saveCareRecord}
+              patients={patients}
+            />
+          }
         />
         <Route
           path="/equipe"
@@ -1493,35 +1557,53 @@ function SchedulingPage({
 
 type CarePageProps = {
   appointments: Appointment[];
+  canManageCare: boolean;
+  isSubmitting: boolean;
+  onSaveCareRecord: (
+    appointmentId: string,
+    payload: CareRecordPayload,
+  ) => Promise<void>;
   patients: Patient[];
 };
 
-function CarePage({ appointments, patients }: CarePageProps) {
+function CarePage({
+  appointments,
+  canManageCare,
+  isSubmitting,
+  onSaveCareRecord,
+  patients,
+}: CarePageProps) {
   const [search, setSearch] = useState('');
+  const [selectedAppointmentId, setSelectedAppointmentId] = useState<
+    null | string
+  >(null);
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
   const filteredQueue = useMemo(
     () =>
-      appointments.filter((appointment) => {
-        if (!matchAppointment(appointment, deferredSearch)) {
-          return false;
-        }
-
-        return ['AGENDADA', 'CONFIRMADA', 'REALIZADA'].includes(
-          appointment.status,
-        );
-      }),
+      [...appointments]
+        .filter((appointment) => appointment.status !== 'CANCELADA')
+        .filter((appointment) => matchAppointment(appointment, deferredSearch))
+        .sort(
+          (left, right) =>
+            new Date(left.appointmentDate).getTime() -
+            new Date(right.appointmentDate).getTime(),
+        ),
     [appointments, deferredSearch],
   );
-  const todayAppointments = appointments.filter((appointment) =>
-    isToday(appointment.appointmentDate),
-  );
-  const waitingCount = todayAppointments.filter((appointment) =>
+  const activeAppointment =
+    filteredQueue.find((appointment) => appointment.id === selectedAppointmentId) ??
+    filteredQueue[0] ??
+    null;
+  const waitingCount = appointments.filter((appointment) =>
     ['AGENDADA', 'CONFIRMADA'].includes(appointment.status),
   ).length;
-  const completedToday = todayAppointments.filter(
+  const confirmedCount = appointments.filter(
+    (appointment) => appointment.status === 'CONFIRMADA',
+  ).length;
+  const completedCount = appointments.filter(
     (appointment) => appointment.status === 'REALIZADA',
   ).length;
-  const missingToday = todayAppointments.filter(
+  const missingCount = appointments.filter(
     (appointment) => appointment.status === 'NAO_COMPARECEU',
   ).length;
 
@@ -1529,28 +1611,28 @@ function CarePage({ appointments, patients }: CarePageProps) {
     <>
       <section className="summary-strip care-strip">
         <article className="summary-card">
-          <span>Fila de hoje</span>
-          <strong>{todayAppointments.length}</strong>
-          <small>consultas do dia</small>
+          <span>Abertos</span>
+          <strong>{waitingCount}</strong>
+          <small>agendados e confirmados</small>
         </article>
         <article className="summary-card">
-          <span>Aguardando</span>
-          <strong>{waitingCount}</strong>
-          <small>recepcao e chamada</small>
+          <span>Confirmadas</span>
+          <strong>{confirmedCount}</strong>
+          <small>prontas para chamada</small>
         </article>
         <article className="summary-card">
           <span>Realizadas</span>
-          <strong>{completedToday}</strong>
-          <small>fechadas hoje</small>
+          <strong>{completedCount}</strong>
+          <small>consultas encerradas</small>
         </article>
         <article className="summary-card">
-          <span>Base total</span>
+          <span>Base assistencial</span>
           <strong>{patients.length}</strong>
           <small>pacientes cadastrados</small>
         </article>
       </section>
 
-      <section className="page-grid overview-grid">
+      <section className="page-grid care-layout">
         <article className="panel">
           <div className="page-header">
             <div>
@@ -1564,31 +1646,43 @@ function CarePage({ appointments, patients }: CarePageProps) {
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
               />
-              <span className="inline-badge">{filteredQueue.length} na fila</span>
+              <span className="inline-badge">
+                {filteredQueue.length} em acompanhamento
+              </span>
             </div>
           </div>
 
-          <div className="table-shell">
-            <div className="table-head care-grid">
-              <span>Paciente</span>
-              <span>Medico</span>
-              <span>Horario</span>
-              <span>Status</span>
-            </div>
-
+          <div className="queue-shell">
             {filteredQueue.length === 0 ? (
               <p className="empty-state">Nenhum atendimento visivel na fila.</p>
             ) : (
               filteredQueue.map((appointment) => (
-                <div className="table-row care-grid" key={appointment.id}>
-                  <span>{appointment.patient.name}</span>
-                  <span>{appointment.doctor.user.name}</span>
-                  <span>{formatDateTime(appointment.appointmentDate)}</span>
-                  <span>
-                    <em className={`status-dot ${statusTone(appointment.status)}`} />
-                    {appointment.status}
-                  </span>
-                </div>
+                <button
+                  className={`queue-card ${
+                    activeAppointment?.id === appointment.id ? 'is-active' : ''
+                  }`}
+                  key={appointment.id}
+                  onClick={() => setSelectedAppointmentId(appointment.id)}
+                  type="button"
+                >
+                  <div className="card-topline">
+                    <div className="queue-identity">
+                      <strong>{appointment.patient.name}</strong>
+                      <span>{appointment.doctor.user.name}</span>
+                    </div>
+                    <span className="queue-status">
+                      <em
+                        className={`status-dot ${statusTone(appointment.status)}`}
+                      />
+                      {humanizeEnum(appointment.status)}
+                    </span>
+                  </div>
+                  <div className="queue-meta">
+                    <span>{formatDateTime(appointment.appointmentDate)}</span>
+                    <span>{humanizeEnum(appointment.type)}</span>
+                    <span>{appointment.patient.phone || 'Sem telefone'}</span>
+                  </div>
+                </button>
               ))
             )}
           </div>
@@ -1598,24 +1692,115 @@ function CarePage({ appointments, patients }: CarePageProps) {
           <article className="panel">
             <div className="page-header">
               <div>
-                <p className="eyebrow">Base inicial</p>
-                <h2>Primeira versao de atendimento</h2>
+                <p className="eyebrow">Paciente em foco</p>
+                <h2>
+                  {activeAppointment
+                    ? activeAppointment.patient.name
+                    : 'Selecione um atendimento'}
+                </h2>
               </div>
+              {activeAppointment ? (
+                <span className="inline-badge">
+                  {humanizeEnum(activeAppointment.status)}
+                </span>
+              ) : null}
             </div>
 
-            <ol className="action-list">
-              <li>Recepcao e fila a partir da agenda.</li>
-              <li>Visualizacao rapida do paciente e do profissional.</li>
-              <li>Separacao entre aguardando, realizado e ausente.</li>
-              <li>Proxima etapa: ficha clinica e evolucao.</li>
-            </ol>
+            {activeAppointment ? (
+              <>
+                <div className="context-band">
+                  <article className="context-card">
+                    <span>Horario</span>
+                    <strong>{formatTime(activeAppointment.appointmentDate)}</strong>
+                    <small>{formatDate(activeAppointment.appointmentDate)}</small>
+                  </article>
+                  <article className="context-card">
+                    <span>Idade</span>
+                    <strong>
+                      {calculateAge(activeAppointment.patient.birthDate)} anos
+                    </strong>
+                    <small>{formatDate(activeAppointment.patient.birthDate)}</small>
+                  </article>
+                </div>
+
+                <div className="field-grid two-columns">
+                  <div className="helper-block">
+                    <span>CPF</span>
+                    <strong>{activeAppointment.patient.cpf}</strong>
+                  </div>
+                  <div className="helper-block">
+                    <span>Contato</span>
+                    <strong>{activeAppointment.patient.phone || 'Nao informado'}</strong>
+                  </div>
+                  <div className="helper-block">
+                    <span>Tipo sanguineo</span>
+                    <strong>
+                      {activeAppointment.patient.bloodType || 'Nao informado'}
+                    </strong>
+                  </div>
+                  <div className="helper-block">
+                    <span>Cidade</span>
+                    <strong>
+                      {activeAppointment.patient.city
+                        ? `${activeAppointment.patient.city}${
+                            activeAppointment.patient.state
+                              ? ` / ${activeAppointment.patient.state}`
+                              : ''
+                          }`
+                        : 'Nao informada'}
+                    </strong>
+                  </div>
+                  <div className="helper-block full-row">
+                    <span>Alergias</span>
+                    <strong>
+                      {activeAppointment.patient.allergies || 'Nenhuma alergia informada'}
+                    </strong>
+                  </div>
+                  <div className="helper-block full-row">
+                    <span>Historico clinico</span>
+                    <strong>
+                      {activeAppointment.patient.medicalHistory ||
+                        'Historico ainda nao preenchido'}
+                    </strong>
+                  </div>
+                  <div className="helper-block full-row">
+                    <span>Profissional responsavel</span>
+                    <strong>
+                      {activeAppointment.doctor.user.name} • CRM{' '}
+                      {activeAppointment.doctor.crm}/{activeAppointment.doctor.crmUf}
+                    </strong>
+                    <span>
+                      {activeAppointment.doctor.specialties.length > 0
+                        ? activeAppointment.doctor.specialties.join(', ')
+                        : 'Especialidade nao informada'}
+                    </span>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <p className="empty-state compact">
+                Escolha um atendimento da fila para abrir o contexto do paciente.
+              </p>
+            )}
           </article>
+
+          <CareRecordPanel
+            appointment={activeAppointment}
+            canManageCare={canManageCare}
+            isSubmitting={isSubmitting}
+            key={
+              activeAppointment
+                ? `${activeAppointment.id}-${activeAppointment.updatedAt ?? activeAppointment.status}`
+                : 'care-record-empty'
+            }
+            onSaveCareRecord={onSaveCareRecord}
+          />
 
           <article className="panel">
             <div className="page-header">
               <div>
-                <p className="eyebrow">Alertas do dia</p>
-                <h2>Leitura de status</h2>
+                <p className="eyebrow">Leitura operacional</p>
+                <h2>Status e proxima acao</h2>
               </div>
             </div>
 
@@ -1631,11 +1816,11 @@ function CarePage({ appointments, patients }: CarePageProps) {
               </div>
               <div className="list-row">
                 <div>
-                  <strong>Realizadas hoje</strong>
+                  <strong>Realizadas</strong>
                   <span>consulta fechada</span>
                 </div>
                 <div>
-                  <span>{completedToday}</span>
+                  <span>{completedCount}</span>
                 </div>
               </div>
               <div className="list-row">
@@ -1644,7 +1829,24 @@ function CarePage({ appointments, patients }: CarePageProps) {
                   <span>nao compareceu</span>
                 </div>
                 <div>
-                  <span>{missingToday}</span>
+                  <span>{missingCount}</span>
+                </div>
+              </div>
+              <div className="list-row">
+                <div>
+                  <strong>Leitura atual</strong>
+                  <span>
+                    {activeAppointment
+                      ? careStatusSummary(activeAppointment.status)
+                      : 'Nenhum atendimento selecionado'}
+                  </span>
+                </div>
+                <div>
+                  <span>
+                    {activeAppointment
+                      ? humanizeEnum(activeAppointment.type)
+                      : '--'}
+                  </span>
                 </div>
               </div>
             </div>
@@ -1652,6 +1854,203 @@ function CarePage({ appointments, patients }: CarePageProps) {
         </div>
       </section>
     </>
+  );
+}
+
+type CareRecordPanelProps = {
+  appointment: Appointment | null;
+  canManageCare: boolean;
+  isSubmitting: boolean;
+  onSaveCareRecord: (
+    appointmentId: string,
+    payload: CareRecordPayload,
+  ) => Promise<void>;
+};
+
+function CareRecordPanel({
+  appointment,
+  canManageCare,
+  isSubmitting,
+  onSaveCareRecord,
+}: CareRecordPanelProps) {
+  const [form, setForm] = useState<CareRecordFormState>(() =>
+    appointment
+      ? createCareRecordForm(appointment)
+      : {
+          status: 'AGENDADA',
+          notes: '',
+          diagnosis: '',
+          prescription: '',
+        },
+  );
+
+  if (!appointment) {
+    return (
+      <article className="panel form-panel">
+        <div className="page-header">
+          <div>
+            <p className="eyebrow">Ficha rapida</p>
+            <h2>Conduta e fechamento</h2>
+          </div>
+        </div>
+
+        <p className="empty-state compact">
+          Selecione um atendimento para registrar observacoes, diagnostico,
+          prescricao e status.
+        </p>
+      </article>
+    );
+  }
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!canManageCare) {
+      return;
+    }
+
+    await onSaveCareRecord(appointment.id, normalizeCareRecord(form));
+  }
+
+  async function applyQuickStatus(nextStatus: string) {
+    if (!canManageCare) {
+      return;
+    }
+
+    const nextForm = {
+      ...form,
+      status: nextStatus,
+    };
+
+    setForm(nextForm);
+    await onSaveCareRecord(appointment.id, normalizeCareRecord(nextForm));
+  }
+
+  return (
+    <article className="panel form-panel">
+      <div className="page-header">
+        <div>
+          <p className="eyebrow">Ficha rapida</p>
+          <h2>Conduta e fechamento</h2>
+        </div>
+        <span className="inline-badge">{humanizeEnum(appointment.type)}</span>
+      </div>
+
+      <form className="section-block" onSubmit={handleSubmit}>
+        <div className="field-grid two-columns">
+          <label className="field">
+            <span>Status do atendimento</span>
+            <select
+              value={form.status}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  status: event.target.value,
+                }))
+              }
+            >
+              {appointmentStatuses.map((status) => (
+                <option key={status} value={status}>
+                  {humanizeEnum(status)}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div className="helper-block">
+            <span>Resumo do status</span>
+            <strong>{careStatusSummary(form.status)}</strong>
+            <span>{formatDateTime(appointment.appointmentDate)}</span>
+          </div>
+
+          <label className="field full-row">
+            <span>Anotacoes do atendimento</span>
+            <textarea
+              value={form.notes}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  notes: event.target.value,
+                }))
+              }
+              placeholder="Recepcao, triagem, orientacoes ou observacoes clinicas."
+            />
+          </label>
+
+          <label className="field full-row">
+            <span>Diagnostico</span>
+            <textarea
+              value={form.diagnosis}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  diagnosis: event.target.value,
+                }))
+              }
+              placeholder="Diagnostico principal ou hipoteses levantadas."
+            />
+          </label>
+
+          <label className="field full-row">
+            <span>Prescricao e conduta</span>
+            <textarea
+              value={form.prescription}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  prescription: event.target.value,
+                }))
+              }
+              placeholder="Medicacao, orientacoes, retorno e encaminhamentos."
+            />
+          </label>
+        </div>
+
+        <div className="quick-actions care-actions">
+          <button
+            className={`mini-button ${
+              form.status === 'CONFIRMADA' ? 'is-active' : ''
+            }`}
+            disabled={isSubmitting || !canManageCare}
+            onClick={() => void applyQuickStatus('CONFIRMADA')}
+            type="button"
+          >
+            Confirmar chegada
+          </button>
+          <button
+            className={`mini-button ${
+              form.status === 'REALIZADA' ? 'is-active' : ''
+            }`}
+            disabled={isSubmitting || !canManageCare}
+            onClick={() => void applyQuickStatus('REALIZADA')}
+            type="button"
+          >
+            Fechar atendimento
+          </button>
+          <button
+            className={`mini-button ${
+              form.status === 'NAO_COMPARECEU' ? 'is-active' : ''
+            }`}
+            disabled={isSubmitting || !canManageCare}
+            onClick={() => void applyQuickStatus('NAO_COMPARECEU')}
+            type="button"
+          >
+            Registrar ausencia
+          </button>
+        </div>
+
+        {canManageCare ? (
+          <button className="primary-button" disabled={isSubmitting} type="submit">
+            {isSubmitting ? 'Salvando atendimento...' : 'Salvar ficha'}
+          </button>
+        ) : (
+          <p className="empty-state compact">
+            Este perfil pode consultar a fila, mas nao possui permissao para
+            atualizar a ficha do atendimento.
+          </p>
+        )}
+      </form>
+    </article>
   );
 }
 
@@ -1922,11 +2321,83 @@ function readStoredValue<T>(key: string) {
   }
 }
 
+function createCareRecordForm(
+  appointment: Appointment,
+): CareRecordFormState {
+  return {
+    status: appointment.status,
+    notes: appointment.notes ?? '',
+    diagnosis: appointment.diagnosis ?? '',
+    prescription: appointment.prescription ?? '',
+  };
+}
+
+function normalizeCareRecord(form: CareRecordFormState): CareRecordPayload {
+  return {
+    status: form.status,
+    notes: form.notes.trim() || undefined,
+    diagnosis: form.diagnosis.trim() || undefined,
+    prescription: form.prescription.trim() || undefined,
+  };
+}
+
+function humanizeEnum(value: string) {
+  return value
+    .toLowerCase()
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat('pt-BR', {
+    dateStyle: 'medium',
+  }).format(new Date(value));
+}
+
+function formatTime(value: string) {
+  return new Intl.DateTimeFormat('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(value));
+}
+
 function formatDateTime(value: string) {
   return new Intl.DateTimeFormat('pt-BR', {
     dateStyle: 'short',
     timeStyle: 'short',
   }).format(new Date(value));
+}
+
+function calculateAge(value: string) {
+  const birthDate = new Date(value);
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDifference = today.getMonth() - birthDate.getMonth();
+
+  if (
+    monthDifference < 0 ||
+    (monthDifference === 0 && today.getDate() < birthDate.getDate())
+  ) {
+    age -= 1;
+  }
+
+  return age;
+}
+
+function careStatusSummary(status: string) {
+  switch (status) {
+    case 'CONFIRMADA':
+      return 'Paciente pronto para ser chamado';
+    case 'REALIZADA':
+      return 'Consulta encerrada e registrada';
+    case 'NAO_COMPARECEU':
+      return 'Ausencia registrada na agenda';
+    case 'CANCELADA':
+      return 'Consulta retirada da trilha operacional';
+    default:
+      return 'Paciente ainda aguardando confirmacao ou chamada';
+  }
 }
 
 function statusTone(status: string) {
@@ -1941,17 +2412,6 @@ function statusTone(status: string) {
     default:
       return 'tone-info';
   }
-}
-
-function isToday(value: string) {
-  const date = new Date(value);
-  const now = new Date();
-
-  return (
-    date.getFullYear() === now.getFullYear() &&
-    date.getMonth() === now.getMonth() &&
-    date.getDate() === now.getDate()
-  );
 }
 
 export default App;

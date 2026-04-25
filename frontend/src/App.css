@@ -417,6 +417,10 @@ textarea {
   grid-template-columns: minmax(0, 1.45fr) minmax(380px, 0.95fr);
 }
 
+.care-layout {
+  grid-template-columns: minmax(0, 1.2fr) minmax(360px, 0.95fr);
+}
+
 .stack-column {
   display: grid;
   gap: 16px;
@@ -479,6 +483,68 @@ textarea {
 
 .care-grid {
   grid-template-columns: 1.25fr 1.2fr 1fr 0.95fr;
+}
+
+.queue-shell {
+  display: grid;
+  gap: 10px;
+}
+
+.queue-card {
+  width: 100%;
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.025);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 180ms ease,
+    background 180ms ease,
+    transform 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.queue-card:hover,
+.queue-card.is-active {
+  border-color: var(--line-strong);
+  background: rgba(47, 130, 246, 0.12);
+  transform: translateY(-1px);
+}
+
+.queue-card.is-active {
+  box-shadow: inset 0 0 0 1px rgba(110, 175, 255, 0.24);
+}
+
+.queue-identity {
+  display: grid;
+  gap: 4px;
+}
+
+.queue-identity strong,
+.queue-status {
+  font-size: 0.95rem;
+}
+
+.queue-meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.queue-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.care-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .status-dot {
@@ -649,6 +715,12 @@ textarea {
   font-size: 0.88rem;
 }
 
+.mini-button.is-active {
+  border-color: var(--line-strong);
+  background: rgba(47, 130, 246, 0.18);
+  color: #ffffff;
+}
+
 .context-band {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -675,6 +747,7 @@ textarea {
   .login-shell,
   .overview-grid,
   .module-grid,
+  .care-layout,
   .summary-strip,
   .overview-pulse,
   .module-tabs {
@@ -707,6 +780,7 @@ textarea {
   .context-band,
   .three-columns,
   .two-columns,
+  .queue-meta,
   .patients-grid,
   .appointments-grid,
   .doctors-grid,
@@ -728,5 +802,9 @@ textarea {
   .module-line {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .queue-status {
+    justify-content: flex-start;
   }
 }

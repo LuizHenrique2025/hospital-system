@@ -61,6 +61,8 @@ export type Appointment = {
   notes?: string | null;
   diagnosis?: string | null;
   prescription?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
   patient: Patient;
   doctor: Doctor;
 };
