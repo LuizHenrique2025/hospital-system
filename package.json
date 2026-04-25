@@ -7,7 +7,10 @@
   "license": "UNLICENSED",
   "scripts": {
     "build": "nest build",
+    "build:front": "npm --prefix frontend run build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
+    "front:dev": "npm --prefix frontend run dev",
+    "seed:admin": "node --env-file=.env scripts/seed-admin.js",
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
