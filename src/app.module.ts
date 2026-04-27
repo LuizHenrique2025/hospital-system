@@ -10,6 +10,7 @@ import { NursesModule } from './nurses/nurses.module';
 import { AppointmentsModule } from './appointments/appointments.module';
 import { DoctorsModule } from './doctors/doctors.module';
 import { SectorsModule } from './sectors/sectors.module';
+import { CommunicationsModule } from './communications/communications.module';
 import configuration from './config/configuration';
 
 @Module({
@@ -27,6 +28,7 @@ import configuration from './config/configuration';
     AppointmentsModule,
     DoctorsModule,
     SectorsModule,
+    CommunicationsModule,
   ],
   providers: [
     {

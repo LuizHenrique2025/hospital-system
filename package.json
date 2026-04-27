@@ -12,6 +12,7 @@
     "front:dev": "npm --prefix frontend run dev",
     "migrate:usernames": "node --env-file=.env scripts/migrate-usernames.js",
     "seed:admin": "node --env-file=.env scripts/seed-admin.js",
+    "seed:communications": "node --env-file=.env scripts/seed-communications.js",
     "seed:foundation": "node --env-file=.env scripts/seed-foundation.js",
     "start": "nest start",
     "start:dev": "nest start --watch",

@@ -239,6 +239,207 @@ textarea {
   gap: 16px;
 }
 
+.login-app-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px 18px;
+  background:
+    radial-gradient(circle at 50% -12%, rgba(255, 255, 255, 0.86), transparent 22rem),
+    linear-gradient(180deg, #eeeeee 0%, #e6e6e6 100%);
+}
+
+.clinic-login-shell {
+  width: min(430px, 100%);
+  min-height: calc(100vh - 64px);
+  grid-template-columns: 1fr;
+}
+
+.clinic-login-card {
+  position: relative;
+  width: min(352px, calc(100vw - 34px));
+  min-height: 410px;
+  margin: 0 auto;
+  padding: 54px 35px 42px;
+  gap: 0;
+  border: 0;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 20px 38px rgba(35, 38, 42, 0.13);
+  backdrop-filter: none;
+}
+
+.clinic-login-title {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  margin: 0 0 34px;
+  color: #2f343b;
+  font-family: 'Sora', 'IBM Plex Sans', sans-serif;
+}
+
+.clinic-login-title span {
+  color: #8a9099;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.clinic-login-title h1 {
+  margin: 0;
+  color: #2f343b;
+  font-size: 1.2rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+
+.clinic-login-field,
+.clinic-password-input {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.clinic-login-field {
+  min-height: 49px;
+  padding: 0 12px;
+  border: 1px solid #d8d8d8;
+  border-radius: 999px;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55);
+}
+
+.clinic-password-block {
+  display: grid;
+  gap: 5px;
+  margin-top: 16px;
+}
+
+.clinic-password-label {
+  color: #687082;
+  font-size: 0.83rem;
+  font-weight: 500;
+}
+
+.clinic-password-input {
+  min-height: 47px;
+  padding: 0 11px;
+  border-radius: 4px;
+  background: #d8d8d8;
+}
+
+.clinic-login-field input,
+.clinic-password-input input {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #4b5568;
+  outline: none;
+}
+
+.clinic-password-input input::placeholder {
+  color: #92959d;
+  font-style: italic;
+}
+
+.field-icon {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: #66758a;
+}
+
+.field-icon svg,
+.login-reset-button svg {
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.login-reset-button {
+  width: 22px;
+  height: 22px;
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #55677b;
+  cursor: pointer;
+}
+
+.forgot-password-link {
+  justify-self: flex-start;
+  margin-top: 9px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #6b7280;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.clinic-login-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 60px;
+}
+
+.clinic-secondary-button,
+.clinic-access-button {
+  flex: 1;
+  min-height: 47px;
+  min-width: 0;
+  border-radius: 999px;
+  text-transform: uppercase;
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.clinic-secondary-button {
+  border: 1px solid #cfcfcf;
+  background: #ffffff;
+  color: #817a73;
+  cursor: pointer;
+}
+
+.clinic-access-button:hover:not(:disabled),
+.clinic-secondary-button:hover:not(:disabled),
+.login-reset-button:hover,
+.forgot-password-link:hover {
+  transform: translateY(-1px);
+}
+
+.clinic-login-field:focus-within {
+  border-color: #bfc7d0;
+  box-shadow: 0 0 0 4px rgba(45, 140, 202, 0.08);
+}
+
+.clinic-password-input:focus-within {
+  box-shadow: 0 0 0 4px rgba(107, 114, 128, 0.14);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .card-topline,
 .page-header,
 .toolbar-inline,
@@ -443,6 +644,119 @@ textarea {
 
 .quick-actions {
   gap: 12px;
+}
+
+.communication-hero {
+  overflow: hidden;
+}
+
+.communication-hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) repeat(2, minmax(180px, 0.7fr));
+  gap: 14px;
+  align-items: stretch;
+}
+
+.communication-hero h2 {
+  margin-bottom: 8px;
+  font-size: clamp(1.65rem, 4vw, 2.45rem);
+}
+
+.communication-hero p,
+.communication-item p,
+.notice-card p,
+.holiday-card p,
+.mail-row p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.58;
+}
+
+.communication-date-card,
+.communication-item,
+.notice-card,
+.holiday-card,
+.mail-row {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface-muted);
+}
+
+.communication-date-card {
+  display: grid;
+  align-content: center;
+  gap: 8px;
+  padding: 18px;
+}
+
+.communication-date-card span,
+.communication-item span,
+.holiday-card span,
+.mail-row span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.communication-date-card strong {
+  font-size: 1.15rem;
+  line-height: 1.15;
+}
+
+.communication-grid {
+  grid-template-columns: minmax(0, 1.2fr) minmax(340px, 0.9fr);
+}
+
+.communication-list,
+.notice-list,
+.inbox-list {
+  display: grid;
+  gap: 10px;
+}
+
+.communication-item,
+.notice-card,
+.holiday-card {
+  display: grid;
+  gap: 7px;
+  padding: 16px;
+}
+
+.communication-item strong,
+.notice-card strong,
+.holiday-card strong,
+.mail-row strong {
+  color: var(--text);
+}
+
+.holiday-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.holiday-card span {
+  color: var(--accent-strong);
+}
+
+.mail-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  padding: 14px;
+}
+
+.mail-row.is-unread {
+  border-color: var(--line-strong);
+  background: rgba(255, 255, 255, 0.64);
+}
+
+.mail-row small {
+  color: var(--muted);
+  font-weight: 700;
 }
 
 .table-shell,
@@ -719,6 +1033,13 @@ textarea {
   font-weight: 700;
 }
 
+.primary-button.clinic-access-button {
+  border: 0;
+  background: #5f6670;
+  color: #ffffff;
+  box-shadow: none;
+}
+
 .primary-button:hover:not(:disabled) {
   transform: translateY(-1px);
 }
@@ -773,6 +1094,8 @@ textarea {
 @media (max-width: 1280px) {
   .login-shell,
   .overview-grid,
+  .communication-grid,
+  .communication-hero-grid,
   .module-grid,
   .care-layout,
   .team-layout,
@@ -808,6 +1131,7 @@ textarea {
   .context-band,
   .three-columns,
   .two-columns,
+  .holiday-grid,
   .queue-meta,
   .patients-grid,
   .appointments-grid,

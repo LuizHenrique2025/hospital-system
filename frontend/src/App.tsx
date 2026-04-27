@@ -19,6 +19,7 @@ import './App.css';
 import { apiRequest } from './lib/api';
 import type {
   Appointment,
+  CommunicationDashboard,
   Doctor,
   Nurse,
   PaginatedResponse,
@@ -34,6 +35,7 @@ type Session = {
 };
 
 type DashboardCache = {
+  communicationDashboard: CommunicationDashboard;
   users: UserProfile[];
   patients: Patient[];
   patientTotal: number;
@@ -41,6 +43,13 @@ type DashboardCache = {
   nurses: Nurse[];
   sectors: Sector[];
   appointments: Appointment[];
+};
+
+const emptyCommunicationDashboard: CommunicationDashboard = {
+  updates: [],
+  notices: [],
+  commemorativeDates: [],
+  emails: [],
 };
 
 type Notice = {
@@ -146,7 +155,7 @@ const storageKey = 'hospital-system.session';
 const dashboardCacheKey = 'hospital-system.dashboard';
 
 const activeModules: ModuleItem[] = [
-  { path: '/central', label: 'Central', hint: 'Resumo geral' },
+  { path: '/central', label: 'Principal', hint: 'Comunicacao interna' },
   {
     path: '/usuarios',
     label: 'Usuarios',
@@ -356,6 +365,10 @@ function App() {
   const [appointments, setAppointments] = useState<Appointment[]>(
     cachedDashboard?.appointments ?? [],
   );
+  const [communicationDashboard, setCommunicationDashboard] =
+    useState<CommunicationDashboard>(
+      cachedDashboard?.communicationDashboard ?? emptyCommunicationDashboard,
+    );
 
   const loadDashboard = useCallback(
     async (token = session?.token) => {
@@ -377,6 +390,7 @@ function App() {
           nurseResponse,
           sectorResponse,
           appointmentResponse,
+          communicationResponse,
         ] = await Promise.all([
           profile.role === 'ADMIN'
             ? apiRequest<PaginatedResponse<UserProfile>>(
@@ -391,6 +405,9 @@ function App() {
           apiRequest<Nurse[]>('/nurses', { token }),
           apiRequest<Sector[]>('/sectors', { token }),
           apiRequest<Appointment[]>('/appointments', { token }),
+          apiRequest<CommunicationDashboard>('/communications/dashboard', {
+            token,
+          }),
         ]);
 
         const nextUsers = userResponse.data ?? [];
@@ -410,6 +427,7 @@ function App() {
           setNurses(nurseResponse);
           setSectors(sectorResponse);
           setAppointments(appointmentResponse);
+          setCommunicationDashboard(communicationResponse);
         });
 
         localStorage.setItem(storageKey, JSON.stringify(nextSession));
@@ -423,6 +441,7 @@ function App() {
             nurses: nurseResponse,
             sectors: sectorResponse,
             appointments: appointmentResponse,
+            communicationDashboard: communicationResponse,
           }),
         );
 
@@ -462,7 +481,7 @@ function App() {
     }, 0);
 
     return () => window.clearTimeout(syncTimer);
-  }, [loadDashboard, restoredSessionToken, session]);
+  }, [loadDashboard, restoredSessionToken, session?.token]);
 
   async function handleLogin(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -546,6 +565,7 @@ function App() {
     setNurses([]);
     setSectors([]);
     setAppointments([]);
+    setCommunicationDashboard(emptyCommunicationDashboard);
     setPatientTotal(0);
     setUserForm(initialUserForm);
     setDoctorForm(initialDoctorForm);
@@ -867,16 +887,8 @@ function App() {
     navigate('/agendamento');
   }
 
-  function openPatientModule() {
-    navigate('/pacientes');
-  }
-
   function openTeamModule() {
     navigate('/equipe');
-  }
-
-  function openSchedulingModule() {
-    navigate('/agendamento');
   }
 
   function openEmergencyScheduling() {
@@ -938,15 +950,8 @@ function App() {
           path="/central"
           element={
             <OverviewPage
-              appointments={appointments}
-              canCreateAppointment={canCreateAppointment}
-              doctors={doctors}
-              openPatientModule={openPatientModule}
-              openSchedulingModule={openSchedulingModule}
-              openTeamModule={openTeamModule}
-              patientTotal={patientTotal}
-              patients={patients}
-              upcomingModules={upcomingModules}
+              communicationDashboard={communicationDashboard}
+              session={session}
             />
           }
         />
@@ -1095,20 +1100,26 @@ function LoginScreen({
   setLoginForm,
 }: LoginScreenProps) {
   return (
-    <main className="app-shell">
-      <section className="login-shell">
-        <form className="auth-card" onSubmit={handleLogin}>
-          <div className="card-topline">
-            <div>
-              <p className="eyebrow">Acesso local</p>
-              <h2>Entrar no painel</h2>
-            </div>
+    <main className="login-app-shell">
+      <section className="login-shell clinic-login-shell">
+        <form className="auth-card clinic-login-card" onSubmit={handleLogin}>
+          <div className="clinic-login-title">
+            <span>Acesso seguro</span>
+            <h1>Sistema Revitalite</h1>
           </div>
 
-          <label className="field">
-            <span>Login</span>
+          <label className="clinic-login-field">
+            <span className="field-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" role="img">
+                <path d="M12 12.6a4.1 4.1 0 1 0 0-8.2 4.1 4.1 0 0 0 0 8.2Z" />
+                <path d="M4.8 20.2a7.2 7.2 0 0 1 14.4 0" />
+              </svg>
+            </span>
+            <span className="sr-only">Login</span>
             <input
+              aria-label="Login"
               autoComplete="username"
+              placeholder="Digite seu login"
               value={loginForm.username}
               onChange={(event) =>
                 setLoginForm((current) => ({
@@ -1118,27 +1129,72 @@ function LoginScreen({
               }
               required
             />
-          </label>
-
-          <label className="field">
-            <span>Senha</span>
-            <input
-              autoComplete="current-password"
-              type="password"
-              value={loginForm.password}
-              onChange={(event) =>
+            <button
+              aria-label="Limpar login"
+              className="login-reset-button"
+              type="button"
+              onClick={() =>
                 setLoginForm((current) => ({
                   ...current,
-                  password: event.target.value,
+                  username: '',
                 }))
               }
-              required
-            />
+            >
+              <svg viewBox="0 0 24 24" role="img">
+                <path d="M20 12a8 8 0 1 1-2.35-5.65" />
+                <path d="M20 4.8v5.1h-5.1" />
+              </svg>
+            </button>
           </label>
 
-          <button className="primary-button" type="submit" disabled={isSubmitting}>
-            {isSubmitting ? 'Entrando...' : 'Acessar sistema'}
+          <label className="clinic-password-block">
+            <span className="clinic-password-label">Senha</span>
+            <span className="clinic-password-input">
+              <span className="field-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" role="img">
+                  <path d="M8.8 14.5a3.6 3.6 0 1 1 1.75-3.1H22l-2.1 2.1 1.3 1.3-1.7 1.7-1.3-1.3-1.6 1.6-1.3-1.3h-4.75a3.6 3.6 0 0 1-1.65 1Z" />
+                  <path d="M5.6 11.4h.01" />
+                </svg>
+              </span>
+              <span className="sr-only">Senha</span>
+              <input
+                aria-label="Senha"
+                autoComplete="current-password"
+                type="password"
+                placeholder="Informe sua senha"
+                value={loginForm.password}
+                onChange={(event) =>
+                  setLoginForm((current) => ({
+                    ...current,
+                    password: event.target.value,
+                  }))
+                }
+                required
+              />
+            </span>
+          </label>
+
+          <button className="forgot-password-link" type="button">
+            Esqueceu sua senha?
           </button>
+
+          <div className="clinic-login-actions">
+            <button
+              className="clinic-secondary-button"
+              type="button"
+              onClick={() =>
+                setLoginForm((current) => ({
+                  ...current,
+                  password: '',
+                }))
+              }
+            >
+              Voltar
+            </button>
+            <button className="primary-button clinic-access-button" type="submit" disabled={isSubmitting}>
+              {isSubmitting ? 'Entrando...' : 'Acessar'}
+            </button>
+          </div>
         </form>
       </section>
     </main>
@@ -1367,7 +1423,7 @@ function WorkspaceLayout({
             <div className="brand-mark">HS</div>
             <div>
               <p className="eyebrow">Centro operacional</p>
-              <h1>Hospital Control</h1>
+              <h1>Hospital Revitalite</h1>
             </div>
           </div>
 
@@ -1438,135 +1494,113 @@ function WorkspaceLayout({
 }
 
 type OverviewPageProps = {
-  appointments: Appointment[];
-  canCreateAppointment: boolean;
-  doctors: Doctor[];
-  openPatientModule: () => void;
-  openSchedulingModule: () => void;
-  openTeamModule: () => void;
-  patientTotal: number;
-  patients: Patient[];
-  upcomingModules: string[];
+  communicationDashboard: CommunicationDashboard;
+  session: Session;
 };
 
 function OverviewPage({
-  appointments,
-  canCreateAppointment,
-  doctors,
-  openPatientModule,
-  openSchedulingModule,
-  openTeamModule,
-  patientTotal,
-  patients,
-  upcomingModules,
+  communicationDashboard,
+  session,
 }: OverviewPageProps) {
-  const nextAppointments = [...appointments]
-    .sort(
-      (left, right) =>
-        new Date(left.appointmentDate).getTime() -
-        new Date(right.appointmentDate).getTime(),
-    )
-    .slice(0, 6);
-  const recentPatients = patients.slice(0, 5);
+  const today = new Date();
+  const unreadCount = communicationDashboard.emails.filter(
+    (email) => email.unread,
+  ).length;
 
   return (
     <>
       <section className="summary-strip">
         <article className="summary-card">
-          <span>Pacientes</span>
-          <strong>{patientTotal}</strong>
-          <small>base operacional</small>
+          <span>Hoje</span>
+          <strong>{formatWeekday(today)}</strong>
+          <small>{formatDateFromDate(today)}</small>
         </article>
         <article className="summary-card">
-          <span>Medicos</span>
-          <strong>{doctors.length}</strong>
-          <small>cadastro ativo</small>
+          <span>Atualizacoes</span>
+          <strong>{communicationDashboard.updates.length}</strong>
+          <small>comunicados do sistema</small>
         </article>
         <article className="summary-card">
-          <span>Consultas</span>
-          <strong>{appointments.length}</strong>
-          <small>agenda registrada</small>
+          <span>Avisos</span>
+          <strong>{communicationDashboard.notices.length}</strong>
+          <small>recados do hospital</small>
         </article>
         <article className="summary-card">
-          <span>Modulos</span>
-          <strong>{activeModules.length + upcomingModules.length}</strong>
-          <small>mapa planejado</small>
+          <span>Emails</span>
+          <strong>{unreadCount}</strong>
+          <small>nao lidos</small>
         </article>
       </section>
 
-      <section className="page-grid overview-grid">
+      <section className="panel communication-hero">
+        <div className="communication-hero-grid">
+          <div>
+            <p className="eyebrow">Aba principal</p>
+            <h2>{greetingLabel(today)}, {firstName(session.profile.name)}</h2>
+            <p>
+              Este espaco e comum para todos os usuarios e concentra informacoes
+              institucionais antes de acessar os modulos do setor.
+            </p>
+          </div>
+          <div className="communication-date-card">
+            <span>Data e hora</span>
+            <strong>{formatDateFromDate(today)}</strong>
+            <small>{formatTimeFromDate(today)}</small>
+          </div>
+          <div className="communication-date-card">
+            <span>Seu perfil</span>
+            <strong>{roleLabel(session.profile.role)}</strong>
+            <small>{session.profile.username}</small>
+          </div>
+        </div>
+      </section>
+
+      <section className="page-grid communication-grid">
         <div className="stack-column">
           <article className="panel">
             <div className="page-header">
               <div>
-                <p className="eyebrow">Ponto de controle</p>
-                <h2>Central operacional</h2>
+                <p className="eyebrow">Atualizacoes</p>
+                <h2>Linha do tempo do sistema</h2>
               </div>
             </div>
 
-            <div className="overview-pulse">
-              <div className="pulse-card">
-                <span>Agenda pronta</span>
-                <strong>{canCreateAppointment ? 'SIM' : 'PENDENTE'}</strong>
-                <small>precisa de medico e paciente</small>
-              </div>
-              <div className="pulse-card">
-                <span>Proximas consultas</span>
-                <strong>{nextAppointments.length}</strong>
-                <small>sequencia da agenda</small>
-              </div>
-              <div className="pulse-card">
-                <span>Pacientes recentes</span>
-                <strong>{recentPatients.length}</strong>
-                <small>cadastros mais novos</small>
-              </div>
-            </div>
-
-            <div className="quick-actions">
-              <button className="ghost-button" onClick={openPatientModule} type="button">
-                Abrir pacientes
-              </button>
-              <button className="ghost-button" onClick={openSchedulingModule} type="button">
-                Abrir agendamento
-              </button>
-              <button className="ghost-button" onClick={openTeamModule} type="button">
-                Abrir equipe
-              </button>
+            <div className="communication-list">
+              {communicationDashboard.updates.length === 0 ? (
+                <p className="empty-state">
+                  Ainda nao ha atualizacoes publicadas.
+                </p>
+              ) : (
+                communicationDashboard.updates.map((update) => (
+                  <div className="communication-item" key={update.id}>
+                    <span>{update.tag || 'Atualizacao'}</span>
+                    <strong>{update.title}</strong>
+                    <p>{update.description}</p>
+                  </div>
+                ))
+              )}
             </div>
           </article>
 
           <article className="panel">
             <div className="page-header">
               <div>
-                <p className="eyebrow">Agenda</p>
-                <h2>Consultas em evidencia</h2>
+                <p className="eyebrow">Datas comemorativas</p>
+                <h2>Calendario institucional</h2>
               </div>
             </div>
 
-            <div className="table-shell">
-              <div className="table-head appointments-grid">
-                <span>Paciente</span>
-                <span>Medico</span>
-                <span>Horario</span>
-                <span>Status</span>
-                <span>Tipo</span>
-              </div>
-
-              {nextAppointments.length === 0 ? (
-                <p className="empty-state">Nenhuma consulta registrada ainda.</p>
+            <div className="holiday-grid">
+              {communicationDashboard.commemorativeDates.length === 0 ? (
+                <p className="empty-state">
+                  Nenhuma data comemorativa cadastrada.
+                </p>
               ) : (
-                nextAppointments.map((appointment) => (
-                  <div className="table-row appointments-grid" key={appointment.id}>
-                    <span>{appointment.patient.name}</span>
-                    <span>{appointment.doctor.user.name}</span>
-                    <span>{formatDateTime(appointment.appointmentDate)}</span>
-                    <span>
-                      <em
-                        className={`status-dot ${statusTone(appointment.status)}`}
-                      />
-                      {appointment.status}
-                    </span>
-                    <span>{appointment.type}</span>
+                communicationDashboard.commemorativeDates.map((date) => (
+                  <div className="holiday-card" key={date.id}>
+                    <span>{date.dateLabel || 'Data'}</span>
+                    <strong>{date.title}</strong>
+                    <p>{date.description}</p>
                   </div>
                 ))
               )}
@@ -1578,25 +1612,19 @@ function OverviewPage({
           <article className="panel">
             <div className="page-header">
               <div>
-                <p className="eyebrow">Pacientes</p>
-                <h2>Ultimos cadastrados</h2>
+                <p className="eyebrow">Avisos do hospital</p>
+                <h2>Mural interno</h2>
               </div>
             </div>
 
-            <div className="list-shell">
-              {recentPatients.length === 0 ? (
-                <p className="empty-state">Ainda nao ha pacientes cadastrados.</p>
+            <div className="notice-list">
+              {communicationDashboard.notices.length === 0 ? (
+                <p className="empty-state">Nenhum aviso publicado.</p>
               ) : (
-                recentPatients.map((patient) => (
-                  <div className="list-row" key={patient.id}>
-                    <div>
-                      <strong>{patient.name}</strong>
-                      <span>{patient.cpf}</span>
-                    </div>
-                    <div>
-                      <span>{patient.phone}</span>
-                      <span>{patient.city || 'Cidade nao informada'}</span>
-                    </div>
+                communicationDashboard.notices.map((notice) => (
+                  <div className="notice-card" key={notice.id}>
+                    <strong>{notice.title}</strong>
+                    <p>{notice.description}</p>
                   </div>
                 ))
               )}
@@ -1606,21 +1634,31 @@ function OverviewPage({
           <article className="panel">
             <div className="page-header">
               <div>
-                <p className="eyebrow">Proximos modulos</p>
-                <h2>Trilha de execucao</h2>
+                <p className="eyebrow">Caixa interna</p>
+                <h2>Emails internos</h2>
               </div>
             </div>
 
-            <div className="module-stack">
-              {upcomingModules.map((moduleName, index) => (
-                <div className="module-line" key={moduleName}>
-                  <span className="module-order">{index + 1}</span>
-                  <div>
-                    <strong>{moduleName}</strong>
-                    <small>entra depois da base operacional atual</small>
+            <div className="inbox-list">
+              {communicationDashboard.emails.length === 0 ? (
+                <p className="empty-state">Caixa interna sem mensagens.</p>
+              ) : (
+                communicationDashboard.emails.map((email) => (
+                  <div
+                    className={`mail-row ${email.unread ? 'is-unread' : ''}`}
+                    key={email.id}
+                  >
+                    <div>
+                      <span>{email.from}</span>
+                      <strong>{email.subject}</strong>
+                      <p>{email.preview}</p>
+                    </div>
+                    <small>
+                      {email.timeLabel || (email.sentAt ? formatTime(email.sentAt) : '--:--')}
+                    </small>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </article>
         </div>
@@ -4018,6 +4056,47 @@ function humanizeEnum(value: string) {
     .split('_')
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
+}
+
+function firstName(value: string) {
+  return value.trim().split(/\s+/)[0] || 'usuario';
+}
+
+function greetingLabel(value: Date) {
+  const hour = value.getHours();
+
+  if (hour < 12) {
+    return 'Bom dia';
+  }
+
+  if (hour < 18) {
+    return 'Boa tarde';
+  }
+
+  return 'Boa noite';
+}
+
+function formatWeekday(value: Date) {
+  return new Intl.DateTimeFormat('pt-BR', {
+    weekday: 'short',
+  })
+    .format(value)
+    .replace('.', '');
+}
+
+function formatDateFromDate(value: Date) {
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  }).format(value);
+}
+
+function formatTimeFromDate(value: Date) {
+  return new Intl.DateTimeFormat('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(value);
 }
 
 function formatDate(value: string) {

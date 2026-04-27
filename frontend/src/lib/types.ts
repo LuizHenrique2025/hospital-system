@@ -31,6 +31,36 @@ export type PaginatedResponse<T> = {
   };
 };
 
+export type CommunicationType = 'UPDATE' | 'NOTICE' | 'HOLIDAY';
+
+export type CommunicationEntry = {
+  id: string;
+  type: CommunicationType;
+  tag?: string | null;
+  title: string;
+  description: string;
+  dateLabel?: string | null;
+  publishAt?: string;
+};
+
+export type InternalEmail = {
+  id: string;
+  from: string;
+  subject: string;
+  preview: string;
+  body?: string | null;
+  timeLabel?: string | null;
+  unread: boolean;
+  sentAt?: string;
+};
+
+export type CommunicationDashboard = {
+  updates: CommunicationEntry[];
+  notices: CommunicationEntry[];
+  commemorativeDates: CommunicationEntry[];
+  emails: InternalEmail[];
+};
+
 export type Patient = {
   id: string;
   name: string;
