@@ -60,13 +60,18 @@ type Notice = {
 type PatientFormState = {
   name: string;
   cpf: string;
+  rg: string;
   birthDate: string;
   gender: 'MASCULINO' | 'FEMININO' | 'OUTRO';
   bloodType: string;
   phone: string;
   email: string;
+  address: string;
   city: string;
   state: string;
+  zipCode: string;
+  emergencyContact: string;
+  emergencyPhone: string;
   allergies: string;
   medicalHistory: string;
 };
@@ -157,6 +162,12 @@ const dashboardCacheKey = 'hospital-system.dashboard';
 const activeModules: ModuleItem[] = [
   { path: '/central', label: 'Principal', hint: 'Comunicacao interna' },
   {
+    path: '/cadastros',
+    label: 'Cadastros',
+    hint: 'Base operacional',
+    roles: ['ADMIN', 'ATENDENTE'],
+  },
+  {
     path: '/usuarios',
     label: 'Usuarios',
     hint: 'Acessos e permissoes',
@@ -210,7 +221,6 @@ const upcomingModules = [
   'Exames',
   'Procedimentos',
   'Tabelas',
-  'Cadastros',
   'Estoque',
   'Relatorios',
 ];
@@ -253,13 +263,18 @@ const roleOptions: Role[] = [
 const initialPatientForm: PatientFormState = {
   name: '',
   cpf: '',
+  rg: '',
   birthDate: '',
   gender: 'MASCULINO',
   bloodType: '',
   phone: '',
   email: '',
+  address: '',
   city: '',
   state: '',
+  zipCode: '',
+  emergencyContact: '',
+  emergencyPhone: '',
   allergies: '',
   medicalHistory: '',
 };
@@ -595,8 +610,13 @@ function App() {
           ...patientForm,
           bloodType: patientForm.bloodType || undefined,
           email: patientForm.email || undefined,
+          rg: patientForm.rg || undefined,
+          address: patientForm.address || undefined,
           city: patientForm.city || undefined,
           state: patientForm.state || undefined,
+          zipCode: patientForm.zipCode || undefined,
+          emergencyContact: patientForm.emergencyContact || undefined,
+          emergencyPhone: patientForm.emergencyPhone || undefined,
           allergies: patientForm.allergies || undefined,
           medicalHistory: patientForm.medicalHistory || undefined,
         },
@@ -952,6 +972,18 @@ function App() {
             <OverviewPage
               communicationDashboard={communicationDashboard}
               session={session}
+            />
+          }
+        />
+        <Route
+          path="/cadastros"
+          element={
+            <RegistrationsPage
+              doctors={doctors}
+              nurses={nurses}
+              patientTotal={patientTotal}
+              sectors={sectors}
+              users={users}
             />
           }
         />
@@ -1667,6 +1699,208 @@ function OverviewPage({
   );
 }
 
+type RegistrationsPageProps = {
+  doctors: Doctor[];
+  nurses: Nurse[];
+  patientTotal: number;
+  sectors: Sector[];
+  users: UserProfile[];
+};
+
+const administrativeRegistrationCards = [
+  {
+    label: 'Convenio',
+    hint: 'Operadoras, contratos e regras',
+    status: 'Em breve',
+  },
+  {
+    label: 'Plano',
+    hint: 'Planos vinculados aos convenios',
+    status: 'Em breve',
+  },
+  {
+    label: 'Profissional',
+    hint: 'Medicos, enfermagem e equipe',
+    path: '/equipe',
+    status: 'Ativo',
+  },
+  {
+    label: 'Procedimento',
+    hint: 'Codigos, grupos e exigencias',
+    status: 'Proximo',
+  },
+  {
+    label: 'Pacote Proc.',
+    hint: 'Pacotes e composicoes',
+    status: 'Em breve',
+  },
+  {
+    label: 'Modelo Laudo',
+    hint: 'Textos padrao e templates',
+    status: 'Em breve',
+  },
+  {
+    label: 'Tabela Proc.',
+    hint: 'Tabelas, valores e vigencias',
+    status: 'Proximo',
+  },
+  {
+    label: 'Grp. Convenio',
+    hint: 'Agrupadores de operadoras',
+    status: 'Em breve',
+  },
+  {
+    label: 'Requisitante',
+    hint: 'Solicitantes externos e internos',
+    status: 'Em breve',
+  },
+];
+
+const operationalRegistrationCards = [
+  {
+    label: 'Paciente',
+    hint: 'Cadastro, busca e dados clinicos',
+    path: '/pacientes',
+    status: 'Ativo',
+  },
+  {
+    label: 'Pedidos Exames',
+    hint: 'Solicitacoes e acompanhamento',
+    status: 'Em breve',
+  },
+  {
+    label: 'Mov. Guias',
+    hint: 'Movimentacao e controle de guias',
+    status: 'Em breve',
+  },
+  {
+    label: 'Laudos',
+    hint: 'Resultados e modelos de laudo',
+    status: 'Em breve',
+  },
+  {
+    label: 'Rec./NFS-e',
+    hint: 'Recibos e notas fiscais',
+    status: 'Em breve',
+  },
+  {
+    label: 'Autorizacao',
+    hint: 'Senhas e liberacoes de atendimento',
+    status: 'Em breve',
+  },
+];
+
+function RegistrationsPage({
+  doctors,
+  nurses,
+  patientTotal,
+  sectors,
+  users,
+}: RegistrationsPageProps) {
+  const professionalTotal = doctors.length + nurses.length;
+
+  return (
+    <section className="page-grid">
+      <section className="summary-strip">
+        <article className="summary-card">
+          <span>Pacientes</span>
+          <strong>{patientTotal}</strong>
+          <small>cadastros ativos</small>
+        </article>
+        <article className="summary-card">
+          <span>Profissionais</span>
+          <strong>{professionalTotal}</strong>
+          <small>medicos e enfermagem</small>
+        </article>
+        <article className="summary-card">
+          <span>Setores</span>
+          <strong>{sectors.length}</strong>
+          <small>areas operacionais</small>
+        </article>
+        <article className="summary-card">
+          <span>Usuarios</span>
+          <strong>{users.length}</strong>
+          <small>visivel para admin</small>
+        </article>
+      </section>
+
+      <article className="panel registrations-hero">
+        <div>
+          <p className="eyebrow">Modulo 2</p>
+          <h2>Central de Cadastros</h2>
+          <p>
+            Atalhos para a base administrativa e operacional. A ideia e manter
+            a logica do sistema atual, mas com menos campos na mesma tela e mais
+            organizacao por contexto.
+          </p>
+        </div>
+      </article>
+
+      <section className="registration-section">
+        <div className="page-header">
+          <div>
+            <p className="eyebrow">Cadastros administrativos</p>
+            <h2>Base de contratos, profissionais e tabelas</h2>
+          </div>
+        </div>
+        <div className="registration-grid">
+          {administrativeRegistrationCards.map((card) => (
+            <RegistrationCard card={card} key={card.label} />
+          ))}
+        </div>
+      </section>
+
+      <section className="registration-section">
+        <div className="page-header">
+          <div>
+            <p className="eyebrow">Cadastros operacionais</p>
+            <h2>Fluxos ligados ao atendimento</h2>
+          </div>
+        </div>
+        <div className="registration-grid operational">
+          {operationalRegistrationCards.map((card) => (
+            <RegistrationCard card={card} key={card.label} />
+          ))}
+        </div>
+      </section>
+    </section>
+  );
+}
+
+type RegistrationCardProps = {
+  card: {
+    label: string;
+    hint: string;
+    path?: string;
+    status: string;
+  };
+};
+
+function RegistrationCard({ card }: RegistrationCardProps) {
+  const content = (
+    <>
+      <span className="registration-icon">{card.label.slice(0, 2)}</span>
+      <strong>{card.label}</strong>
+      <small>{card.hint}</small>
+      <em>{card.status}</em>
+    </>
+  );
+
+  if (card.path) {
+    return (
+      <NavLink className="registration-card is-active" to={card.path}>
+        {content}
+      </NavLink>
+    );
+  }
+
+  return (
+    <div className="registration-card" aria-disabled="true">
+      {content}
+    </div>
+  );
+}
+
 type PatientsPageProps = {
   form: PatientFormState;
   isSubmitting: boolean;
@@ -1687,24 +1921,37 @@ function PatientsPage({
   setForm,
 }: PatientsPageProps) {
   const [search, setSearch] = useState('');
+  const [activeTab, setActiveTab] = useState<
+    'identificacao' | 'contato' | 'saude' | 'status'
+  >('identificacao');
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
   const filteredPatients = useMemo(
     () => patients.filter((patient) => matchPatient(patient, deferredSearch)),
     [deferredSearch, patients],
   );
+  const previewPatient = filteredPatients[0] ?? patients[0] ?? null;
+  const canSavePatient = [form.name, form.cpf, form.birthDate, form.phone].every(
+    (value) => value.trim().length > 0,
+  );
+  const tabs = [
+    { id: 'identificacao', label: 'Identificacao', hint: 'Dados gerais' },
+    { id: 'contato', label: 'Contato', hint: 'Endereco e emergencia' },
+    { id: 'saude', label: 'Saude', hint: 'Alergias e historico' },
+    { id: 'status', label: 'Status', hint: 'Fluxo do prontuario' },
+  ] as const;
 
   return (
-    <section className="page-grid module-grid">
-      <article className="panel">
+    <section className="page-grid patients-workspace">
+      <article className="panel patient-directory">
         <div className="page-header">
           <div>
             <p className="eyebrow">Pacientes</p>
-            <h2>Busca e selecao</h2>
+            <h2>Busca rapida</h2>
           </div>
           <div className="toolbar-inline">
             <input
               className="search-input"
-              placeholder="Buscar por nome, CPF, telefone ou cidade"
+              placeholder="Buscar por nome, CPF, RG, telefone ou cidade"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
             />
@@ -1713,6 +1960,23 @@ function PatientsPage({
             </span>
           </div>
         </div>
+
+        {previewPatient ? (
+          <aside className="patient-preview-card">
+            <div>
+              <span className="section-title">Paciente em foco</span>
+              <strong>{previewPatient.name}</strong>
+              <small>
+                {previewPatient.cpf} - {formatDate(previewPatient.birthDate)}
+              </small>
+            </div>
+            <div className="patient-preview-meta">
+              <span>{previewPatient.phone}</span>
+              <span>{previewPatient.city || 'Cidade nao informada'}</span>
+              <span>{previewPatient.bloodType || 'Tipo sanguineo pendente'}</span>
+            </div>
+          </aside>
+        ) : null}
 
         <div className="table-shell">
           <div className="table-head patients-grid">
@@ -1728,8 +1992,14 @@ function PatientsPage({
           ) : (
             filteredPatients.map((patient) => (
               <div className="table-row patients-grid" key={patient.id}>
-                <span>{patient.name}</span>
-                <span>{patient.cpf}</span>
+                <span>
+                  {patient.name}
+                  <small>{patient.email || 'Sem email cadastrado'}</small>
+                </span>
+                <span>
+                  {patient.cpf}
+                  <small>{patient.rg ? `RG ${patient.rg}` : 'RG pendente'}</small>
+                </span>
                 <span>{patient.city || 'Nao informada'}</span>
                 <span>{patient.phone}</span>
                 <button
@@ -1745,161 +2015,294 @@ function PatientsPage({
         </div>
       </article>
 
-      <form className="panel form-panel" onSubmit={onSubmit}>
+      <form className="panel patient-editor" onSubmit={onSubmit}>
         <div className="page-header">
           <div>
-            <p className="eyebrow">Cadastro</p>
+            <p className="eyebrow">Cadastro assistido</p>
             <h2>Novo paciente</h2>
           </div>
+          <span className="inline-badge">Cadastro em abas</span>
         </div>
 
-        <div className="section-block">
-          <p className="section-title">Identificacao</p>
-          <div className="field-grid three-columns">
-            <label className="field">
-              <span>Nome</span>
-              <input
-                value={form.name}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, name: event.target.value }))
-                }
-                required
-              />
-            </label>
-            <label className="field">
-              <span>CPF</span>
-              <input
-                value={form.cpf}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, cpf: event.target.value }))
-                }
-                required
-              />
-            </label>
-            <label className="field">
-              <span>Nascimento</span>
-              <input
-                type="date"
-                value={form.birthDate}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    birthDate: event.target.value,
-                  }))
-                }
-                required
-              />
-            </label>
-            <label className="field">
-              <span>Genero</span>
-              <select
-                value={form.gender}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    gender: event.target.value as PatientFormState['gender'],
-                  }))
-                }
-              >
-                {genders.map((gender) => (
-                  <option key={gender} value={gender}>
-                    {gender}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field">
-              <span>Telefone</span>
-              <input
-                value={form.phone}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, phone: event.target.value }))
-                }
-                required
-              />
-            </label>
-            <label className="field">
-              <span>Tipo sanguineo</span>
-              <select
-                value={form.bloodType}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    bloodType: event.target.value,
-                  }))
-                }
-              >
-                {bloodTypes.map((bloodType) => (
-                  <option key={bloodType || 'none'} value={bloodType}>
-                    {bloodType || 'Nao informado'}
-                  </option>
-                ))}
-              </select>
-            </label>
+        <div className="patient-tabs" role="tablist" aria-label="Cadastro do paciente">
+          {tabs.map((tab) => (
+            <button
+              aria-pressed={activeTab === tab.id}
+              className={`patient-tab ${activeTab === tab.id ? 'is-active' : ''}`}
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              type="button"
+            >
+              <strong>{tab.label}</strong>
+              <small>{tab.hint}</small>
+            </button>
+          ))}
+        </div>
+
+        {activeTab === 'identificacao' ? (
+          <div className="section-block">
+            <p className="section-title">Identificacao</p>
+            <div className="field-grid three-columns">
+              <label className="field full-row">
+                <span>Nome completo</span>
+                <input
+                  value={form.name}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, name: event.target.value }))
+                  }
+                  required
+                />
+              </label>
+              <label className="field">
+                <span>CPF</span>
+                <input
+                  value={form.cpf}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, cpf: event.target.value }))
+                  }
+                  required
+                />
+              </label>
+              <label className="field">
+                <span>RG</span>
+                <input
+                  value={form.rg}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, rg: event.target.value }))
+                  }
+                />
+              </label>
+              <label className="field">
+                <span>Nascimento</span>
+                <input
+                  type="date"
+                  value={form.birthDate}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      birthDate: event.target.value,
+                    }))
+                  }
+                  required
+                />
+              </label>
+              <label className="field">
+                <span>Genero</span>
+                <select
+                  value={form.gender}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      gender: event.target.value as PatientFormState['gender'],
+                    }))
+                  }
+                >
+                  {genders.map((gender) => (
+                    <option key={gender} value={gender}>
+                      {gender}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span>Telefone</span>
+                <input
+                  value={form.phone}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, phone: event.target.value }))
+                  }
+                  required
+                />
+              </label>
+            </div>
           </div>
-        </div>
+        ) : null}
 
-        <div className="section-block">
-          <p className="section-title">Contato e clinico</p>
-          <div className="field-grid three-columns">
-            <label className="field">
-              <span>Email</span>
-              <input
-                type="email"
-                value={form.email}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, email: event.target.value }))
-                }
-              />
-            </label>
-            <label className="field">
-              <span>Cidade</span>
-              <input
-                value={form.city}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, city: event.target.value }))
-                }
-              />
-            </label>
-            <label className="field">
-              <span>Estado</span>
-              <input
-                value={form.state}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, state: event.target.value }))
-                }
-              />
-            </label>
-            <label className="field full-row">
-              <span>Alergias</span>
-              <textarea
-                value={form.allergies}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    allergies: event.target.value,
-                  }))
-                }
-              />
-            </label>
-            <label className="field full-row">
-              <span>Historico medico</span>
-              <textarea
-                value={form.medicalHistory}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    medicalHistory: event.target.value,
-                  }))
-                }
-              />
-            </label>
+        {activeTab === 'contato' ? (
+          <div className="section-block">
+            <p className="section-title">Contato e endereco</p>
+            <div className="field-grid three-columns">
+              <label className="field">
+                <span>Email</span>
+                <input
+                  type="email"
+                  value={form.email}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, email: event.target.value }))
+                  }
+                />
+              </label>
+              <label className="field">
+                <span>CEP</span>
+                <input
+                  value={form.zipCode}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      zipCode: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label className="field">
+                <span>Cidade</span>
+                <input
+                  value={form.city}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, city: event.target.value }))
+                  }
+                />
+              </label>
+              <label className="field">
+                <span>Estado</span>
+                <input
+                  value={form.state}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, state: event.target.value }))
+                  }
+                />
+              </label>
+              <label className="field">
+                <span>Contato emergencia</span>
+                <input
+                  value={form.emergencyContact}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      emergencyContact: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label className="field">
+                <span>Telefone emergencia</span>
+                <input
+                  value={form.emergencyPhone}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      emergencyPhone: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label className="field full-row">
+                <span>Endereco</span>
+                <input
+                  value={form.address}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      address: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+            </div>
           </div>
-        </div>
+        ) : null}
 
-        <button className="primary-button" disabled={isSubmitting} type="submit">
-          {isSubmitting ? 'Salvando...' : 'Cadastrar paciente'}
-        </button>
+        {activeTab === 'saude' ? (
+          <div className="section-block">
+            <p className="section-title">Dados clinicos de referencia</p>
+            <div className="field-grid two-columns">
+              <label className="field">
+                <span>Tipo sanguineo</span>
+                <select
+                  value={form.bloodType}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      bloodType: event.target.value,
+                    }))
+                  }
+                >
+                  {bloodTypes.map((bloodType) => (
+                    <option key={bloodType || 'none'} value={bloodType}>
+                      {bloodType || 'Nao informado'}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="helper-block patient-form-note">
+                <span>Como usar</span>
+                <strong>Registre apenas sinais importantes para triagem.</strong>
+                <small>
+                  O consultorio medico depois detalha evolucao, diagnostico e
+                  prescricao em modulo proprio.
+                </small>
+              </div>
+              <label className="field full-row">
+                <span>Alergias</span>
+                <textarea
+                  value={form.allergies}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      allergies: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label className="field full-row">
+                <span>Historico medico</span>
+                <textarea
+                  value={form.medicalHistory}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      medicalHistory: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+            </div>
+          </div>
+        ) : null}
+
+        {activeTab === 'status' ? (
+          <div className="section-block">
+            <p className="section-title">Status operacional</p>
+            <div className="status-checklist">
+              <article>
+                <span>Prontuario</span>
+                <strong>Gerado automaticamente</strong>
+                <small>O codigo definitivo entra quando integrarmos prontuario.</small>
+              </article>
+              <article>
+                <span>Situacao</span>
+                <strong>Ativo no cadastro</strong>
+                <small>Paciente ja fica disponivel para agendamento.</small>
+              </article>
+              <article>
+                <span>Origem</span>
+                <strong>Cadastro local</strong>
+                <small>Depois podemos incluir importacao de legado.</small>
+              </article>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="patient-editor-actions">
+          <button
+            className="ghost-button"
+            onClick={() => setForm(initialPatientForm)}
+            type="button"
+          >
+            Limpar
+          </button>
+          <button
+            className="primary-button"
+            disabled={isSubmitting || !canSavePatient}
+            type="submit"
+          >
+            {isSubmitting
+              ? 'Salvando...'
+              : canSavePatient
+                ? 'Salvar paciente'
+                : 'Preencha identificacao'}
+          </button>
+        </div>
       </form>
     </section>
   );
@@ -3910,9 +4313,15 @@ function matchPatient(patient: Patient, query: string) {
   const haystack = [
     patient.name,
     patient.cpf,
+    patient.rg,
     patient.phone,
+    patient.email,
+    patient.address,
     patient.city,
     patient.state,
+    patient.zipCode,
+    patient.emergencyContact,
+    patient.emergencyPhone,
   ]
     .filter(Boolean)
     .join(' ')

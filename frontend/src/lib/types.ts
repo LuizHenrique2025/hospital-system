@@ -65,13 +65,18 @@ export type Patient = {
   id: string;
   name: string;
   cpf: string;
+  rg?: string | null;
   birthDate: string;
   gender: 'MASCULINO' | 'FEMININO' | 'OUTRO';
   bloodType?: string | null;
   phone: string;
   email?: string | null;
+  address?: string | null;
   city?: string | null;
   state?: string | null;
+  zipCode?: string | null;
+  emergencyContact?: string | null;
+  emergencyPhone?: string | null;
   allergies?: string | null;
   medicalHistory?: string | null;
 };
