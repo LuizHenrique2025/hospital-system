@@ -153,6 +153,24 @@ type CareRecordFormState = {
   prescription: string;
 };
 
+type EnvironmentId =
+  | 'administrativo'
+  | 'hospitalar'
+  | 'pronto-atendimento'
+  | 'consultorio'
+  | 'farmacia'
+  | 'faturamento';
+
+type NavigationEnvironment = {
+  id: EnvironmentId;
+  label: string;
+  hint: string;
+  symbol: string;
+  toneClass: string;
+  modulePaths: string[];
+  roadmap: string[];
+};
+
 type ModuleItem = {
   path: string;
   label: string;
@@ -160,8 +178,15 @@ type ModuleItem = {
   roles?: Role[];
 };
 
+type AdministrativeModuleGroup = {
+  hint: string;
+  label: string;
+  paths: string[];
+};
+
 const storageKey = 'hospital-system.session';
 const dashboardCacheKey = 'hospital-system.dashboard';
+const environmentStorageKey = 'hospital-system.environment';
 
 const activeModules: ModuleItem[] = [
   { path: '/central', label: 'Principal', hint: 'Comunicacao interna' },
@@ -190,15 +215,93 @@ const activeModules: ModuleItem[] = [
     roles: ['ATENDENTE', 'ENFERMEIRO'],
   },
   {
+    path: '/atender',
+    label: 'Atender',
+    hint: 'Atendimento eletivo',
+    roles: ['ATENDENTE', 'MEDICO', 'ENFERMEIRO'],
+  },
+  {
+    path: '/pedidos-exames',
+    label: 'Pedidos Exames',
+    hint: 'Solicitacoes ambulatoriais',
+    roles: ['ATENDENTE', 'MEDICO', 'ENFERMEIRO'],
+  },
+  {
+    path: '/laudos',
+    label: 'Laudos',
+    hint: 'Resultados e modelos',
+    roles: ['MEDICO', 'ENFERMEIRO', 'ATENDENTE'],
+  },
+  {
+    path: '/recibo-nfse',
+    label: 'Rec./NFS-e',
+    hint: 'Recibos e notas',
+    roles: ['ATENDENTE', 'FATURAMENTO'],
+  },
+  {
+    path: '/autorizacao',
+    label: 'Autorizacao',
+    hint: 'Senhas e liberacoes',
+    roles: ['ATENDENTE', 'FATURAMENTO'],
+  },
+  {
+    path: '/mapa-cirurgia',
+    label: 'Mapa Cirurgia',
+    hint: 'Salas e agenda cirurgica',
+    roles: ['ADMIN', 'ATENDENTE', 'MEDICO', 'ENFERMEIRO'],
+  },
+  {
+    path: '/leitos',
+    label: 'Leitos',
+    hint: 'Ocupacao e movimentacao',
+    roles: ['ADMIN', 'ATENDENTE', 'MEDICO', 'ENFERMEIRO'],
+  },
+  {
     path: '/pronto-atendimento',
     label: 'Pronto Atendimento',
     hint: 'Triagem e fila PA',
     roles: ['ATENDENTE', 'MEDICO', 'ENFERMEIRO'],
   },
   {
+    path: '/pa-recepcao',
+    label: 'Recepcao PA',
+    hint: 'Abrir pronto atendimento',
+    roles: ['ATENDENTE', 'ENFERMEIRO'],
+  },
+  {
+    path: '/pa-enfermagem',
+    label: 'Enfermagem PA',
+    hint: 'Triagem e sinais',
+    roles: ['ENFERMEIRO', 'MEDICO', 'ATENDENTE'],
+  },
+  {
+    path: '/pa-dispensacao-medica',
+    label: 'Disp. Medica',
+    hint: 'Medicacao no PA',
+    roles: ['MEDICO', 'ENFERMEIRO', 'FARMACIA'],
+  },
+  {
+    path: '/pa-imagem',
+    label: 'Imagem PA',
+    hint: 'Exames de imagem',
+    roles: ['MEDICO', 'ENFERMEIRO', 'ATENDENTE'],
+  },
+  {
+    path: '/pa-exames-ambulatoriais',
+    label: 'Exames Amb.',
+    hint: 'Coletas e ambulatorio',
+    roles: ['MEDICO', 'ENFERMEIRO', 'ATENDENTE'],
+  },
+  {
     path: '/consultorio',
     label: 'Consultorio',
     hint: 'Atendimento medico',
+    roles: ['MEDICO', 'ENFERMEIRO'],
+  },
+  {
+    path: '/consultorio-virtual',
+    label: 'Consultorio Virtual',
+    hint: 'Atendimento digital',
     roles: ['MEDICO', 'ENFERMEIRO'],
   },
   {
@@ -214,19 +317,218 @@ const activeModules: ModuleItem[] = [
     roles: ['FARMACIA', 'ESTOQUE', 'ENFERMEIRO'],
   },
   {
+    path: '/estoque-produtos',
+    label: 'Produtos',
+    hint: 'Cadastro de itens',
+    roles: ['FARMACIA', 'ESTOQUE'],
+  },
+  {
+    path: '/estoque-lotes',
+    label: 'Lotes',
+    hint: 'Lotes e validade',
+    roles: ['FARMACIA', 'ESTOQUE'],
+  },
+  {
+    path: '/medicamentos',
+    label: 'Medicamentos',
+    hint: 'Base medicamentosa',
+    roles: ['FARMACIA', 'ESTOQUE'],
+  },
+  {
     path: '/faturamento',
     label: 'Faturamento',
     hint: 'Contas e notas',
     roles: ['FATURAMENTO'],
   },
+  {
+    path: '/guias',
+    label: 'Guias',
+    hint: 'Controle de guias',
+    roles: ['FATURAMENTO'],
+  },
+  {
+    path: '/contas',
+    label: 'Contas',
+    hint: 'Contas hospitalares',
+    roles: ['FATURAMENTO'],
+  },
+  {
+    path: '/notas-fiscais',
+    label: 'NF',
+    hint: 'Notas fiscais',
+    roles: ['FATURAMENTO'],
+  },
+  {
+    path: '/glosas',
+    label: 'Glosas',
+    hint: 'Recursos e perdas',
+    roles: ['FATURAMENTO'],
+  },
+  {
+    path: '/importacao-xml',
+    label: 'Importar XML',
+    hint: 'Entrada de XML',
+    roles: ['FATURAMENTO'],
+  },
+  {
+    path: '/movimentacao-guias',
+    label: 'Mov. Guias',
+    hint: 'Movimentacao de guias',
+    roles: ['FATURAMENTO'],
+  },
 ];
 
-const upcomingModules = [
-  'Exames',
-  'Procedimentos',
-  'Tabelas',
-  'Estoque',
-  'Relatorios',
+const administrativeModuleGroups: AdministrativeModuleGroup[] = [
+  {
+    label: 'Base administrativa',
+    hint: 'Configuracao, usuarios e cadastros principais',
+    paths: ['/central', '/cadastros', '/usuarios', '/equipe', '/pacientes'],
+  },
+  {
+    label: 'Hospitalar',
+    hint: 'Eletivos, agenda, exames, leitos e cirurgia',
+    paths: [
+      '/agendamento',
+      '/atender',
+      '/pedidos-exames',
+      '/laudos',
+      '/recibo-nfse',
+      '/autorizacao',
+      '/mapa-cirurgia',
+      '/leitos',
+    ],
+  },
+  {
+    label: 'Pronto Atendimento',
+    hint: 'Recepcao PA, triagem, exames e dispensacao',
+    paths: [
+      '/pa-recepcao',
+      '/pronto-atendimento',
+      '/pa-enfermagem',
+      '/pa-dispensacao-medica',
+      '/pa-imagem',
+      '/pa-exames-ambulatoriais',
+    ],
+  },
+  {
+    label: 'Consultorio',
+    hint: 'Consultorio local e virtual',
+    paths: ['/consultorio', '/consultorio-virtual'],
+  },
+  {
+    label: 'Farmacia e Estoque',
+    hint: 'Dispensacao, produtos, lotes e medicamentos',
+    paths: [
+      '/farmacia',
+      '/estoque-produtos',
+      '/estoque-lotes',
+      '/medicamentos',
+    ],
+  },
+  {
+    label: 'Faturamento',
+    hint: 'Guias, contas, NF, glosas e XML',
+    paths: [
+      '/faturamento',
+      '/guias',
+      '/contas',
+      '/notas-fiscais',
+      '/glosas',
+      '/importacao-xml',
+      '/movimentacao-guias',
+    ],
+  },
+];
+
+const navigationEnvironments: NavigationEnvironment[] = [
+  {
+    id: 'administrativo',
+    label: 'Administrativo',
+    hint: 'Visao completa de todos os ambientes e cadastros',
+    symbol: 'AD',
+    toneClass: 'env-admin',
+    modulePaths: activeModules.map((moduleItem) => moduleItem.path),
+    roadmap: ['Tudo visivel', 'Configuracoes', 'Cadastros', 'Auditoria'],
+  },
+  {
+    id: 'hospitalar',
+    label: 'Hospitalar',
+    hint: 'Fluxos eletivos, agenda e rotina hospitalar',
+    symbol: 'HP',
+    toneClass: 'env-hospital',
+    modulePaths: [
+      '/central',
+      '/agendamento',
+      '/atender',
+      '/pedidos-exames',
+      '/laudos',
+      '/recibo-nfse',
+      '/autorizacao',
+      '/mapa-cirurgia',
+      '/leitos',
+      '/pacientes',
+    ],
+    roadmap: ['Eletivos', 'Leitos', 'Cirurgias', 'Autorizacoes'],
+  },
+  {
+    id: 'pronto-atendimento',
+    label: 'Pronto Atendimento',
+    hint: 'Recepcao propria, enfermagem, exames e dispensacao PA',
+    symbol: 'PA',
+    toneClass: 'env-pa',
+    modulePaths: [
+      '/central',
+      '/pa-recepcao',
+      '/pronto-atendimento',
+      '/pa-enfermagem',
+      '/pa-dispensacao-medica',
+      '/pa-imagem',
+      '/pa-exames-ambulatoriais',
+    ],
+    roadmap: ['Recepcao PA', 'Triagem', 'Imagem', 'Dispensacao'],
+  },
+  {
+    id: 'consultorio',
+    label: 'Consultorio',
+    hint: 'Consultorio virtual e areas medicas futuras',
+    symbol: 'CO',
+    toneClass: 'env-office',
+    modulePaths: ['/central', '/consultorio', '/consultorio-virtual'],
+    roadmap: ['Virtual', 'Evolucao', 'Prescricao', 'Pedidos'],
+  },
+  {
+    id: 'farmacia',
+    label: 'Farmacia / Estoque',
+    hint: 'Dispensacao, produtos, lotes e medicamentos',
+    symbol: 'FE',
+    toneClass: 'env-pharmacy',
+    modulePaths: [
+      '/central',
+      '/farmacia',
+      '/estoque-produtos',
+      '/estoque-lotes',
+      '/medicamentos',
+    ],
+    roadmap: ['Dispensacao', 'Produtos', 'Lotes', 'Medicamentos'],
+  },
+  {
+    id: 'faturamento',
+    label: 'Faturamento',
+    hint: 'Guias, contas, NF, glosas, XML e movimentacoes',
+    symbol: 'FT',
+    toneClass: 'env-billing',
+    modulePaths: [
+      '/central',
+      '/faturamento',
+      '/guias',
+      '/contas',
+      '/notas-fiscais',
+      '/glosas',
+      '/importacao-xml',
+      '/movimentacao-guias',
+    ],
+    roadmap: ['Guias', 'Contas', 'Glosas', 'XML'],
+  },
 ];
 
 const genders = ['MASCULINO', 'FEMININO', 'OUTRO'] as const;
@@ -378,6 +680,17 @@ function App() {
   const [session, setSession] = useState<Session | null>(() =>
     readStoredValue<Session>(storageKey),
   );
+  const [selectedEnvironmentId, setSelectedEnvironmentId] =
+    useState<EnvironmentId>(() => {
+      const storedEnvironment = localStorage.getItem(environmentStorageKey);
+
+      return isEnvironmentId(storedEnvironment)
+        ? storedEnvironment
+        : 'hospitalar';
+    });
+  const [isEnvironmentPickerOpen, setIsEnvironmentPickerOpen] = useState(false);
+  const [transitionEnvironment, setTransitionEnvironment] =
+    useState<NavigationEnvironment | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -391,7 +704,9 @@ function App() {
   const [doctorForm, setDoctorForm] = useState(initialDoctorForm);
   const [nurseForm, setNurseForm] = useState(initialNurseForm);
   const [sectorForm, setSectorForm] = useState(initialSectorForm);
-  const [appointmentForm, setAppointmentForm] = useState(initialAppointmentForm);
+  const [appointmentForm, setAppointmentForm] = useState(
+    initialAppointmentForm,
+  );
   const [users, setUsers] = useState<UserProfile[]>(
     cachedDashboard?.users ?? [],
   );
@@ -405,7 +720,9 @@ function App() {
     cachedDashboard?.doctors ?? [],
   );
   const [nurses, setNurses] = useState<Nurse[]>(cachedDashboard?.nurses ?? []);
-  const [sectors, setSectors] = useState<Sector[]>(cachedDashboard?.sectors ?? []);
+  const [sectors, setSectors] = useState<Sector[]>(
+    cachedDashboard?.sectors ?? [],
+  );
   const [appointments, setAppointments] = useState<Appointment[]>(
     cachedDashboard?.appointments ?? [],
   );
@@ -537,10 +854,9 @@ function App() {
       });
 
       await loadDashboard(auth.access_token);
-      navigate(
-        location.pathname === '/' ? '/central' : location.pathname,
-        { replace: true },
-      );
+      navigate(location.pathname === '/' ? '/central' : location.pathname, {
+        replace: true,
+      });
       setNotice({
         kind: 'success',
         text: 'Sessao iniciada. Ambiente pronto para operacao.',
@@ -981,17 +1297,60 @@ function App() {
     patients.some(isPatientActive) && doctors.length > 0;
   const canManageCare = Boolean(
     session &&
-      ['ADMIN', 'ATENDENTE', 'MEDICO', 'ENFERMEIRO'].includes(
-        session.profile.role,
-      ),
+    ['ADMIN', 'ATENDENTE', 'MEDICO', 'ENFERMEIRO'].includes(
+      session.profile.role,
+    ),
   );
-  const visibleModules = session
+  const storedEnvironment = getNavigationEnvironment(selectedEnvironmentId);
+  const routeEnvironment =
+    session &&
+    location.pathname !== '/' &&
+    !storedEnvironment.modulePaths.includes(location.pathname)
+      ? navigationEnvironments.find((environment) =>
+          environment.modulePaths.includes(location.pathname),
+        )
+      : null;
+  const activeEnvironment = routeEnvironment ?? storedEnvironment;
+  const accessibleModules = session
     ? activeModules.filter(
         (moduleItem) =>
           session.profile.role === 'ADMIN' ||
-          !moduleItem.roles || moduleItem.roles.includes(session.profile.role),
+          !moduleItem.roles ||
+          moduleItem.roles.includes(session.profile.role),
       )
     : activeModules;
+  const environmentModules = accessibleModules.filter((moduleItem) =>
+    activeEnvironment.modulePaths.includes(moduleItem.path),
+  );
+  const visibleModules =
+    environmentModules.length > 0
+      ? environmentModules
+      : accessibleModules.filter(
+          (moduleItem) => moduleItem.path === '/central',
+        );
+
+  function changeEnvironment(environmentId: EnvironmentId) {
+    const nextEnvironment = getNavigationEnvironment(environmentId);
+    const targetModule =
+      accessibleModules.find((moduleItem) =>
+        nextEnvironment.modulePaths.includes(moduleItem.path),
+      ) ?? accessibleModules[0];
+
+    setIsEnvironmentPickerOpen(false);
+    setTransitionEnvironment(nextEnvironment);
+    localStorage.setItem(environmentStorageKey, nextEnvironment.id);
+    startTransition(() => {
+      setSelectedEnvironmentId(nextEnvironment.id);
+    });
+
+    if (targetModule) {
+      navigate(targetModule.path);
+    }
+
+    window.setTimeout(() => {
+      setTransitionEnvironment(null);
+    }, 620);
+  }
 
   if (!session) {
     return (
@@ -1009,13 +1368,20 @@ function App() {
       <Route
         element={
           <WorkspaceLayout
+            activeEnvironment={activeEnvironment}
             activeModules={visibleModules}
+            environments={navigationEnvironments}
             handleLogout={handleLogout}
+            isEnvironmentPickerOpen={isEnvironmentPickerOpen}
             isBusy={isBusy}
             loadDashboard={loadDashboard}
             notice={notice}
+            onChangeEnvironment={changeEnvironment}
+            onCloseEnvironmentPicker={() => setIsEnvironmentPickerOpen(false)}
+            onOpenEnvironmentPicker={() => setIsEnvironmentPickerOpen(true)}
             session={session}
-            upcomingModules={upcomingModules}
+            transitionEnvironment={transitionEnvironment}
+            upcomingModules={activeEnvironment.roadmap}
           />
         }
       >
@@ -1070,6 +1436,7 @@ function App() {
               onSubmit={savePatient}
               patients={patients}
               patientTotal={patientTotal}
+              sessionToken={session.token}
               setForm={setPatientForm}
             />
           }
@@ -1111,6 +1478,186 @@ function App() {
           element={<Navigate replace to="/pronto-atendimento" />}
         />
         <Route
+          path="/atender"
+          element={
+            <ModulePlaceholderPage
+              environment="Hospitalar"
+              title="Atender"
+              description="Fluxo eletivo para atendimento de pacientes agendados."
+              steps={[
+                'Selecionar paciente da agenda eletiva',
+                'Registrar chegada e status do atendimento',
+                'Encaminhar para consultorio, exames ou faturamento',
+              ]}
+            />
+          }
+        />
+        <Route
+          path="/pedidos-exames"
+          element={
+            <ModulePlaceholderPage
+              environment="Hospitalar"
+              title="Pedidos de Exames"
+              description="Solicitacoes de exames ambulatoriais e eletivos."
+              steps={[
+                'Criar pedido vinculado ao paciente',
+                'Separar exames laboratoriais, imagem e procedimentos',
+                'Acompanhar status ate laudo ou liberacao',
+              ]}
+            />
+          }
+        />
+        <Route
+          path="/laudos"
+          element={
+            <ModulePlaceholderPage
+              environment="Hospitalar"
+              title="Laudos"
+              description="Resultados, modelos e liberacao de laudos."
+              steps={[
+                'Listar exames pendentes de laudo',
+                'Aplicar modelo por tipo de exame',
+                'Liberar resultado para consultorio e faturamento',
+              ]}
+            />
+          }
+        />
+        <Route
+          path="/recibo-nfse"
+          element={
+            <ModulePlaceholderPage
+              environment="Hospitalar"
+              title="Recibo / NFS-e"
+              description="Emissao de recibos e notas fiscais da rotina hospitalar."
+              steps={[
+                'Vincular recibo ao atendimento',
+                'Preparar nota fiscal de servico',
+                'Enviar pendencias ao faturamento',
+              ]}
+            />
+          }
+        />
+        <Route
+          path="/autorizacao"
+          element={
+            <ModulePlaceholderPage
+              environment="Hospitalar"
+              title="Autorizacao"
+              description="Controle de senhas, liberacoes e autorizacoes de convenio."
+              steps={[
+                'Registrar guia ou senha solicitada',
+                'Acompanhar retorno do convenio',
+                'Liberar atendimento autorizado',
+              ]}
+            />
+          }
+        />
+        <Route
+          path="/mapa-cirurgia"
+          element={
+            <ModulePlaceholderPage
+              environment="Hospitalar"
+              title="Mapa de Cirurgia"
+              description="Agenda cirurgica, salas, equipes e preparo."
+              steps={[
+                'Montar mapa por sala e horario',
+                'Relacionar paciente, medico e equipe',
+                'Controlar status pre, intra e pos-cirurgico',
+              ]}
+            />
+          }
+        />
+        <Route
+          path="/leitos"
+          element={
+            <ModulePlaceholderPage
+              environment="Hospitalar"
+              title="Leitos"
+              description="Ocupacao, movimentacao e disponibilidade de leitos."
+              steps={[
+                'Visualizar leitos livres e ocupados',
+                'Registrar entrada, transferencia e alta',
+                'Relacionar leito ao atendimento hospitalar',
+              ]}
+            />
+          }
+        />
+        <Route
+          path="/pa-recepcao"
+          element={
+            <ModulePlaceholderPage
+              environment="Pronto Atendimento"
+              title="Recepcao PA"
+              description="Entrada exclusiva para abrir pronto atendimento."
+              steps={[
+                'Localizar ou cadastrar paciente',
+                'Abrir ficha de pronto atendimento',
+                'Enviar para enfermagem e fila de triagem',
+              ]}
+            />
+          }
+        />
+        <Route
+          path="/pa-enfermagem"
+          element={
+            <ModulePlaceholderPage
+              environment="Pronto Atendimento"
+              title="Enfermagem PA"
+              description="Triagem, sinais vitais e classificacao inicial."
+              steps={[
+                'Chamar paciente da recepcao PA',
+                'Registrar sinais vitais e queixa principal',
+                'Classificar prioridade e encaminhar',
+              ]}
+            />
+          }
+        />
+        <Route
+          path="/pa-dispensacao-medica"
+          element={
+            <ModulePlaceholderPage
+              environment="Pronto Atendimento"
+              title="Dispensacao Medica"
+              description="Medicacoes e dispensacoes vinculadas ao PA."
+              steps={[
+                'Receber prescricao do atendimento',
+                'Registrar medicamento dispensado',
+                'Baixar item do estoque ou farmacia',
+              ]}
+            />
+          }
+        />
+        <Route
+          path="/pa-imagem"
+          element={
+            <ModulePlaceholderPage
+              environment="Pronto Atendimento"
+              title="Exames de Imagem PA"
+              description="Solicitacao e acompanhamento de imagem no PA."
+              steps={[
+                'Receber pedido do medico do PA',
+                'Acompanhar realizacao do exame',
+                'Retornar resultado ao atendimento',
+              ]}
+            />
+          }
+        />
+        <Route
+          path="/pa-exames-ambulatoriais"
+          element={
+            <ModulePlaceholderPage
+              environment="Pronto Atendimento"
+              title="Exames Ambulatoriais PA"
+              description="Coletas e exames ambulatoriais ligados ao PA."
+              steps={[
+                'Receber pedido do PA',
+                'Registrar coleta ou execucao',
+                'Disponibilizar resultado para conduta',
+              ]}
+            />
+          }
+        />
+        <Route
           path="/consultorio"
           element={
             <DoctorOfficePage
@@ -1121,6 +1668,21 @@ function App() {
               onSaveCareRecord={saveCareRecord}
               patients={patients}
               profile={session.profile}
+            />
+          }
+        />
+        <Route
+          path="/consultorio-virtual"
+          element={
+            <ModulePlaceholderPage
+              environment="Consultorio"
+              title="Consultorio Virtual"
+              description="Atendimento digital a ser configurado com areas medicas proprias."
+              steps={[
+                'Definir especialidades e salas virtuais',
+                'Relacionar agenda medica ao atendimento online',
+                'Integrar evolucao, prescricao e pedidos',
+              ]}
             />
           }
         />
@@ -1156,9 +1718,147 @@ function App() {
           }
         />
         <Route
+          path="/estoque-produtos"
+          element={
+            <ModulePlaceholderPage
+              environment="Farmacia / Estoque"
+              title="Cadastro de Produtos"
+              description="Produtos, materiais e itens controlados pelo estoque."
+              steps={[
+                'Cadastrar produto e unidade de controle',
+                'Definir categoria, estoque minimo e local',
+                'Relacionar produto a lote ou medicamento',
+              ]}
+            />
+          }
+        />
+        <Route
+          path="/estoque-lotes"
+          element={
+            <ModulePlaceholderPage
+              environment="Farmacia / Estoque"
+              title="Lotes"
+              description="Controle de lote, validade, entrada e saldo."
+              steps={[
+                'Registrar entrada por lote',
+                'Controlar validade e saldo',
+                'Bloquear lote vencido ou inconsistente',
+              ]}
+            />
+          }
+        />
+        <Route
+          path="/medicamentos"
+          element={
+            <ModulePlaceholderPage
+              environment="Farmacia / Estoque"
+              title="Medicamentos"
+              description="Base medicamentosa para prescricao e dispensacao."
+              steps={[
+                'Cadastrar principio ativo e apresentacao',
+                'Relacionar medicamento ao produto de estoque',
+                'Controlar dispensacao por paciente',
+              ]}
+            />
+          }
+        />
+        <Route
           path="/faturamento"
           element={
-            <BillingPage appointments={appointments} patientTotal={patientTotal} />
+            <BillingPage
+              appointments={appointments}
+              patientTotal={patientTotal}
+            />
+          }
+        />
+        <Route
+          path="/guias"
+          element={
+            <ModulePlaceholderPage
+              environment="Faturamento"
+              title="Guias"
+              description="Controle de guias por convenio, paciente e atendimento."
+              steps={[
+                'Criar ou importar guia',
+                'Relacionar procedimentos realizados',
+                'Controlar status de envio e retorno',
+              ]}
+            />
+          }
+        />
+        <Route
+          path="/contas"
+          element={
+            <ModulePlaceholderPage
+              environment="Faturamento"
+              title="Contas"
+              description="Contas hospitalares, fechamento e conferencia."
+              steps={[
+                'Agrupar itens por atendimento',
+                'Conferir procedimentos e valores',
+                'Fechar conta para guia ou nota',
+              ]}
+            />
+          }
+        />
+        <Route
+          path="/notas-fiscais"
+          element={
+            <ModulePlaceholderPage
+              environment="Faturamento"
+              title="Notas Fiscais"
+              description="Notas fiscais e documentos fiscais relacionados."
+              steps={[
+                'Preparar nota por conta fechada',
+                'Controlar emissao e cancelamento',
+                'Relacionar nota a recibo e guia',
+              ]}
+            />
+          }
+        />
+        <Route
+          path="/glosas"
+          element={
+            <ModulePlaceholderPage
+              environment="Faturamento"
+              title="Glosas"
+              description="Controle de glosas, recursos e perdas financeiras."
+              steps={[
+                'Registrar glosa por guia ou item',
+                'Acompanhar recurso e retorno',
+                'Mensurar perdas por convenio',
+              ]}
+            />
+          }
+        />
+        <Route
+          path="/importacao-xml"
+          element={
+            <ModulePlaceholderPage
+              environment="Faturamento"
+              title="Importacao XML"
+              description="Entrada de XML para conferencia fiscal e operacional."
+              steps={[
+                'Importar XML recebido',
+                'Validar itens e dados fiscais',
+                'Relacionar XML a nota ou conta',
+              ]}
+            />
+          }
+        />
+        <Route
+          path="/movimentacao-guias"
+          element={
+            <ModulePlaceholderPage
+              environment="Faturamento"
+              title="Movimentacao de Guias"
+              description="Movimentacao, envio, retorno e rastreio de guias."
+              steps={[
+                'Registrar movimentacao da guia',
+                'Acompanhar envio, retorno e pendencias',
+                'Conectar guia a conta, nota e glosa',
+              ]}
+            />
           }
         />
         <Route path="*" element={<Navigate replace to="/central" />} />
@@ -1193,7 +1893,9 @@ function LoginScreen({
       <section className="login-shell clinic-login-shell">
         <form className="auth-card clinic-login-card" onSubmit={handleLogin}>
           <div className="clinic-login-title">
-            <span>Acesso seguro</span>
+            <div className="clinic-login-logo" aria-label="Hospital Revitalite">
+              <span>R</span>
+            </div>
             <h1>Sistema Revitalite</h1>
           </div>
 
@@ -1280,7 +1982,11 @@ function LoginScreen({
             >
               Voltar
             </button>
-            <button className="primary-button clinic-access-button" type="submit" disabled={isSubmitting}>
+            <button
+              className="primary-button clinic-access-button"
+              type="submit"
+              disabled={isSubmitting}
+            >
               {isSubmitting ? 'Entrando...' : 'Acessar'}
             </button>
           </div>
@@ -1306,12 +2012,30 @@ function UsersPage({
   users,
 }: UsersPageProps) {
   const [search, setSearch] = useState('');
+  const [hasSearchedUsers, setHasSearchedUsers] = useState(false);
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
+  const canSearchUsers = search.trim().length >= 2;
   const filteredUsers = useMemo(
-    () => users.filter((user) => matchUser(user, deferredSearch)),
-    [deferredSearch, users],
+    () =>
+      hasSearchedUsers
+        ? users.filter((user) => matchUser(user, deferredSearch))
+        : [],
+    [deferredSearch, hasSearchedUsers, users],
   );
   const adminCount = users.filter((user) => user.role === 'ADMIN').length;
+
+  function searchUsers(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (canSearchUsers) {
+      setHasSearchedUsers(true);
+    }
+  }
+
+  function clearUsersSearch() {
+    setSearch('');
+    setHasSearchedUsers(false);
+  }
 
   return (
     <>
@@ -1343,18 +2067,26 @@ function UsersPage({
           <div className="page-header">
             <div>
               <p className="eyebrow">Usuarios</p>
-              <h2>Acessos cadastrados</h2>
+              <h2>Buscar acessos</h2>
             </div>
-            <div className="toolbar-inline">
-              <input
-                className="search-input"
-                placeholder="Buscar por nome, login, email ou cargo"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-              />
-              <span className="inline-badge">{filteredUsers.length} visiveis</span>
-            </div>
+            <span className="inline-badge">{users.length} no cadastro</span>
           </div>
+
+          <OperationalSearchCard
+            canSearch={canSearchUsers}
+            description="Pesquise antes de abrir a lista de acessos. Isso evita rolagem e reduz risco de alterar o usuario errado."
+            onChange={setSearch}
+            onClear={clearUsersSearch}
+            onSearch={searchUsers}
+            placeholder="Buscar por nome, login, email ou cargo"
+            resultText={
+              hasSearchedUsers
+                ? `${filteredUsers.length} usuarios encontrados`
+                : undefined
+            }
+            title="Localize o usuario pelo login ou permissao."
+            value={search}
+          />
 
           <div className="table-shell">
             <div className="table-head users-grid">
@@ -1364,8 +2096,18 @@ function UsersPage({
               <span>Cargo</span>
             </div>
 
-            {filteredUsers.length === 0 ? (
-              <p className="empty-state">Nenhum usuario encontrado.</p>
+            {!hasSearchedUsers ? (
+              <DirectoryState
+                code="01"
+                title="Nenhum usuario carregado automaticamente."
+                description="Use a busca acima para localizar um login ou utilize o formulario ao lado para cadastrar um novo acesso."
+              />
+            ) : filteredUsers.length === 0 ? (
+              <DirectoryState
+                code="00"
+                title="Nenhum usuario encontrado."
+                description="Revise o termo pesquisado ou cadastre um novo usuario com login unico."
+              />
             ) : (
               filteredUsers.map((user) => (
                 <div className="table-row users-grid" key={user.id}>
@@ -1476,7 +2218,11 @@ function UsersPage({
             </span>
           </div>
 
-          <button className="primary-button" disabled={isSubmitting} type="submit">
+          <button
+            className="primary-button"
+            disabled={isSubmitting}
+            type="submit"
+          >
             {isSubmitting ? 'Salvando...' : 'Cadastrar usuario'}
           </button>
         </form>
@@ -1486,22 +2232,36 @@ function UsersPage({
 }
 
 type WorkspaceLayoutProps = {
+  activeEnvironment: NavigationEnvironment;
   activeModules: ModuleItem[];
+  environments: NavigationEnvironment[];
   handleLogout: () => void;
+  isEnvironmentPickerOpen: boolean;
   isBusy: boolean;
   loadDashboard: () => Promise<void>;
   notice: Notice | null;
+  onChangeEnvironment: (environmentId: EnvironmentId) => void;
+  onCloseEnvironmentPicker: () => void;
+  onOpenEnvironmentPicker: () => void;
   session: Session;
+  transitionEnvironment: NavigationEnvironment | null;
   upcomingModules: string[];
 };
 
 function WorkspaceLayout({
+  activeEnvironment,
   activeModules,
+  environments,
   handleLogout,
+  isEnvironmentPickerOpen,
   isBusy,
   loadDashboard,
   notice,
+  onChangeEnvironment,
+  onCloseEnvironmentPicker,
+  onOpenEnvironmentPicker,
   session,
+  transitionEnvironment,
   upcomingModules,
 }: WorkspaceLayoutProps) {
   return (
@@ -1524,6 +2284,14 @@ function WorkspaceLayout({
               </span>
             </div>
             <button
+              className={`environment-switch ${activeEnvironment.toneClass}`}
+              onClick={onOpenEnvironmentPicker}
+              type="button"
+            >
+              <span>Ambiente</span>
+              <strong>{activeEnvironment.label}</strong>
+            </button>
+            <button
               className="ghost-button"
               onClick={() => void loadDashboard()}
               type="button"
@@ -1538,47 +2306,351 @@ function WorkspaceLayout({
             >
               Swagger
             </a>
-            <button className="ghost-button" onClick={handleLogout} type="button">
+            <button
+              className="ghost-button"
+              onClick={handleLogout}
+              type="button"
+            >
               Sair
             </button>
           </div>
         </header>
 
         <section className="module-bar">
-          <nav className="module-tabs">
-            {activeModules.map((moduleItem) => (
-              <NavLink
-                key={moduleItem.path}
-                className={({ isActive }) =>
-                  isActive ? 'module-tab active' : 'module-tab'
-                }
-                to={moduleItem.path}
-              >
-                <strong>{moduleItem.label}</strong>
-                <span>{moduleItem.hint}</span>
-              </NavLink>
-            ))}
-          </nav>
-
-          <div className="module-future">
-            <span className="module-caption">Proxima trilha</span>
-            <div className="roadmap-inline">
-              {upcomingModules.map((moduleName) => (
-                <span className="roadmap-chip compact" key={moduleName}>
-                  {moduleName}
-                </span>
-              ))}
+          <div className={`environment-current ${activeEnvironment.toneClass}`}>
+            <div>
+              <span className="module-caption">Ambiente atual</span>
+              <strong>{activeEnvironment.label}</strong>
+              <small>{activeEnvironment.hint}</small>
             </div>
+            <button
+              className="ghost-button"
+              onClick={onOpenEnvironmentPicker}
+              type="button"
+            >
+              Alterar ambiente
+            </button>
           </div>
         </section>
 
         {notice ? (
-          <div className={`notice-banner notice-${notice.kind}`}>{notice.text}</div>
+          <div className={`notice-banner notice-${notice.kind}`}>
+            {notice.text}
+          </div>
         ) : null}
 
-        <Outlet />
+        <section className="workspace-main-grid">
+          <aside
+            className={`environment-sidebar ${activeEnvironment.toneClass}`}
+          >
+            {activeEnvironment.id === 'administrativo' ? (
+              <AdministrativeModuleGrid modules={activeModules} />
+            ) : (
+              <EnvironmentModuleNav modules={activeModules} />
+            )}
+
+            <div className="module-future">
+              <span className="module-caption">Trilha</span>
+              <div className="roadmap-inline">
+                {upcomingModules.map((moduleName) => (
+                  <span className="roadmap-chip compact" key={moduleName}>
+                    {moduleName}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </aside>
+
+          <section className="workspace-content">
+            <Outlet />
+          </section>
+        </section>
       </section>
+
+      {isEnvironmentPickerOpen ? (
+        <EnvironmentPicker
+          activeEnvironment={activeEnvironment}
+          environments={environments}
+          onClose={onCloseEnvironmentPicker}
+          onSelect={onChangeEnvironment}
+        />
+      ) : null}
+
+      <EnvironmentTransition environment={transitionEnvironment} />
     </main>
+  );
+}
+
+type AdministrativeModuleGridProps = {
+  modules: ModuleItem[];
+};
+
+type EnvironmentModuleNavProps = {
+  modules: ModuleItem[];
+};
+
+function EnvironmentModuleNav({ modules }: EnvironmentModuleNavProps) {
+  const [search, setSearch] = useState('');
+  const deferredSearch = useDeferredValue(search.trim().toLowerCase());
+  const filteredModules = useMemo(
+    () =>
+      modules.filter((moduleItem) =>
+        matchModuleSearch(
+          [moduleItem.label, moduleItem.hint, moduleItem.path],
+          deferredSearch,
+        ),
+      ),
+    [deferredSearch, modules],
+  );
+
+  return (
+    <div className="side-module-panel">
+      <SidebarSearch
+        count={filteredModules.length}
+        onChange={setSearch}
+        placeholder="Pesquisar modulo"
+        value={search}
+      />
+      <nav className="side-module-nav" aria-label="Modulos do ambiente">
+        {filteredModules.length === 0 ? (
+          <p className="sidebar-empty">Nenhum modulo encontrado.</p>
+        ) : (
+          filteredModules.map((moduleItem) => (
+            <NavLink
+              key={moduleItem.path}
+              className={({ isActive }) =>
+                isActive ? 'side-module-link active' : 'side-module-link'
+              }
+              to={moduleItem.path}
+            >
+              <strong>{moduleItem.label}</strong>
+              <span>{moduleItem.hint}</span>
+            </NavLink>
+          ))
+        )}
+      </nav>
+    </div>
+  );
+}
+
+function AdministrativeModuleGrid({ modules }: AdministrativeModuleGridProps) {
+  const [search, setSearch] = useState('');
+  const deferredSearch = useDeferredValue(search.trim().toLowerCase());
+  const modulesByPath = new Map(
+    modules.map((moduleItem) => [moduleItem.path, moduleItem]),
+  );
+  const filteredGroupCount = administrativeModuleGroups.reduce(
+    (total, group) => {
+      const groupModules = group.paths
+        .map((path) => modulesByPath.get(path))
+        .filter((moduleItem): moduleItem is ModuleItem => Boolean(moduleItem))
+        .filter((moduleItem) =>
+          matchModuleSearch(
+            [group.label, group.hint, moduleItem.label, moduleItem.hint],
+            deferredSearch,
+          ),
+        );
+
+      return total + groupModules.length;
+    },
+    0,
+  );
+
+  return (
+    <div className="side-module-panel">
+      <SidebarSearch
+        count={filteredGroupCount}
+        onChange={setSearch}
+        placeholder="Buscar em todos"
+        value={search}
+      />
+      <section
+        className="admin-module-grid"
+        aria-label="Modulos administrativos"
+      >
+        {filteredGroupCount === 0 ? (
+          <p className="sidebar-empty">Nenhum modulo encontrado.</p>
+        ) : (
+          administrativeModuleGroups.map((group) => {
+            const groupModules = group.paths
+              .map((path) => modulesByPath.get(path))
+              .filter((moduleItem): moduleItem is ModuleItem =>
+                Boolean(moduleItem),
+              )
+              .filter((moduleItem) =>
+                matchModuleSearch(
+                  [group.label, group.hint, moduleItem.label, moduleItem.hint],
+                  deferredSearch,
+                ),
+              );
+
+            if (groupModules.length === 0) {
+              return null;
+            }
+
+            return (
+              <article className="admin-module-group" key={group.label}>
+                <div className="admin-module-group-header">
+                  <strong>{group.label}</strong>
+                  <span>{group.hint}</span>
+                </div>
+
+                <div className="admin-module-links">
+                  {groupModules.map((moduleItem) => (
+                    <NavLink
+                      className={({ isActive }) =>
+                        isActive
+                          ? 'admin-module-link active'
+                          : 'admin-module-link'
+                      }
+                      key={moduleItem.path}
+                      to={moduleItem.path}
+                    >
+                      <strong>{moduleItem.label}</strong>
+                      <span>{moduleItem.hint}</span>
+                    </NavLink>
+                  ))}
+                </div>
+              </article>
+            );
+          })
+        )}
+      </section>
+    </div>
+  );
+}
+
+type SidebarSearchProps = {
+  count: number;
+  onChange: React.Dispatch<React.SetStateAction<string>>;
+  placeholder: string;
+  value: string;
+};
+
+function SidebarSearch({
+  count,
+  onChange,
+  placeholder,
+  value,
+}: SidebarSearchProps) {
+  return (
+    <label className="sidebar-search">
+      <span>Pesquisar</span>
+      <input
+        placeholder={placeholder}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      <small>{count} atalhos</small>
+    </label>
+  );
+}
+
+type EnvironmentPickerProps = {
+  activeEnvironment: NavigationEnvironment;
+  environments: NavigationEnvironment[];
+  onClose: () => void;
+  onSelect: (environmentId: EnvironmentId) => void;
+};
+
+function EnvironmentPicker({
+  activeEnvironment,
+  environments,
+  onClose,
+  onSelect,
+}: EnvironmentPickerProps) {
+  return (
+    <div className="environment-backdrop" role="presentation">
+      <section
+        aria-labelledby="environment-title"
+        aria-modal="true"
+        className="environment-modal"
+        role="dialog"
+      >
+        <div className="environment-modal-header">
+          <div>
+            <p className="eyebrow">Alteracao de Ambiente</p>
+            <h2 id="environment-title">Escolha onde quer trabalhar</h2>
+          </div>
+          <button className="ghost-button" onClick={onClose} type="button">
+            Cancelar
+          </button>
+        </div>
+
+        <div className="environment-card-grid">
+          {environments.map((environment) => (
+            <button
+              className={`environment-card ${environment.toneClass} ${
+                activeEnvironment.id === environment.id ? 'is-active' : ''
+              }`}
+              key={environment.id}
+              onClick={() => onSelect(environment.id)}
+              type="button"
+            >
+              <span className="environment-symbol">{environment.symbol}</span>
+              <strong>{environment.label}</strong>
+              <small>{environment.hint}</small>
+            </button>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+type EnvironmentTransitionProps = {
+  environment: NavigationEnvironment | null;
+};
+
+function EnvironmentTransition({ environment }: EnvironmentTransitionProps) {
+  if (!environment) {
+    return null;
+  }
+
+  return (
+    <div className={`environment-transition ${environment.toneClass}`}>
+      <span>Entrando em</span>
+      <strong>{environment.label}</strong>
+      <small>{environment.hint}</small>
+      <div className="environment-transition-bar" />
+    </div>
+  );
+}
+
+type ModulePlaceholderPageProps = {
+  description: string;
+  environment: string;
+  steps: string[];
+  title: string;
+};
+
+function ModulePlaceholderPage({
+  description,
+  environment,
+  steps,
+  title,
+}: ModulePlaceholderPageProps) {
+  return (
+    <section className="panel module-placeholder">
+      <div className="page-header">
+        <div>
+          <p className="eyebrow">{environment}</p>
+          <h2>{title}</h2>
+        </div>
+        <span className="inline-badge">Em configuracao</span>
+      </div>
+
+      <p>{description}</p>
+
+      <div className="placeholder-flow">
+        {steps.map((step, index) => (
+          <article key={step}>
+            <span>{String(index + 1).padStart(2, '0')}</span>
+            <strong>{step}</strong>
+          </article>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -1587,10 +2659,7 @@ type OverviewPageProps = {
   session: Session;
 };
 
-function OverviewPage({
-  communicationDashboard,
-  session,
-}: OverviewPageProps) {
+function OverviewPage({ communicationDashboard, session }: OverviewPageProps) {
   const today = new Date();
   const unreadCount = communicationDashboard.emails.filter(
     (email) => email.unread,
@@ -1625,7 +2694,9 @@ function OverviewPage({
         <div className="communication-hero-grid">
           <div>
             <p className="eyebrow">Aba principal</p>
-            <h2>{greetingLabel(today)}, {firstName(session.profile.name)}</h2>
+            <h2>
+              {greetingLabel(today)}, {firstName(session.profile.name)}
+            </h2>
             <p>
               Este espaco e comum para todos os usuarios e concentra informacoes
               institucionais antes de acessar os modulos do setor.
@@ -1743,7 +2814,8 @@ function OverviewPage({
                       <p>{email.preview}</p>
                     </div>
                     <small>
-                      {email.timeLabel || (email.sentAt ? formatTime(email.sentAt) : '--:--')}
+                      {email.timeLabel ||
+                        (email.sentAt ? formatTime(email.sentAt) : '--:--')}
                     </small>
                   </div>
                 ))
@@ -1886,8 +2958,8 @@ function RegistrationsPage({
           <p className="eyebrow">Modulo 2</p>
           <h2>Central de Cadastros</h2>
           <p>
-            Atalhos para a base administrativa e operacional. A ideia e manter
-            a logica do sistema atual, mas com menos campos na mesma tela e mais
+            Atalhos para a base administrativa e operacional. A ideia e manter a
+            logica do sistema atual, mas com menos campos na mesma tela e mais
             organizacao por contexto.
           </p>
         </div>
@@ -1972,6 +3044,87 @@ function RecordLine({ label, value }: RecordLineProps) {
   );
 }
 
+type OperationalSearchCardProps = {
+  canSearch: boolean;
+  description: string;
+  error?: string;
+  isLoading?: boolean;
+  label?: string;
+  onChange: (value: string) => void;
+  onClear: () => void;
+  onSearch: (event: React.FormEvent<HTMLFormElement>) => void;
+  placeholder: string;
+  resultText?: string;
+  title: string;
+  value: string;
+};
+
+function OperationalSearchCard({
+  canSearch,
+  description,
+  error,
+  isLoading = false,
+  label = 'Consulta parametrizada',
+  onChange,
+  onClear,
+  onSearch,
+  placeholder,
+  resultText,
+  title,
+  value,
+}: OperationalSearchCardProps) {
+  return (
+    <form className="operational-search-card" onSubmit={onSearch}>
+      <div>
+        <span className="section-title">{label}</span>
+        <strong>{title}</strong>
+        <small>{description}</small>
+      </div>
+      <div className="operational-search-actions">
+        <input
+          className="search-input"
+          placeholder={placeholder}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+        />
+        <button
+          className="ghost-button"
+          disabled={isLoading || !canSearch}
+          type="submit"
+        >
+          {isLoading ? 'Buscando...' : 'Buscar'}
+        </button>
+        <button
+          className="ghost-button"
+          disabled={isLoading || value.length === 0}
+          onClick={onClear}
+          type="button"
+        >
+          Limpar
+        </button>
+      </div>
+      {resultText ? <small>{resultText}</small> : null}
+      {error ? <small className="form-warning">{error}</small> : null}
+    </form>
+  );
+}
+
+type DirectoryStateProps = {
+  code: string;
+  description: string;
+  title: string;
+};
+
+function DirectoryState({ code, description, title }: DirectoryStateProps) {
+  return (
+    <div className="directory-state">
+      <span>{code}</span>
+      <strong>{title}</strong>
+      <small>{description}</small>
+    </div>
+  );
+}
+
 type PatientsPageProps = {
   editingPatientId: string | null;
   form: PatientFormState;
@@ -1982,6 +3135,7 @@ type PatientsPageProps = {
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => Promise<void>;
   patients: Patient[];
   patientTotal: number;
+  sessionToken: string;
   setForm: React.Dispatch<React.SetStateAction<PatientFormState>>;
 };
 
@@ -1995,32 +3149,46 @@ function PatientsPage({
   onSubmit,
   patients,
   patientTotal,
+  sessionToken,
   setForm,
 }: PatientsPageProps) {
   const [search, setSearch] = useState('');
+  const [hasSearchedPatients, setHasSearchedPatients] = useState(false);
+  const [patientResults, setPatientResults] = useState<Patient[]>([]);
+  const [patientResultTotal, setPatientResultTotal] = useState(0);
+  const [patientSearchStatus, setPatientSearchStatus] = useState<
+    'idle' | 'loading' | 'ready' | 'error'
+  >('idle');
+  const [patientSearchError, setPatientSearchError] = useState('');
+  const [isEditorRequested, setIsEditorRequested] = useState(false);
   const [activeTab, setActiveTab] = useState<
     'identificacao' | 'contato' | 'saude' | 'status'
   >('identificacao');
-  const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
-  const deferredSearch = useDeferredValue(search.trim().toLowerCase());
-  const filteredPatients = useMemo(
-    () => patients.filter((patient) => matchPatient(patient, deferredSearch)),
-    [deferredSearch, patients],
+  const [selectedPatientId, setSelectedPatientId] = useState<string | null>(
+    null,
   );
-  const previewPatient = filteredPatients[0] ?? patients[0] ?? null;
+  const searchTerm = search.trim();
+  const canSearchPatient = searchTerm.length >= 2;
+  const previewPatient = hasSearchedPatients
+    ? (patientResults[0] ?? null)
+    : null;
   const focusedPatient =
-    patients.find((patient) => patient.id === selectedPatientId) ??
+    patientResults.find((patient) => patient.id === selectedPatientId) ??
     previewPatient;
+  const isEditorVisible = isEditorRequested || Boolean(editingPatientId);
   const editingPatient =
-    patients.find((patient) => patient.id === editingPatientId) ?? null;
+    patientResults.find((patient) => patient.id === editingPatientId) ??
+    patients.find((patient) => patient.id === editingPatientId) ??
+    null;
   const cpfConflict = patients.some(
     (patient) =>
       normalizeDigits(patient.cpf) === normalizeDigits(form.cpf) &&
       patient.id !== editingPatientId,
   );
-  const canSavePatient = [form.name, form.cpf, form.birthDate, form.phone].every(
-    (value) => value.trim().length > 0,
-  ) && !cpfConflict;
+  const canSavePatient =
+    [form.name, form.cpf, form.birthDate, form.phone].every(
+      (value) => value.trim().length > 0,
+    ) && !cpfConflict;
   const tabs = [
     { id: 'identificacao', label: 'Identificacao', hint: 'Dados gerais' },
     { id: 'contato', label: 'Contato', hint: 'Endereco e emergencia' },
@@ -2028,26 +3196,112 @@ function PatientsPage({
     { id: 'status', label: 'Status', hint: 'Fluxo do prontuario' },
   ] as const;
 
+  async function searchPatients(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!canSearchPatient) {
+      setPatientSearchStatus('idle');
+      setPatientSearchError('Digite ao menos 2 caracteres para pesquisar.');
+      return;
+    }
+
+    setPatientSearchStatus('loading');
+    setPatientSearchError('');
+
+    try {
+      const queryParams = new URLSearchParams({
+        page: '1',
+        limit: '25',
+        q: searchTerm,
+      });
+      const response = await apiRequest<PaginatedResponse<Patient>>(
+        `/patients?${queryParams.toString()}`,
+        { token: sessionToken },
+      );
+      const nextPatients = response.data ?? [];
+      const nextTotal =
+        response.meta?.total ?? response.total ?? nextPatients.length;
+
+      setPatientResults(nextPatients);
+      setPatientResultTotal(nextTotal);
+      setSelectedPatientId(nextPatients[0]?.id ?? null);
+      setHasSearchedPatients(true);
+      setPatientSearchStatus('ready');
+    } catch (error) {
+      setPatientResults([]);
+      setPatientResultTotal(0);
+      setSelectedPatientId(null);
+      setHasSearchedPatients(true);
+      setPatientSearchStatus('error');
+      setPatientSearchError(
+        error instanceof Error
+          ? error.message
+          : 'Nao foi possivel buscar pacientes.',
+      );
+    }
+  }
+
+  function openNewPatientEditor() {
+    onResetPatient();
+    setIsEditorRequested(true);
+    setActiveTab('identificacao');
+  }
+
+  function closePatientEditor() {
+    onResetPatient();
+    setIsEditorRequested(false);
+    setActiveTab('identificacao');
+  }
+
+  function clearPatientSearch() {
+    setSearch('');
+    setHasSearchedPatients(false);
+    setPatientResults([]);
+    setPatientResultTotal(0);
+    setPatientSearchStatus('idle');
+    setPatientSearchError('');
+    setSelectedPatientId(null);
+    closePatientEditor();
+  }
+
+  function openPatientForEdit(patient: Patient) {
+    setIsEditorRequested(true);
+    setActiveTab('identificacao');
+    onEditPatient(patient);
+  }
+
   return (
     <section className="page-grid patients-workspace">
       <article className="panel patient-directory">
         <div className="page-header">
           <div>
             <p className="eyebrow">Pacientes</p>
-            <h2>Busca rapida</h2>
+            <h2>Buscar ou cadastrar</h2>
           </div>
           <div className="toolbar-inline">
-            <input
-              className="search-input"
-              placeholder="Buscar por nome, CPF, RG, telefone ou cidade"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
-            <span className="inline-badge">
-              {filteredPatients.length} de {patientTotal}
-            </span>
+            <button
+              className="primary-button"
+              onClick={openNewPatientEditor}
+              type="button"
+            >
+              Novo paciente
+            </button>
+            <span className="inline-badge">{patientTotal} no cadastro</span>
           </div>
         </div>
+
+        <OperationalSearchCard
+          canSearch={canSearchPatient}
+          description="Pesquise por nome, CPF, RG, telefone, email ou cidade. A busca vai direto no banco e retorna ate 25 resultados por vez."
+          error={patientSearchError}
+          isLoading={patientSearchStatus === 'loading'}
+          onChange={setSearch}
+          onClear={clearPatientSearch}
+          onSearch={searchPatients}
+          placeholder="Digite ao menos 2 caracteres"
+          title="Localize antes de abrir uma ficha."
+          value={search}
+        />
 
         {focusedPatient ? (
           <aside className="patient-preview-card">
@@ -2061,7 +3315,9 @@ function PatientsPage({
             <div className="patient-preview-meta">
               <span>{focusedPatient.phone}</span>
               <span>{focusedPatient.city || 'Cidade nao informada'}</span>
-              <span>{focusedPatient.bloodType || 'Tipo sanguineo pendente'}</span>
+              <span>
+                {focusedPatient.bloodType || 'Tipo sanguineo pendente'}
+              </span>
               <span>{patientStatusLabel(focusedPatient.status)}</span>
             </div>
           </aside>
@@ -2076,56 +3332,80 @@ function PatientsPage({
             <span>Acoes</span>
           </div>
 
-          {filteredPatients.length === 0 ? (
-            <p className="empty-state">Nenhum paciente encontrado com esse filtro.</p>
+          {!hasSearchedPatients ? (
+            <DirectoryState
+              code="01"
+              title="Nenhum paciente carregado automaticamente."
+              description="Use a busca acima para consultar a base ou clique em Novo paciente para abrir um cadastro limpo."
+            />
+          ) : patientSearchStatus === 'loading' ? (
+            <p className="empty-state">Buscando pacientes no banco...</p>
+          ) : patientSearchStatus === 'error' ? (
+            <p className="empty-state">
+              {patientSearchError || 'Nao foi possivel buscar pacientes.'}
+            </p>
+          ) : patientResults.length === 0 ? (
+            <DirectoryState
+              code="00"
+              title="Nenhum paciente encontrado."
+              description="Confira o termo pesquisado ou inicie um novo cadastro se for uma primeira passagem."
+            />
           ) : (
-            filteredPatients.map((patient) => (
-              <div className="table-row patients-grid" key={patient.id}>
-                <span>
-                  {patient.name}
-                  <small>{patient.email || 'Sem email cadastrado'}</small>
-                </span>
-                <span>
-                  {patient.cpf}
-                  <small>{patient.rg ? `RG ${patient.rg}` : 'RG pendente'}</small>
-                </span>
-                <span>
-                  <em
-                    className={`patient-status-pill ${patientStatusTone(
-                      patient.status,
-                    )}`}
-                  >
-                    {patientStatusLabel(patient.status)}
-                  </em>
-                  <small>{patient.city || 'Cidade nao informada'}</small>
-                </span>
-                <span>{patient.phone}</span>
-                <div className="patient-actions">
-                  <button
-                    className="mini-button"
-                    onClick={() => setSelectedPatientId(patient.id)}
-                    type="button"
-                  >
-                    Ficha
-                  </button>
-                  <button
-                    className="mini-button"
-                    onClick={() => onEditPatient(patient)}
-                    type="button"
-                  >
-                    Editar
-                  </button>
-                  <button
-                    className="mini-button"
-                    disabled={!isPatientActive(patient)}
-                    onClick={() => onPreparePatient(patient.id)}
-                    type="button"
-                  >
-                    Agendar
-                  </button>
+            <>
+              <p className="result-caption">
+                {patientResults.length} de {patientResultTotal} pacientes
+                encontrados
+              </p>
+              {patientResults.map((patient) => (
+                <div className="table-row patients-grid" key={patient.id}>
+                  <span>
+                    {patient.name}
+                    <small>{patient.email || 'Sem email cadastrado'}</small>
+                  </span>
+                  <span>
+                    {patient.cpf}
+                    <small>
+                      {patient.rg ? `RG ${patient.rg}` : 'RG pendente'}
+                    </small>
+                  </span>
+                  <span>
+                    <em
+                      className={`patient-status-pill ${patientStatusTone(
+                        patient.status,
+                      )}`}
+                    >
+                      {patientStatusLabel(patient.status)}
+                    </em>
+                    <small>{patient.city || 'Cidade nao informada'}</small>
+                  </span>
+                  <span>{patient.phone}</span>
+                  <div className="patient-actions">
+                    <button
+                      className="mini-button"
+                      onClick={() => setSelectedPatientId(patient.id)}
+                      type="button"
+                    >
+                      Ficha
+                    </button>
+                    <button
+                      className="mini-button"
+                      onClick={() => openPatientForEdit(patient)}
+                      type="button"
+                    >
+                      Editar
+                    </button>
+                    <button
+                      className="mini-button"
+                      disabled={!isPatientActive(patient)}
+                      onClick={() => onPreparePatient(patient.id)}
+                      type="button"
+                    >
+                      Agendar
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))
+              ))}
+            </>
           )}
         </div>
 
@@ -2138,7 +3418,7 @@ function PatientsPage({
               </div>
               <button
                 className="ghost-button"
-                onClick={() => onEditPatient(focusedPatient)}
+                onClick={() => openPatientForEdit(focusedPatient)}
                 type="button"
               >
                 Editar ficha
@@ -2181,12 +3461,15 @@ function PatientsPage({
             </div>
 
             {focusedPatient.blockReason ? (
-              <p className="empty-state compact">{focusedPatient.blockReason}</p>
+              <p className="empty-state compact">
+                {focusedPatient.blockReason}
+              </p>
             ) : null}
 
             <div className="document-list">
               <span className="section-title">Documentos anexados</span>
-              {focusedPatient.documents && focusedPatient.documents.length > 0 ? (
+              {focusedPatient.documents &&
+              focusedPatient.documents.length > 0 ? (
                 focusedPatient.documents.map((document) => (
                   <small key={document}>{document}</small>
                 ))
@@ -2198,352 +3481,405 @@ function PatientsPage({
         ) : null}
       </article>
 
-      <form className="panel patient-editor" onSubmit={onSubmit}>
-        <div className="page-header">
-          <div>
-            <p className="eyebrow">Cadastro assistido</p>
-            <h2>{editingPatient ? 'Editar paciente' : 'Novo paciente'}</h2>
+      {isEditorVisible ? (
+        <form className="panel patient-editor" onSubmit={onSubmit}>
+          <div className="page-header">
+            <div>
+              <p className="eyebrow">Cadastro assistido</p>
+              <h2>{editingPatient ? 'Editar paciente' : 'Novo paciente'}</h2>
+            </div>
+            <span className="inline-badge">
+              {editingPatient ? 'Ficha em edicao' : 'Cadastro em abas'}
+            </span>
           </div>
-          <span className="inline-badge">
-            {editingPatient ? 'Ficha em edicao' : 'Cadastro em abas'}
-          </span>
-        </div>
 
-        <div className="patient-tabs" role="tablist" aria-label="Cadastro do paciente">
-          {tabs.map((tab) => (
+          <div
+            className="patient-tabs"
+            role="tablist"
+            aria-label="Cadastro do paciente"
+          >
+            {tabs.map((tab) => (
+              <button
+                aria-pressed={activeTab === tab.id}
+                className={`patient-tab ${activeTab === tab.id ? 'is-active' : ''}`}
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                type="button"
+              >
+                <strong>{tab.label}</strong>
+                <small>{tab.hint}</small>
+              </button>
+            ))}
+          </div>
+
+          {activeTab === 'identificacao' ? (
+            <div className="section-block">
+              <p className="section-title">Identificacao</p>
+              <div className="field-grid three-columns">
+                <label className="field full-row">
+                  <span>Nome completo</span>
+                  <input
+                    value={form.name}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        name: event.target.value,
+                      }))
+                    }
+                    required
+                  />
+                </label>
+                <label className="field">
+                  <span>CPF</span>
+                  <input
+                    value={form.cpf}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        cpf: normalizeDigits(event.target.value).slice(0, 11),
+                      }))
+                    }
+                    required
+                  />
+                  {cpfConflict ? (
+                    <small className="form-warning">
+                      CPF ja esta vinculado a outro paciente.
+                    </small>
+                  ) : null}
+                </label>
+                <label className="field">
+                  <span>RG</span>
+                  <input
+                    value={form.rg}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        rg: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <label className="field">
+                  <span>Nascimento</span>
+                  <input
+                    type="date"
+                    value={form.birthDate}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        birthDate: event.target.value,
+                      }))
+                    }
+                    required
+                  />
+                </label>
+                <label className="field">
+                  <span>Genero</span>
+                  <select
+                    value={form.gender}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        gender: event.target
+                          .value as PatientFormState['gender'],
+                      }))
+                    }
+                  >
+                    {genders.map((gender) => (
+                      <option key={gender} value={gender}>
+                        {gender}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Telefone</span>
+                  <input
+                    value={form.phone}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        phone: event.target.value,
+                      }))
+                    }
+                    required
+                  />
+                </label>
+              </div>
+            </div>
+          ) : null}
+
+          {activeTab === 'contato' ? (
+            <div className="section-block">
+              <p className="section-title">Contato e endereco</p>
+              <div className="field-grid three-columns">
+                <label className="field">
+                  <span>Email</span>
+                  <input
+                    type="email"
+                    value={form.email}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        email: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <label className="field">
+                  <span>CEP</span>
+                  <input
+                    value={form.zipCode}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        zipCode: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <label className="field">
+                  <span>Cidade</span>
+                  <input
+                    value={form.city}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        city: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <label className="field">
+                  <span>Estado</span>
+                  <input
+                    value={form.state}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        state: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <label className="field">
+                  <span>Contato emergencia</span>
+                  <input
+                    value={form.emergencyContact}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        emergencyContact: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <label className="field">
+                  <span>Telefone emergencia</span>
+                  <input
+                    value={form.emergencyPhone}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        emergencyPhone: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <label className="field full-row">
+                  <span>Endereco</span>
+                  <input
+                    value={form.address}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        address: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+              </div>
+            </div>
+          ) : null}
+
+          {activeTab === 'saude' ? (
+            <div className="section-block">
+              <p className="section-title">Dados clinicos de referencia</p>
+              <div className="field-grid two-columns">
+                <label className="field">
+                  <span>Tipo sanguineo</span>
+                  <select
+                    value={form.bloodType}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        bloodType: event.target.value,
+                      }))
+                    }
+                  >
+                    {bloodTypes.map((bloodType) => (
+                      <option key={bloodType || 'none'} value={bloodType}>
+                        {bloodType || 'Nao informado'}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="helper-block patient-form-note">
+                  <span>Como usar</span>
+                  <strong>
+                    Registre apenas sinais importantes para triagem.
+                  </strong>
+                  <small>
+                    O consultorio medico depois detalha evolucao, diagnostico e
+                    prescricao em modulo proprio.
+                  </small>
+                </div>
+                <label className="field full-row">
+                  <span>Alergias</span>
+                  <textarea
+                    value={form.allergies}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        allergies: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <label className="field full-row">
+                  <span>Historico medico</span>
+                  <textarea
+                    value={form.medicalHistory}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        medicalHistory: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+              </div>
+            </div>
+          ) : null}
+
+          {activeTab === 'status' ? (
+            <div className="section-block">
+              <p className="section-title">Status operacional</p>
+              <div className="field-grid two-columns">
+                <label className="field">
+                  <span>Status do paciente</span>
+                  <select
+                    value={form.status}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        status: event.target.value as PatientStatus,
+                        blockReason:
+                          event.target.value === 'BLOCKED'
+                            ? current.blockReason
+                            : '',
+                      }))
+                    }
+                  >
+                    {patientStatusOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="status-checklist">
+                  {patientStatusOptions.map((option) => (
+                    <article key={option.value}>
+                      <span>{option.label}</span>
+                      <strong>
+                        {form.status === option.value
+                          ? 'Selecionado'
+                          : 'Disponivel'}
+                      </strong>
+                      <small>{option.hint}</small>
+                    </article>
+                  ))}
+                </div>
+                <label className="field full-row">
+                  <span>Motivo do bloqueio</span>
+                  <textarea
+                    disabled={form.status !== 'BLOCKED'}
+                    placeholder="Obrigatorio apenas quando o paciente estiver bloqueado."
+                    value={form.blockReason}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        blockReason: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <label className="field full-row">
+                  <span>Documentos anexados</span>
+                  <textarea
+                    placeholder="Informe um documento por linha: RG, CPF, comprovante, autorizacao..."
+                    value={form.documents}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        documents: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+              </div>
+            </div>
+          ) : null}
+
+          <div className="patient-editor-actions">
             <button
-              aria-pressed={activeTab === tab.id}
-              className={`patient-tab ${activeTab === tab.id ? 'is-active' : ''}`}
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              className="ghost-button"
+              onClick={closePatientEditor}
               type="button"
             >
-              <strong>{tab.label}</strong>
-              <small>{tab.hint}</small>
+              {editingPatient ? 'Cancelar edicao' : 'Fechar cadastro'}
             </button>
-          ))}
-        </div>
-
-        {activeTab === 'identificacao' ? (
-          <div className="section-block">
-            <p className="section-title">Identificacao</p>
-            <div className="field-grid three-columns">
-              <label className="field full-row">
-                <span>Nome completo</span>
-                <input
-                  value={form.name}
-                  onChange={(event) =>
-                    setForm((current) => ({ ...current, name: event.target.value }))
-                  }
-                  required
-                />
-              </label>
-              <label className="field">
-                <span>CPF</span>
-                <input
-                  value={form.cpf}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      cpf: normalizeDigits(event.target.value).slice(0, 11),
-                    }))
-                  }
-                  required
-                />
-                {cpfConflict ? (
-                  <small className="form-warning">
-                    CPF ja esta vinculado a outro paciente.
-                  </small>
-                ) : null}
-              </label>
-              <label className="field">
-                <span>RG</span>
-                <input
-                  value={form.rg}
-                  onChange={(event) =>
-                    setForm((current) => ({ ...current, rg: event.target.value }))
-                  }
-                />
-              </label>
-              <label className="field">
-                <span>Nascimento</span>
-                <input
-                  type="date"
-                  value={form.birthDate}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      birthDate: event.target.value,
-                    }))
-                  }
-                  required
-                />
-              </label>
-              <label className="field">
-                <span>Genero</span>
-                <select
-                  value={form.gender}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      gender: event.target.value as PatientFormState['gender'],
-                    }))
-                  }
-                >
-                  {genders.map((gender) => (
-                    <option key={gender} value={gender}>
-                      {gender}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
-                <span>Telefone</span>
-                <input
-                  value={form.phone}
-                  onChange={(event) =>
-                    setForm((current) => ({ ...current, phone: event.target.value }))
-                  }
-                  required
-                />
-              </label>
-            </div>
+            <button
+              className="primary-button"
+              disabled={isSubmitting || !canSavePatient}
+              type="submit"
+            >
+              {isSubmitting
+                ? 'Salvando...'
+                : canSavePatient
+                  ? editingPatient
+                    ? 'Atualizar ficha'
+                    : 'Salvar paciente'
+                  : 'Preencha identificacao'}
+            </button>
           </div>
-        ) : null}
-
-        {activeTab === 'contato' ? (
-          <div className="section-block">
-            <p className="section-title">Contato e endereco</p>
-            <div className="field-grid three-columns">
-              <label className="field">
-                <span>Email</span>
-                <input
-                  type="email"
-                  value={form.email}
-                  onChange={(event) =>
-                    setForm((current) => ({ ...current, email: event.target.value }))
-                  }
-                />
-              </label>
-              <label className="field">
-                <span>CEP</span>
-                <input
-                  value={form.zipCode}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      zipCode: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-              <label className="field">
-                <span>Cidade</span>
-                <input
-                  value={form.city}
-                  onChange={(event) =>
-                    setForm((current) => ({ ...current, city: event.target.value }))
-                  }
-                />
-              </label>
-              <label className="field">
-                <span>Estado</span>
-                <input
-                  value={form.state}
-                  onChange={(event) =>
-                    setForm((current) => ({ ...current, state: event.target.value }))
-                  }
-                />
-              </label>
-              <label className="field">
-                <span>Contato emergencia</span>
-                <input
-                  value={form.emergencyContact}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      emergencyContact: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-              <label className="field">
-                <span>Telefone emergencia</span>
-                <input
-                  value={form.emergencyPhone}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      emergencyPhone: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-              <label className="field full-row">
-                <span>Endereco</span>
-                <input
-                  value={form.address}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      address: event.target.value,
-                    }))
-                  }
-                />
-              </label>
+        </form>
+      ) : (
+        <aside className="panel patient-editor patient-editor-empty">
+          <div className="page-header">
+            <div>
+              <p className="eyebrow">Cadastro assistido</p>
+              <h2>Nenhuma ficha aberta</h2>
             </div>
+            <span className="inline-badge">Fluxo protegido</span>
           </div>
-        ) : null}
 
-        {activeTab === 'saude' ? (
-          <div className="section-block">
-            <p className="section-title">Dados clinicos de referencia</p>
-            <div className="field-grid two-columns">
-              <label className="field">
-                <span>Tipo sanguineo</span>
-                <select
-                  value={form.bloodType}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      bloodType: event.target.value,
-                    }))
-                  }
-                >
-                  {bloodTypes.map((bloodType) => (
-                    <option key={bloodType || 'none'} value={bloodType}>
-                      {bloodType || 'Nao informado'}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="helper-block patient-form-note">
-                <span>Como usar</span>
-                <strong>Registre apenas sinais importantes para triagem.</strong>
-                <small>
-                  O consultorio medico depois detalha evolucao, diagnostico e
-                  prescricao em modulo proprio.
-                </small>
-              </div>
-              <label className="field full-row">
-                <span>Alergias</span>
-                <textarea
-                  value={form.allergies}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      allergies: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-              <label className="field full-row">
-                <span>Historico medico</span>
-                <textarea
-                  value={form.medicalHistory}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      medicalHistory: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-            </div>
-          </div>
-        ) : null}
+          <DirectoryState
+            code="02"
+            title="Cadastre apenas quando houver uma nova passagem."
+            description="Primeiro consulte a base para evitar duplicidade. Se nao encontrar o paciente, abra um cadastro limpo e preencha as abas por etapa."
+          />
 
-        {activeTab === 'status' ? (
-          <div className="section-block">
-            <p className="section-title">Status operacional</p>
-            <div className="field-grid two-columns">
-              <label className="field">
-                <span>Status do paciente</span>
-                <select
-                  value={form.status}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      status: event.target.value as PatientStatus,
-                      blockReason:
-                        event.target.value === 'BLOCKED'
-                          ? current.blockReason
-                          : '',
-                    }))
-                  }
-                >
-                  {patientStatusOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="status-checklist">
-                {patientStatusOptions.map((option) => (
-                  <article key={option.value}>
-                    <span>{option.label}</span>
-                    <strong>
-                      {form.status === option.value ? 'Selecionado' : 'Disponivel'}
-                    </strong>
-                    <small>{option.hint}</small>
-                  </article>
-                ))}
-              </div>
-              <label className="field full-row">
-                <span>Motivo do bloqueio</span>
-                <textarea
-                  disabled={form.status !== 'BLOCKED'}
-                  placeholder="Obrigatorio apenas quando o paciente estiver bloqueado."
-                  value={form.blockReason}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      blockReason: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-              <label className="field full-row">
-                <span>Documentos anexados</span>
-                <textarea
-                  placeholder="Informe um documento por linha: RG, CPF, comprovante, autorizacao..."
-                  value={form.documents}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      documents: event.target.value,
-                    }))
-                  }
-                />
-              </label>
-            </div>
-          </div>
-        ) : null}
-
-        <div className="patient-editor-actions">
-          <button
-            className="ghost-button"
-            onClick={onResetPatient}
-            type="button"
-          >
-            {editingPatient ? 'Cancelar edicao' : 'Limpar'}
-          </button>
           <button
             className="primary-button"
-            disabled={isSubmitting || !canSavePatient}
-            type="submit"
+            onClick={openNewPatientEditor}
+            type="button"
           >
-            {isSubmitting
-              ? 'Salvando...'
-              : canSavePatient
-                ? editingPatient
-                  ? 'Atualizar ficha'
-                  : 'Salvar paciente'
-                : 'Preencha identificacao'}
+            Abrir novo cadastro
           </button>
-        </div>
-      </form>
+        </aside>
+      )}
     </section>
   );
 }
@@ -2574,22 +3910,78 @@ function SchedulingPage({
   setAppointmentForm,
 }: SchedulingPageProps) {
   const [search, setSearch] = useState('');
+  const [hasSearchedAppointments, setHasSearchedAppointments] = useState(false);
+  const [patientPickerSearch, setPatientPickerSearch] = useState('');
+  const [doctorPickerSearch, setDoctorPickerSearch] = useState('');
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
+  const deferredPatientPickerSearch = useDeferredValue(
+    patientPickerSearch.trim().toLowerCase(),
+  );
+  const deferredDoctorPickerSearch = useDeferredValue(
+    doctorPickerSearch.trim().toLowerCase(),
+  );
+  const canSearchAppointments = search.trim().length >= 2;
   const filteredAppointments = useMemo(
     () =>
-      appointments.filter((appointment) =>
-        matchAppointment(appointment, deferredSearch),
-      ),
-    [appointments, deferredSearch],
+      hasSearchedAppointments
+        ? appointments.filter((appointment) =>
+            matchAppointment(appointment, deferredSearch),
+          )
+        : [],
+    [appointments, deferredSearch, hasSearchedAppointments],
   );
   const activePatients = useMemo(
     () => patients.filter(isPatientActive),
     [patients],
   );
+  const visiblePatientOptions = useMemo(
+    () =>
+      activePatients.filter(
+        (patient) =>
+          patient.id === appointmentForm.patientId ||
+          (patientPickerSearch.trim().length >= 2 &&
+            matchPatientRecord(patient, deferredPatientPickerSearch)),
+      ),
+    [
+      activePatients,
+      appointmentForm.patientId,
+      deferredPatientPickerSearch,
+      patientPickerSearch,
+    ],
+  );
+  const visibleDoctorOptions = useMemo(
+    () =>
+      doctors.filter(
+        (doctor) =>
+          doctor.id === appointmentForm.doctorId ||
+          (doctorPickerSearch.trim().length >= 2 &&
+            matchDoctor(doctor, deferredDoctorPickerSearch)),
+      ),
+    [
+      appointmentForm.doctorId,
+      deferredDoctorPickerSearch,
+      doctorPickerSearch,
+      doctors,
+    ],
+  );
   const selectedPatient =
-    patients.find((patient) => patient.id === appointmentForm.patientId) ?? null;
+    patients.find((patient) => patient.id === appointmentForm.patientId) ??
+    null;
   const selectedDoctor =
     doctors.find((doctor) => doctor.id === appointmentForm.doctorId) ?? null;
+
+  function searchAppointments(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (canSearchAppointments) {
+      setHasSearchedAppointments(true);
+    }
+  }
+
+  function clearAppointmentSearch() {
+    setSearch('');
+    setHasSearchedAppointments(false);
+  }
 
   return (
     <section className="page-grid module-grid">
@@ -2597,18 +3989,26 @@ function SchedulingPage({
         <div className="page-header">
           <div>
             <p className="eyebrow">Agendamento</p>
-            <h2>Agenda atual</h2>
+            <h2>Buscar agenda</h2>
           </div>
-          <div className="toolbar-inline">
-            <input
-              className="search-input"
-              placeholder="Buscar por paciente, medico, status ou tipo"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
-            <span className="inline-badge">{filteredAppointments.length} itens</span>
-          </div>
+          <span className="inline-badge">{appointments.length} registros</span>
         </div>
+
+        <OperationalSearchCard
+          canSearch={canSearchAppointments}
+          description="Consulte agenda por paciente, medico, status ou tipo antes de abrir a lista de atendimentos."
+          onChange={setSearch}
+          onClear={clearAppointmentSearch}
+          onSearch={searchAppointments}
+          placeholder="Buscar por paciente, medico, status ou tipo"
+          resultText={
+            hasSearchedAppointments
+              ? `${filteredAppointments.length} agendamentos encontrados`
+              : undefined
+          }
+          title="Localize o atendimento antes de operar."
+          value={search}
+        />
 
         <div className="table-shell">
           <div className="table-head appointments-grid">
@@ -2619,8 +4019,18 @@ function SchedulingPage({
             <span>Tipo</span>
           </div>
 
-          {filteredAppointments.length === 0 ? (
-            <p className="empty-state">Nenhuma consulta encontrada com esse filtro.</p>
+          {!hasSearchedAppointments ? (
+            <DirectoryState
+              code="01"
+              title="Nenhum agendamento carregado automaticamente."
+              description="Use a busca para localizar um atendimento especifico ou monte uma nova consulta no formulario ao lado."
+            />
+          ) : filteredAppointments.length === 0 ? (
+            <DirectoryState
+              code="00"
+              title="Nenhuma consulta encontrada."
+              description="Revise paciente, medico, status ou tipo pesquisado."
+            />
           ) : (
             filteredAppointments.map((appointment) => (
               <div className="table-row appointments-grid" key={appointment.id}>
@@ -2658,11 +4068,21 @@ function SchedulingPage({
           </div>
           <div className="context-card">
             <span>Medico pronto</span>
-            <strong>{selectedDoctor?.user.name || 'Selecione em equipe'}</strong>
+            <strong>
+              {selectedDoctor?.user.name || 'Selecione em equipe'}
+            </strong>
           </div>
         </div>
 
         <div className="field-grid two-columns">
+          <label className="field">
+            <span>Buscar paciente</span>
+            <input
+              placeholder="Nome, CPF ou telefone"
+              value={patientPickerSearch}
+              onChange={(event) => setPatientPickerSearch(event.target.value)}
+            />
+          </label>
           <label className="field">
             <span>Paciente</span>
             <select
@@ -2675,13 +4095,25 @@ function SchedulingPage({
               }
               required
             >
-              <option value="">Selecione</option>
-              {activePatients.map((patient) => (
+              <option value="">
+                {patientPickerSearch.trim().length >= 2
+                  ? 'Selecione'
+                  : 'Pesquise o paciente primeiro'}
+              </option>
+              {visiblePatientOptions.map((patient) => (
                 <option key={patient.id} value={patient.id}>
-                  {patient.name}
+                  {patient.name} - {patient.cpf}
                 </option>
               ))}
             </select>
+          </label>
+          <label className="field">
+            <span>Buscar medico</span>
+            <input
+              placeholder="Nome, CRM ou especialidade"
+              value={doctorPickerSearch}
+              onChange={(event) => setDoctorPickerSearch(event.target.value)}
+            />
           </label>
           <label className="field">
             <span>Medico</span>
@@ -2695,10 +4127,14 @@ function SchedulingPage({
               }
               required
             >
-              <option value="">Selecione</option>
-              {doctors.map((doctor) => (
+              <option value="">
+                {doctorPickerSearch.trim().length >= 2
+                  ? 'Selecione'
+                  : 'Pesquise o medico primeiro'}
+              </option>
+              {visibleDoctorOptions.map((doctor) => (
                 <option key={doctor.id} value={doctor.id}>
-                  {doctor.user.name}
+                  {doctor.user.name} - CRM {doctor.crm}/{doctor.crmUf}
                 </option>
               ))}
             </select>
@@ -2835,19 +4271,27 @@ function EmergencyCarePage({
         <article className="context-card">
           <span>Setor PA</span>
           <strong>{paSector?.name ?? 'Pronto Atendimento'}</strong>
-          <small>{paSector ? 'setor configurado' : 'rode o seed foundation'}</small>
+          <small>
+            {paSector ? 'setor configurado' : 'rode o seed foundation'}
+          </small>
         </article>
         <article className="context-card">
           <span>Equipe vinculada</span>
           <strong>{paDoctors.length + paNurses.length}</strong>
-          <small>{paDoctors.length} med. / {paNurses.length} enf.</small>
+          <small>
+            {paDoctors.length} med. / {paNurses.length} enf.
+          </small>
         </article>
         <article className="context-card">
           <span>Ausencias PA</span>
           <strong>{missingCount}</strong>
           <small>controle da fila de urgencia</small>
         </article>
-        <button className="primary-button" onClick={onOpenScheduling} type="button">
+        <button
+          className="primary-button"
+          onClick={onOpenScheduling}
+          type="button"
+        >
           Nova entrada PA
         </button>
       </section>
@@ -2893,7 +4337,7 @@ function DoctorOfficePage({
 }: DoctorOfficePageProps) {
   const currentDoctor =
     profile.role === 'MEDICO'
-      ? doctors.find((doctor) => doctor.userId === profile.id) ?? null
+      ? (doctors.find((doctor) => doctor.userId === profile.id) ?? null)
       : null;
   const officeAppointments = useMemo(
     () =>
@@ -2953,7 +4397,8 @@ type PharmacyPageProps = {
 };
 
 function PharmacyPage({ appointments, nurses, sectors }: PharmacyPageProps) {
-  const pharmacySector = sectors.find((sector) => sector.code === 'FARM') ?? null;
+  const pharmacySector =
+    sectors.find((sector) => sector.code === 'FARM') ?? null;
   const stockSector = sectors.find((sector) => sector.code === 'EST') ?? null;
   const pharmacyTeam = nurses.filter((nurse) =>
     professionalInSector(nurse, 'FARM', pharmacySector?.id),
@@ -3103,9 +4548,18 @@ type BillingPageProps = {
 };
 
 function BillingPage({ appointments, patientTotal }: BillingPageProps) {
-  const billableAppointments = [...appointments]
+  const [search, setSearch] = useState('');
+  const [hasSearchedBilling, setHasSearchedBilling] = useState(false);
+  const deferredSearch = useDeferredValue(search.trim().toLowerCase());
+  const canSearchBilling = search.trim().length >= 2;
+  const billableSource = [...appointments]
     .filter((appointment) => appointment.status === 'REALIZADA')
     .sort(sortByAppointmentDate);
+  const billableAppointments = hasSearchedBilling
+    ? billableSource.filter((appointment) =>
+        matchAppointment(appointment, deferredSearch),
+      )
+    : [];
   const openAccounts = appointments.filter((appointment) =>
     ['AGENDADA', 'CONFIRMADA'].includes(appointment.status),
   ).length;
@@ -3113,12 +4567,25 @@ function BillingPage({ appointments, patientTotal }: BillingPageProps) {
     ['CANCELADA', 'NAO_COMPARECEU'].includes(appointment.status),
   ).length;
 
+  function searchBilling(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (canSearchBilling) {
+      setHasSearchedBilling(true);
+    }
+  }
+
+  function clearBillingSearch() {
+    setSearch('');
+    setHasSearchedBilling(false);
+  }
+
   return (
     <>
       <section className="summary-strip">
         <article className="summary-card">
           <span>Faturaveis</span>
-          <strong>{billableAppointments.length}</strong>
+          <strong>{billableSource.length}</strong>
           <small>atendimentos realizados</small>
         </article>
         <article className="summary-card">
@@ -3143,10 +4610,26 @@ function BillingPage({ appointments, patientTotal }: BillingPageProps) {
           <div className="page-header">
             <div>
               <p className="eyebrow">Faturamento</p>
-              <h2>Contas prontas para cobranca</h2>
+              <h2>Buscar contas para cobranca</h2>
             </div>
             <span className="inline-badge">recibos e notas fiscais</span>
           </div>
+
+          <OperationalSearchCard
+            canSearch={canSearchBilling}
+            description="Busque por paciente, medico, tipo ou status antes de abrir contas faturaveis."
+            onChange={setSearch}
+            onClear={clearBillingSearch}
+            onSearch={searchBilling}
+            placeholder="Buscar paciente, medico, tipo ou status"
+            resultText={
+              hasSearchedBilling
+                ? `${billableAppointments.length} contas encontradas`
+                : undefined
+            }
+            title="Localize a conta antes de emitir documentos."
+            value={search}
+          />
 
           <div className="table-shell">
             <div className="table-head appointments-grid">
@@ -3157,14 +4640,23 @@ function BillingPage({ appointments, patientTotal }: BillingPageProps) {
               <span>Tipo</span>
             </div>
 
-            {billableAppointments.length === 0 ? (
+            {!hasSearchedBilling ? (
+              <DirectoryState
+                code="01"
+                title="Nenhuma conta carregada automaticamente."
+                description="Use a busca para localizar o atendimento realizado antes de iniciar conferencia, recibo ou nota."
+              />
+            ) : billableAppointments.length === 0 ? (
               <p className="empty-state">
                 Nenhuma conta faturavel ainda. Quando a consulta for marcada
                 como realizada, ela entra nesta lista.
               </p>
             ) : (
               billableAppointments.map((appointment) => (
-                <div className="table-row appointments-grid" key={appointment.id}>
+                <div
+                  className="table-row appointments-grid"
+                  key={appointment.id}
+                >
                   <span>{appointment.patient.name}</span>
                   <span>{appointment.doctor.user.name}</span>
                   <span>{formatDateTime(appointment.appointmentDate)}</span>
@@ -3259,24 +4751,32 @@ function CarePage({
   title = 'Fila operacional',
 }: CarePageProps) {
   const [search, setSearch] = useState('');
+  const [hasSearchedQueue, setHasSearchedQueue] = useState(false);
   const [selectedAppointmentId, setSelectedAppointmentId] = useState<
     null | string
   >(null);
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
+  const canSearchQueue = search.trim().length >= 2;
   const filteredQueue = useMemo(
     () =>
-      [...appointments]
-        .filter((appointment) => appointment.status !== 'CANCELADA')
-        .filter((appointment) => matchAppointment(appointment, deferredSearch))
-        .sort(
-          (left, right) =>
-            new Date(left.appointmentDate).getTime() -
-            new Date(right.appointmentDate).getTime(),
-        ),
-    [appointments, deferredSearch],
+      hasSearchedQueue
+        ? [...appointments]
+            .filter((appointment) => appointment.status !== 'CANCELADA')
+            .filter((appointment) =>
+              matchAppointment(appointment, deferredSearch),
+            )
+            .sort(
+              (left, right) =>
+                new Date(left.appointmentDate).getTime() -
+                new Date(right.appointmentDate).getTime(),
+            )
+        : [],
+    [appointments, deferredSearch, hasSearchedQueue],
   );
   const activeAppointment =
-    filteredQueue.find((appointment) => appointment.id === selectedAppointmentId) ??
+    filteredQueue.find(
+      (appointment) => appointment.id === selectedAppointmentId,
+    ) ??
     filteredQueue[0] ??
     null;
   const waitingCount = appointments.filter((appointment) =>
@@ -3291,6 +4791,20 @@ function CarePage({
   const missingCount = appointments.filter(
     (appointment) => appointment.status === 'NAO_COMPARECEU',
   ).length;
+
+  function searchQueue(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (canSearchQueue) {
+      setHasSearchedQueue(true);
+    }
+  }
+
+  function clearQueueSearch() {
+    setSearch('');
+    setHasSearchedQueue(false);
+    setSelectedAppointmentId(null);
+  }
 
   return (
     <>
@@ -3324,21 +4838,35 @@ function CarePage({
               <p className="eyebrow">{eyebrow}</p>
               <h2>{title}</h2>
             </div>
-            <div className="toolbar-inline">
-              <input
-                className="search-input"
-                placeholder="Buscar por paciente, medico, status ou tipo"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-              />
-              <span className="inline-badge">
-                {filteredQueue.length} em acompanhamento
-              </span>
-            </div>
+            <span className="inline-badge">
+              {appointments.length} registros
+            </span>
           </div>
 
+          <OperationalSearchCard
+            canSearch={canSearchQueue}
+            description="Pesquise por paciente, medico, status ou tipo para abrir apenas a fila relacionada ao atendimento desejado."
+            onChange={setSearch}
+            onClear={clearQueueSearch}
+            onSearch={searchQueue}
+            placeholder="Buscar por paciente, medico, status ou tipo"
+            resultText={
+              hasSearchedQueue
+                ? `${filteredQueue.length} atendimentos encontrados`
+                : undefined
+            }
+            title="Abra a fila pelo contexto de trabalho."
+            value={search}
+          />
+
           <div className="queue-shell">
-            {filteredQueue.length === 0 ? (
+            {!hasSearchedQueue ? (
+              <DirectoryState
+                code="01"
+                title="Nenhum atendimento carregado automaticamente."
+                description="Use a busca acima para localizar paciente, medico ou status antes de abrir a fila."
+              />
+            ) : filteredQueue.length === 0 ? (
               <p className="empty-state">{emptyMessage}</p>
             ) : (
               filteredQueue.map((appointment) => (
@@ -3396,15 +4924,21 @@ function CarePage({
                 <div className="context-band">
                   <article className="context-card">
                     <span>Horario</span>
-                    <strong>{formatTime(activeAppointment.appointmentDate)}</strong>
-                    <small>{formatDate(activeAppointment.appointmentDate)}</small>
+                    <strong>
+                      {formatTime(activeAppointment.appointmentDate)}
+                    </strong>
+                    <small>
+                      {formatDate(activeAppointment.appointmentDate)}
+                    </small>
                   </article>
                   <article className="context-card">
                     <span>Idade</span>
                     <strong>
                       {calculateAge(activeAppointment.patient.birthDate)} anos
                     </strong>
-                    <small>{formatDate(activeAppointment.patient.birthDate)}</small>
+                    <small>
+                      {formatDate(activeAppointment.patient.birthDate)}
+                    </small>
                   </article>
                 </div>
 
@@ -3415,7 +4949,9 @@ function CarePage({
                   </div>
                   <div className="helper-block">
                     <span>Contato</span>
-                    <strong>{activeAppointment.patient.phone || 'Nao informado'}</strong>
+                    <strong>
+                      {activeAppointment.patient.phone || 'Nao informado'}
+                    </strong>
                   </div>
                   <div className="helper-block">
                     <span>Tipo sanguineo</span>
@@ -3438,7 +4974,8 @@ function CarePage({
                   <div className="helper-block full-row">
                     <span>Alergias</span>
                     <strong>
-                      {activeAppointment.patient.allergies || 'Nenhuma alergia informada'}
+                      {activeAppointment.patient.allergies ||
+                        'Nenhuma alergia informada'}
                     </strong>
                   </div>
                   <div className="helper-block full-row">
@@ -3452,7 +4989,8 @@ function CarePage({
                     <span>Profissional responsavel</span>
                     <strong>
                       {activeAppointment.doctor.user.name} • CRM{' '}
-                      {activeAppointment.doctor.crm}/{activeAppointment.doctor.crmUf}
+                      {activeAppointment.doctor.crm}/
+                      {activeAppointment.doctor.crmUf}
                     </strong>
                     <span>
                       {activeAppointment.doctor.specialties.length > 0
@@ -3464,7 +5002,8 @@ function CarePage({
               </>
             ) : (
               <p className="empty-state compact">
-                Escolha um atendimento da fila para abrir o contexto do paciente.
+                Escolha um atendimento da fila para abrir o contexto do
+                paciente.
               </p>
             )}
           </article>
@@ -3620,7 +5159,9 @@ function CareRecordPanel({
           <p className="eyebrow">Ficha rapida</p>
           <h2>Conduta e fechamento</h2>
         </div>
-        <span className="inline-badge">{humanizeEnum(activeAppointment.type)}</span>
+        <span className="inline-badge">
+          {humanizeEnum(activeAppointment.type)}
+        </span>
       </div>
 
       <form className="section-block" onSubmit={handleSubmit}>
@@ -3727,7 +5268,11 @@ function CareRecordPanel({
         </div>
 
         {canManageCare ? (
-          <button className="primary-button" disabled={isSubmitting} type="submit">
+          <button
+            className="primary-button"
+            disabled={isSubmitting}
+            type="submit"
+          >
             {isSubmitting ? 'Salvando atendimento...' : 'Salvar ficha'}
           </button>
         ) : (
@@ -3775,20 +5320,44 @@ function TeamPage({
   setSectorForm,
 }: TeamPageProps) {
   const [search, setSearch] = useState('');
+  const [hasSearchedTeam, setHasSearchedTeam] = useState(false);
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
+  const canSearchTeam = search.trim().length >= 2;
   const filteredDoctors = useMemo(
-    () => doctors.filter((doctor) => matchDoctor(doctor, deferredSearch)),
-    [deferredSearch, doctors],
+    () =>
+      hasSearchedTeam
+        ? doctors.filter((doctor) => matchDoctor(doctor, deferredSearch))
+        : [],
+    [deferredSearch, doctors, hasSearchedTeam],
   );
   const filteredNurses = useMemo(
-    () => nurses.filter((nurse) => matchNurse(nurse, deferredSearch)),
-    [deferredSearch, nurses],
+    () =>
+      hasSearchedTeam
+        ? nurses.filter((nurse) => matchNurse(nurse, deferredSearch))
+        : [],
+    [deferredSearch, hasSearchedTeam, nurses],
   );
   const filteredSectors = useMemo(
-    () => sectors.filter((sector) => matchSector(sector, deferredSearch)),
-    [deferredSearch, sectors],
+    () =>
+      hasSearchedTeam
+        ? sectors.filter((sector) => matchSector(sector, deferredSearch))
+        : [],
+    [deferredSearch, hasSearchedTeam, sectors],
   );
   const activeSectors = sectors.filter((sector) => sector.active).length;
+
+  function searchTeam(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (canSearchTeam) {
+      setHasSearchedTeam(true);
+    }
+  }
+
+  function clearTeamSearch() {
+    setSearch('');
+    setHasSearchedTeam(false);
+  }
 
   return (
     <>
@@ -3823,18 +5392,24 @@ function TeamPage({
                 <p className="eyebrow">Equipe assistencial</p>
                 <h2>Busca e preparacao de agenda</h2>
               </div>
-              <div className="toolbar-inline">
-                <input
-                  className="search-input"
-                  placeholder="Buscar por nome, conselho, email, especialidade ou setor"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                />
-                <span className="inline-badge">
-                  {filteredDoctors.length} medicos
-                </span>
-              </div>
+              <span className="inline-badge">{doctors.length} medicos</span>
             </div>
+
+            <OperationalSearchCard
+              canSearch={canSearchTeam}
+              description="Pesquise por profissional, conselho, email, especialidade ou setor antes de abrir os resultados da equipe."
+              onChange={setSearch}
+              onClear={clearTeamSearch}
+              onSearch={searchTeam}
+              placeholder="Buscar por nome, conselho, email, especialidade ou setor"
+              resultText={
+                hasSearchedTeam
+                  ? `${filteredDoctors.length} medicos, ${filteredNurses.length} enfermagem, ${filteredSectors.length} setores`
+                  : undefined
+              }
+              title="Localize profissional ou setor pelo contexto."
+              value={search}
+            />
 
             <div className="table-shell">
               <div className="table-head doctors-grid">
@@ -3844,8 +5419,16 @@ function TeamPage({
                 <span>Acao</span>
               </div>
 
-              {filteredDoctors.length === 0 ? (
-                <p className="empty-state">Nenhum medico encontrado com esse filtro.</p>
+              {!hasSearchedTeam ? (
+                <DirectoryState
+                  code="01"
+                  title="Nenhum medico carregado automaticamente."
+                  description="Use a busca acima para localizar profissional, conselho ou setor."
+                />
+              ) : filteredDoctors.length === 0 ? (
+                <p className="empty-state">
+                  Nenhum medico encontrado com esse filtro.
+                </p>
               ) : (
                 filteredDoctors.map((doctor) => (
                   <div className="table-row doctors-grid" key={doctor.id}>
@@ -3880,7 +5463,9 @@ function TeamPage({
                 <p className="eyebrow">Enfermagem</p>
                 <h2>Setores e plantoes</h2>
               </div>
-              <span className="inline-badge">{filteredNurses.length} ativos</span>
+              <span className="inline-badge">
+                {hasSearchedTeam ? filteredNurses.length : nurses.length} ativos
+              </span>
             </div>
 
             <div className="table-shell">
@@ -3891,7 +5476,13 @@ function TeamPage({
                 <span>Plantao</span>
               </div>
 
-              {filteredNurses.length === 0 ? (
+              {!hasSearchedTeam ? (
+                <DirectoryState
+                  code="02"
+                  title="Nenhum enfermeiro carregado automaticamente."
+                  description="A busca da equipe tambem filtra enfermagem por nome, COREN, email, setor e plantao."
+                />
+              ) : filteredNurses.length === 0 ? (
                 <p className="empty-state">
                   Nenhum enfermeiro encontrado com esse filtro.
                 </p>
@@ -3919,11 +5510,20 @@ function TeamPage({
                 <p className="eyebrow">Setores</p>
                 <h2>Mapa de alocacao</h2>
               </div>
-              <span className="inline-badge">{filteredSectors.length} visiveis</span>
+              <span className="inline-badge">
+                {hasSearchedTeam ? filteredSectors.length : sectors.length}{' '}
+                visiveis
+              </span>
             </div>
 
             <div className="list-shell">
-              {filteredSectors.length === 0 ? (
+              {!hasSearchedTeam ? (
+                <DirectoryState
+                  code="03"
+                  title="Nenhum setor carregado automaticamente."
+                  description="Pesquise para abrir somente os setores relacionados ao termo informado."
+                />
+              ) : filteredSectors.length === 0 ? (
                 <p className="empty-state">Nenhum setor cadastrado ainda.</p>
               ) : (
                 filteredSectors.map((sector) => (
@@ -3965,7 +5565,10 @@ function TeamPage({
                   <input
                     value={form.name}
                     onChange={(event) =>
-                      setForm((current) => ({ ...current, name: event.target.value }))
+                      setForm((current) => ({
+                        ...current,
+                        name: event.target.value,
+                      }))
                     }
                     required
                   />
@@ -3976,7 +5579,10 @@ function TeamPage({
                     type="email"
                     value={form.email}
                     onChange={(event) =>
-                      setForm((current) => ({ ...current, email: event.target.value }))
+                      setForm((current) => ({
+                        ...current,
+                        email: event.target.value,
+                      }))
                     }
                     required
                   />
@@ -4022,7 +5628,10 @@ function TeamPage({
                   <input
                     value={form.crm}
                     onChange={(event) =>
-                      setForm((current) => ({ ...current, crm: event.target.value }))
+                      setForm((current) => ({
+                        ...current,
+                        crm: event.target.value,
+                      }))
                     }
                     required
                   />
@@ -4065,7 +5674,10 @@ function TeamPage({
                   <input
                     value={form.phone}
                     onChange={(event) =>
-                      setForm((current) => ({ ...current, phone: event.target.value }))
+                      setForm((current) => ({
+                        ...current,
+                        phone: event.target.value,
+                      }))
                     }
                   />
                 </label>
@@ -4088,7 +5700,10 @@ function TeamPage({
                   <textarea
                     value={form.bio}
                     onChange={(event) =>
-                      setForm((current) => ({ ...current, bio: event.target.value }))
+                      setForm((current) => ({
+                        ...current,
+                        bio: event.target.value,
+                      }))
                     }
                   />
                 </label>
@@ -4115,7 +5730,10 @@ function TeamPage({
                   <input
                     value={form.city}
                     onChange={(event) =>
-                      setForm((current) => ({ ...current, city: event.target.value }))
+                      setForm((current) => ({
+                        ...current,
+                        city: event.target.value,
+                      }))
                     }
                   />
                 </label>
@@ -4160,7 +5778,11 @@ function TeamPage({
               </div>
             </div>
 
-            <button className="primary-button" disabled={isSubmitting} type="submit">
+            <button
+              className="primary-button"
+              disabled={isSubmitting}
+              type="submit"
+            >
               {isSubmitting ? 'Salvando...' : 'Cadastrar medico'}
             </button>
           </form>
@@ -4381,7 +6003,11 @@ function TeamPage({
               </div>
             </div>
 
-            <button className="primary-button" disabled={isSubmitting} type="submit">
+            <button
+              className="primary-button"
+              disabled={isSubmitting}
+              type="submit"
+            >
               {isSubmitting ? 'Salvando...' : 'Cadastrar enfermeiro'}
             </button>
           </form>
@@ -4450,7 +6076,11 @@ function TeamPage({
               </label>
             </div>
 
-            <button className="primary-button" disabled={isSubmitting} type="submit">
+            <button
+              className="primary-button"
+              disabled={isSubmitting}
+              type="submit"
+            >
               {isSubmitting ? 'Salvando...' : 'Cadastrar setor'}
             </button>
           </form>
@@ -4549,11 +6179,12 @@ function matchUser(user: UserProfile, query: string) {
   return haystack.includes(query);
 }
 
-function matchPatient(patient: Patient, query: string) {
+function matchPatientRecord(patient: Patient, query: string) {
   if (!query) {
     return true;
   }
 
+  const queryDigits = normalizeDigits(query);
   const haystack = [
     patient.name,
     patient.cpf,
@@ -4574,7 +6205,10 @@ function matchPatient(patient: Patient, query: string) {
     .join(' ')
     .toLowerCase();
 
-  return haystack.includes(query);
+  return (
+    haystack.includes(query) ||
+    (queryDigits.length > 0 && normalizeDigits(haystack).includes(queryDigits))
+  );
 }
 
 function matchDoctor(doctor: Doctor, query: string) {
@@ -4743,6 +6377,26 @@ function patientStatusTone(status?: PatientStatus) {
   }
 }
 
+function matchModuleSearch(values: Array<string | undefined>, query: string) {
+  if (!query) {
+    return true;
+  }
+
+  return values.filter(Boolean).join(' ').toLowerCase().includes(query);
+}
+
+function isEnvironmentId(value: string | null): value is EnvironmentId {
+  return navigationEnvironments.some((environment) => environment.id === value);
+}
+
+function getNavigationEnvironment(environmentId: EnvironmentId) {
+  return (
+    navigationEnvironments.find(
+      (environment) => environment.id === environmentId,
+    ) ?? navigationEnvironments[0]!
+  );
+}
+
 function readStoredValue<T>(key: string) {
   const rawValue = localStorage.getItem(key);
 
@@ -4765,9 +6419,7 @@ function parseDocumentReferences(value: string) {
     .filter(Boolean);
 }
 
-function createCareRecordForm(
-  appointment: Appointment,
-): CareRecordFormState {
+function createCareRecordForm(appointment: Appointment): CareRecordFormState {
   return {
     status: appointment.status,
     notes: appointment.notes ?? '',

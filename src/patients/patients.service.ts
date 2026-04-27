@@ -33,13 +33,37 @@ export class PatientsService {
   }
 
   async findAll(query: QueryPatientDto) {
-    const { page = 1, limit = 10, name, cpf, gender, bloodType, status } = query;
+    const {
+      page = 1,
+      limit = 10,
+      name,
+      q,
+      cpf,
+      gender,
+      bloodType,
+      status,
+    } = query;
     const skip = (page - 1) * limit;
 
     const where: Prisma.PatientWhereInput = {};
+    const search = q?.trim();
 
     if (name) {
       where.name = { contains: name, mode: 'insensitive' };
+    }
+
+    if (search) {
+      const searchDigits = search.replace(/\D/g, '');
+      const searchByDigits = searchDigits.length > 0 ? searchDigits : search;
+
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { cpf: { contains: searchByDigits } },
+        { rg: { contains: search, mode: 'insensitive' } },
+        { phone: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+        { city: { contains: search, mode: 'insensitive' } },
+      ];
     }
 
     if (cpf) {

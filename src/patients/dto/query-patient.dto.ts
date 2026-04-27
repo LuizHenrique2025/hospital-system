@@ -23,6 +23,14 @@ export class QueryPatientDto {
   @IsString()
   name?: string;
 
+  @ApiPropertyOptional({
+    example: 'Joao 12345678900',
+    description: 'Busca ampla por nome, CPF, RG, telefone, email ou cidade',
+  })
+  @IsOptional()
+  @IsString()
+  q?: string;
+
   @ApiPropertyOptional({ example: '12345678900' })
   @IsOptional()
   @IsString()
