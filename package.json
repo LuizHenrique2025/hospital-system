@@ -11,6 +11,7 @@
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "front:dev": "npm --prefix frontend run dev",
     "seed:admin": "node --env-file=.env scripts/seed-admin.js",
+    "seed:foundation": "node --env-file=.env scripts/seed-foundation.js",
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",

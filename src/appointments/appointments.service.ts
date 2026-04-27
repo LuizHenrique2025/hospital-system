@@ -55,6 +55,9 @@ export class AppointmentsService {
         doctor: {
           include: {
             user: { select: { id: true, name: true, email: true } },
+            sector: {
+              select: { id: true, name: true, code: true, active: true },
+            },
           },
         },
       },
@@ -143,6 +146,9 @@ export class AppointmentsService {
       doctor: {
         include: {
           user: { select: { id: true, name: true, email: true } },
+          sector: {
+            select: { id: true, name: true, code: true, active: true },
+          },
         },
       },
     };

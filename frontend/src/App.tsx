@@ -137,8 +137,15 @@ const activeModules: ModuleItem[] = [
   { path: '/central', label: 'Central', hint: 'Resumo geral' },
   { path: '/pacientes', label: 'Pacientes', hint: 'Cadastro e busca' },
   { path: '/agendamento', label: 'Agendamento', hint: 'Agenda e triagem' },
-  { path: '/atendimento', label: 'Atendimento', hint: 'Fila operacional' },
+  {
+    path: '/pronto-atendimento',
+    label: 'Pronto Atendimento',
+    hint: 'Triagem e fila PA',
+  },
+  { path: '/consultorio', label: 'Consultorio', hint: 'Atendimento medico' },
   { path: '/equipe', label: 'Equipe', hint: 'Medicos e suporte' },
+  { path: '/farmacia', label: 'Farmacia', hint: 'Dispensacao' },
+  { path: '/faturamento', label: 'Faturamento', hint: 'Contas e notas' },
 ];
 
 const upcomingModules = [
@@ -147,7 +154,6 @@ const upcomingModules = [
   'Tabelas',
   'Cadastros',
   'Estoque',
-  'Faturamento',
   'Relatorios',
 ];
 
@@ -750,9 +756,26 @@ function App() {
     navigate('/agendamento');
   }
 
+  function openEmergencyScheduling() {
+    setAppointmentForm((current) => ({
+      ...current,
+      status: 'AGENDADA',
+      type: 'URGENCIA',
+    }));
+    setNotice({
+      kind: 'info',
+      text: 'Agendamento preparado para entrada de Pronto Atendimento.',
+    });
+    navigate('/agendamento');
+  }
+
   const canCreateAppointment = patients.length > 0 && doctors.length > 0;
-  const canManageCare =
-    session?.profile.role === 'ADMIN' || session?.profile.role === 'ATENDENTE';
+  const canManageCare = Boolean(
+    session &&
+      ['ADMIN', 'ATENDENTE', 'MEDICO', 'ENFERMEIRO'].includes(
+        session.profile.role,
+      ),
+  );
 
   if (!session) {
     return (
@@ -831,38 +854,76 @@ function App() {
           }
         />
         <Route
-          path="/atendimento"
+          path="/pronto-atendimento"
           element={
-            <CarePage
+            <EmergencyCarePage
               appointments={appointments}
               canManageCare={canManageCare}
+              doctors={doctors}
+              isSubmitting={isSubmitting}
+              nurses={nurses}
+              onOpenScheduling={openEmergencyScheduling}
+              onSaveCareRecord={saveCareRecord}
+              patients={patients}
+              sectors={sectors}
+            />
+          }
+        />
+        <Route
+          path="/atendimento"
+          element={<Navigate replace to="/pronto-atendimento" />}
+        />
+        <Route
+          path="/consultorio"
+          element={
+            <DoctorOfficePage
+              appointments={appointments}
+              canManageCare={canManageCare}
+              doctors={doctors}
               isSubmitting={isSubmitting}
               onSaveCareRecord={saveCareRecord}
               patients={patients}
+              profile={session.profile}
             />
           }
         />
         <Route
           path="/equipe"
-            element={
-              <TeamPage
-                doctors={doctors}
-                nurses={nurses}
-                sectors={sectors}
-                form={doctorForm}
-                nurseForm={nurseForm}
-                sectorForm={sectorForm}
-                isSubmitting={isSubmitting}
-                onNurseSubmit={createNurse}
-                onSectorSubmit={createSector}
-                onPrepareDoctor={prepareDoctorForScheduling}
-                onSubmit={createDoctor}
-                setForm={setDoctorForm}
-                setNurseForm={setNurseForm}
-                setSectorForm={setSectorForm}
-              />
-            }
-          />
+          element={
+            <TeamPage
+              doctors={doctors}
+              nurses={nurses}
+              sectors={sectors}
+              form={doctorForm}
+              nurseForm={nurseForm}
+              sectorForm={sectorForm}
+              isSubmitting={isSubmitting}
+              onNurseSubmit={createNurse}
+              onSectorSubmit={createSector}
+              onPrepareDoctor={prepareDoctorForScheduling}
+              onSubmit={createDoctor}
+              setForm={setDoctorForm}
+              setNurseForm={setNurseForm}
+              setSectorForm={setSectorForm}
+            />
+          }
+        />
+        <Route
+          path="/farmacia"
+          element={
+            <PharmacyPage
+              appointments={appointments}
+              nurses={nurses}
+              sectors={sectors}
+            />
+          }
+        />
+        <Route
+          path="/faturamento"
+          element={
+            <BillingPage appointments={appointments} patientTotal={patientTotal} />
+          }
+        />
         <Route path="*" element={<Navigate replace to="/central" />} />
       </Route>
     </Routes>
@@ -1749,23 +1810,478 @@ function SchedulingPage({
   );
 }
 
-type CarePageProps = {
+type EmergencyCarePageProps = {
   appointments: Appointment[];
   canManageCare: boolean;
+  doctors: Doctor[];
+  isSubmitting: boolean;
+  nurses: Nurse[];
+  onOpenScheduling: () => void;
+  onSaveCareRecord: (
+    appointmentId: string,
+    payload: CareRecordPayload,
+  ) => Promise<void>;
+  patients: Patient[];
+  sectors: Sector[];
+};
+
+function EmergencyCarePage({
+  appointments,
+  canManageCare,
+  doctors,
+  isSubmitting,
+  nurses,
+  onOpenScheduling,
+  onSaveCareRecord,
+  patients,
+  sectors,
+}: EmergencyCarePageProps) {
+  const paSector = sectors.find((sector) => sector.code === 'PA') ?? null;
+  const paDoctors = doctors.filter((doctor) =>
+    professionalInSector(doctor, 'PA', paSector?.id),
+  );
+  const paNurses = nurses.filter((nurse) =>
+    professionalInSector(nurse, 'PA', paSector?.id),
+  );
+  const paAppointments = useMemo(
+    () =>
+      [...appointments]
+        .filter((appointment) => isEmergencyAppointment(appointment, doctors))
+        .sort(sortByAppointmentDate),
+    [appointments, doctors],
+  );
+  const missingCount = paAppointments.filter(
+    (appointment) => appointment.status === 'NAO_COMPARECEU',
+  ).length;
+
+  return (
+    <>
+      <section className="context-band">
+        <article className="context-card">
+          <span>Setor PA</span>
+          <strong>{paSector?.name ?? 'Pronto Atendimento'}</strong>
+          <small>{paSector ? 'setor configurado' : 'rode o seed foundation'}</small>
+        </article>
+        <article className="context-card">
+          <span>Equipe vinculada</span>
+          <strong>{paDoctors.length + paNurses.length}</strong>
+          <small>{paDoctors.length} med. / {paNurses.length} enf.</small>
+        </article>
+        <article className="context-card">
+          <span>Ausencias PA</span>
+          <strong>{missingCount}</strong>
+          <small>controle da fila de urgencia</small>
+        </article>
+        <button className="primary-button" onClick={onOpenScheduling} type="button">
+          Nova entrada PA
+        </button>
+      </section>
+
+      <CarePage
+        appointments={paAppointments}
+        canManageCare={canManageCare}
+        emptyMessage="Nenhum atendimento de PA visivel. Crie uma entrada como URGENCIA ou vincule o medico ao setor PA."
+        eyebrow="Pronto Atendimento"
+        focusEyebrow="Triagem em foco"
+        isSubmitting={isSubmitting}
+        onSaveCareRecord={onSaveCareRecord}
+        patients={patients}
+        statusEyebrow="Leitura PA"
+        statusTitle="Status, chamada e desfecho"
+        title="Fila de urgencia e triagem"
+      />
+    </>
+  );
+}
+
+type DoctorOfficePageProps = {
+  appointments: Appointment[];
+  canManageCare: boolean;
+  doctors: Doctor[];
   isSubmitting: boolean;
   onSaveCareRecord: (
     appointmentId: string,
     payload: CareRecordPayload,
   ) => Promise<void>;
   patients: Patient[];
+  profile: UserProfile;
+};
+
+function DoctorOfficePage({
+  appointments,
+  canManageCare,
+  doctors,
+  isSubmitting,
+  onSaveCareRecord,
+  patients,
+  profile,
+}: DoctorOfficePageProps) {
+  const currentDoctor =
+    profile.role === 'MEDICO'
+      ? doctors.find((doctor) => doctor.userId === profile.id) ?? null
+      : null;
+  const officeAppointments = useMemo(
+    () =>
+      [...appointments]
+        .filter((appointment) => !isEmergencyAppointment(appointment, doctors))
+        .filter((appointment) =>
+          currentDoctor ? appointment.doctor.id === currentDoctor.id : true,
+        )
+        .sort(sortByAppointmentDate),
+    [appointments, currentDoctor, doctors],
+  );
+  const todayCount = officeAppointments.filter((appointment) =>
+    isSameLocalDate(appointment.appointmentDate),
+  ).length;
+
+  return (
+    <>
+      <section className="context-band">
+        <article className="context-card">
+          <span>Agenda</span>
+          <strong>{currentDoctor ? 'Minha agenda' : 'Todos os medicos'}</strong>
+          <small>{officeAppointments.length} consultas visiveis</small>
+        </article>
+        <article className="context-card">
+          <span>Hoje</span>
+          <strong>{todayCount}</strong>
+          <small>consultas nesta data</small>
+        </article>
+        <article className="context-card">
+          <span>Perfil</span>
+          <strong>{profile.role}</strong>
+          <small>{profile.name}</small>
+        </article>
+      </section>
+
+      <CarePage
+        appointments={officeAppointments}
+        canManageCare={canManageCare}
+        emptyMessage="Nenhuma consulta de consultorio encontrada para este filtro."
+        eyebrow="Consultorio"
+        focusEyebrow="Paciente em consulta"
+        isSubmitting={isSubmitting}
+        onSaveCareRecord={onSaveCareRecord}
+        patients={patients}
+        statusEyebrow="Evolucao medica"
+        statusTitle="Conduta, prescricao e fechamento"
+        title="Agenda medica e evolucao"
+      />
+    </>
+  );
+}
+
+type PharmacyPageProps = {
+  appointments: Appointment[];
+  nurses: Nurse[];
+  sectors: Sector[];
+};
+
+function PharmacyPage({ appointments, nurses, sectors }: PharmacyPageProps) {
+  const pharmacySector = sectors.find((sector) => sector.code === 'FARM') ?? null;
+  const stockSector = sectors.find((sector) => sector.code === 'EST') ?? null;
+  const pharmacyTeam = nurses.filter((nurse) =>
+    professionalInSector(nurse, 'FARM', pharmacySector?.id),
+  );
+  const prescriptions = [...appointments]
+    .filter((appointment) => appointment.prescription?.trim())
+    .sort(sortByAppointmentDate);
+
+  return (
+    <>
+      <section className="summary-strip">
+        <article className="summary-card">
+          <span>Prescricoes</span>
+          <strong>{prescriptions.length}</strong>
+          <small>condutas registradas</small>
+        </article>
+        <article className="summary-card">
+          <span>Equipe farmacia</span>
+          <strong>{pharmacyTeam.length}</strong>
+          <small>profissionais vinculados</small>
+        </article>
+        <article className="summary-card">
+          <span>Setor farmacia</span>
+          <strong>{pharmacySector ? 'OK' : '--'}</strong>
+          <small>base organizacional</small>
+        </article>
+        <article className="summary-card">
+          <span>Estoque</span>
+          <strong>{stockSector ? 'OK' : '--'}</strong>
+          <small>vinculo para baixa futura</small>
+        </article>
+      </section>
+
+      <section className="page-grid module-grid">
+        <article className="panel">
+          <div className="page-header">
+            <div>
+              <p className="eyebrow">Farmacia</p>
+              <h2>Dispensacao por prescricao</h2>
+            </div>
+            <span className="inline-badge">ligada ao atendimento</span>
+          </div>
+
+          <div className="list-shell">
+            {prescriptions.length === 0 ? (
+              <p className="empty-state">
+                Nenhuma prescricao registrada ainda. Quando o atendimento salvar
+                uma conduta, ela aparece aqui para dispensacao.
+              </p>
+            ) : (
+              prescriptions.map((appointment) => (
+                <div className="list-row" key={appointment.id}>
+                  <div>
+                    <strong>{appointment.patient.name}</strong>
+                    <span>
+                      {appointment.prescription} -{' '}
+                      {formatDateTime(appointment.appointmentDate)}
+                    </span>
+                  </div>
+                  <div>
+                    <span>{humanizeEnum(appointment.status)}</span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </article>
+
+        <div className="stack-column">
+          <article className="panel">
+            <div className="page-header">
+              <div>
+                <p className="eyebrow">Estoque relacionado</p>
+                <h2>Proximo encaixe tecnico</h2>
+              </div>
+            </div>
+
+            <div className="list-shell">
+              <div className="list-row">
+                <div>
+                  <strong>Medicamentos</strong>
+                  <span>cadastro, principio ativo, concentracao e unidade</span>
+                </div>
+                <div>
+                  <span>modelo</span>
+                </div>
+              </div>
+              <div className="list-row">
+                <div>
+                  <strong>Lotes e validade</strong>
+                  <span>entrada de estoque e rastreio por lote</span>
+                </div>
+                <div>
+                  <span>modelo</span>
+                </div>
+              </div>
+              <div className="list-row">
+                <div>
+                  <strong>Baixa por dispensacao</strong>
+                  <span>ligar prescricao ao consumo real do estoque</span>
+                </div>
+                <div>
+                  <span>proximo</span>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article className="panel">
+            <div className="page-header">
+              <div>
+                <p className="eyebrow">Equipe</p>
+                <h2>Farmacia hospitalar</h2>
+              </div>
+            </div>
+            <div className="list-shell">
+              {pharmacyTeam.length === 0 ? (
+                <p className="empty-state compact">
+                  Nenhum profissional vinculado ao setor Farmacia ainda.
+                </p>
+              ) : (
+                pharmacyTeam.map((nurse) => (
+                  <div className="list-row" key={nurse.id}>
+                    <div>
+                      <strong>{nurse.user.name}</strong>
+                      <span>
+                        COREN {nurse.coren}/{nurse.corenUf}
+                      </span>
+                    </div>
+                    <div>
+                      <span>{nurse.shift || 'Plantao nao informado'}</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </article>
+        </div>
+      </section>
+    </>
+  );
+}
+
+type BillingPageProps = {
+  appointments: Appointment[];
+  patientTotal: number;
+};
+
+function BillingPage({ appointments, patientTotal }: BillingPageProps) {
+  const billableAppointments = [...appointments]
+    .filter((appointment) => appointment.status === 'REALIZADA')
+    .sort(sortByAppointmentDate);
+  const openAccounts = appointments.filter((appointment) =>
+    ['AGENDADA', 'CONFIRMADA'].includes(appointment.status),
+  ).length;
+  const cancelledOrMissing = appointments.filter((appointment) =>
+    ['CANCELADA', 'NAO_COMPARECEU'].includes(appointment.status),
+  ).length;
+
+  return (
+    <>
+      <section className="summary-strip">
+        <article className="summary-card">
+          <span>Faturaveis</span>
+          <strong>{billableAppointments.length}</strong>
+          <small>atendimentos realizados</small>
+        </article>
+        <article className="summary-card">
+          <span>Contas abertas</span>
+          <strong>{openAccounts}</strong>
+          <small>aguardando fechamento</small>
+        </article>
+        <article className="summary-card">
+          <span>Excecoes</span>
+          <strong>{cancelledOrMissing}</strong>
+          <small>cancelados ou ausentes</small>
+        </article>
+        <article className="summary-card">
+          <span>Base pacientes</span>
+          <strong>{patientTotal}</strong>
+          <small>origem dos cadastros</small>
+        </article>
+      </section>
+
+      <section className="page-grid module-grid">
+        <article className="panel">
+          <div className="page-header">
+            <div>
+              <p className="eyebrow">Faturamento</p>
+              <h2>Contas prontas para cobranca</h2>
+            </div>
+            <span className="inline-badge">recibos e notas fiscais</span>
+          </div>
+
+          <div className="table-shell">
+            <div className="table-head appointments-grid">
+              <span>Paciente</span>
+              <span>Medico</span>
+              <span>Atendimento</span>
+              <span>Status</span>
+              <span>Tipo</span>
+            </div>
+
+            {billableAppointments.length === 0 ? (
+              <p className="empty-state">
+                Nenhuma conta faturavel ainda. Quando a consulta for marcada
+                como realizada, ela entra nesta lista.
+              </p>
+            ) : (
+              billableAppointments.map((appointment) => (
+                <div className="table-row appointments-grid" key={appointment.id}>
+                  <span>{appointment.patient.name}</span>
+                  <span>{appointment.doctor.user.name}</span>
+                  <span>{formatDateTime(appointment.appointmentDate)}</span>
+                  <span>{humanizeEnum(appointment.status)}</span>
+                  <span>{humanizeEnum(appointment.type)}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </article>
+
+        <article className="panel">
+          <div className="page-header">
+            <div>
+              <p className="eyebrow">Trilha fiscal</p>
+              <h2>Fluxo operacional</h2>
+            </div>
+          </div>
+
+          <div className="list-shell">
+            <div className="list-row">
+              <div>
+                <strong>1. Conta do atendimento</strong>
+                <span>capturar paciente, profissional, tipo e conduta</span>
+              </div>
+              <div>
+                <span>base pronta</span>
+              </div>
+            </div>
+            <div className="list-row">
+              <div>
+                <strong>2. Tabela e procedimento</strong>
+                <span>vincular valores, convenio ou particular</span>
+              </div>
+              <div>
+                <span>proximo</span>
+              </div>
+            </div>
+            <div className="list-row">
+              <div>
+                <strong>3. Recibo ou NF</strong>
+                <span>emitir documento fiscal e controlar pagamento</span>
+              </div>
+              <div>
+                <span>proximo</span>
+              </div>
+            </div>
+            <div className="list-row">
+              <div>
+                <strong>4. Relatorio financeiro</strong>
+                <span>fechamento por periodo, setor e profissional</span>
+              </div>
+              <div>
+                <span>proximo</span>
+              </div>
+            </div>
+          </div>
+        </article>
+      </section>
+    </>
+  );
+}
+
+type CarePageProps = {
+  appointments: Appointment[];
+  canManageCare: boolean;
+  emptyMessage?: string;
+  eyebrow?: string;
+  focusEyebrow?: string;
+  isSubmitting: boolean;
+  onSaveCareRecord: (
+    appointmentId: string,
+    payload: CareRecordPayload,
+  ) => Promise<void>;
+  patients: Patient[];
+  statusEyebrow?: string;
+  statusTitle?: string;
+  title?: string;
 };
 
 function CarePage({
   appointments,
   canManageCare,
+  emptyMessage = 'Nenhum atendimento visivel na fila.',
+  eyebrow = 'Atendimento',
+  focusEyebrow = 'Paciente em foco',
   isSubmitting,
   onSaveCareRecord,
   patients,
+  statusEyebrow = 'Leitura operacional',
+  statusTitle = 'Status e proxima acao',
+  title = 'Fila operacional',
 }: CarePageProps) {
   const [search, setSearch] = useState('');
   const [selectedAppointmentId, setSelectedAppointmentId] = useState<
@@ -1830,8 +2346,8 @@ function CarePage({
         <article className="panel">
           <div className="page-header">
             <div>
-              <p className="eyebrow">Atendimento</p>
-              <h2>Fila operacional</h2>
+              <p className="eyebrow">{eyebrow}</p>
+              <h2>{title}</h2>
             </div>
             <div className="toolbar-inline">
               <input
@@ -1848,7 +2364,7 @@ function CarePage({
 
           <div className="queue-shell">
             {filteredQueue.length === 0 ? (
-              <p className="empty-state">Nenhum atendimento visivel na fila.</p>
+              <p className="empty-state">{emptyMessage}</p>
             ) : (
               filteredQueue.map((appointment) => (
                 <button
@@ -1886,7 +2402,7 @@ function CarePage({
           <article className="panel">
             <div className="page-header">
               <div>
-                <p className="eyebrow">Paciente em foco</p>
+                <p className="eyebrow">{focusEyebrow}</p>
                 <h2>
                   {activeAppointment
                     ? activeAppointment.patient.name
@@ -1993,8 +2509,8 @@ function CarePage({
           <article className="panel">
             <div className="page-header">
               <div>
-                <p className="eyebrow">Leitura operacional</p>
-                <h2>Status e proxima acao</h2>
+                <p className="eyebrow">{statusEyebrow}</p>
+                <h2>{statusTitle}</h2>
               </div>
             </div>
 
@@ -2340,7 +2856,7 @@ function TeamPage({
                   onChange={(event) => setSearch(event.target.value)}
                 />
                 <span className="inline-badge">
-                  {filteredDoctors.length + filteredNurses.length} profissionais
+                  {filteredDoctors.length} medicos
                 </span>
               </div>
             </div>
@@ -2939,6 +3455,53 @@ function TeamPage({
   );
 }
 
+function sortByAppointmentDate(left: Appointment, right: Appointment) {
+  return (
+    new Date(left.appointmentDate).getTime() -
+    new Date(right.appointmentDate).getTime()
+  );
+}
+
+function professionalInSector(
+  professional: {
+    sectorId?: string | null;
+    sector?: { id: string; code: string } | null;
+  },
+  sectorCode: string,
+  sectorId?: string,
+) {
+  return (
+    professional.sector?.code === sectorCode ||
+    Boolean(sectorId && professional.sectorId === sectorId)
+  );
+}
+
+function getAppointmentSector(appointment: Appointment, doctors: Doctor[]) {
+  return (
+    appointment.doctor.sector ??
+    doctors.find((doctor) => doctor.id === appointment.doctor.id)?.sector ??
+    null
+  );
+}
+
+function isEmergencyAppointment(appointment: Appointment, doctors: Doctor[]) {
+  return (
+    appointment.type === 'URGENCIA' ||
+    getAppointmentSector(appointment, doctors)?.code === 'PA'
+  );
+}
+
+function isSameLocalDate(value: string) {
+  const target = new Date(value);
+  const today = new Date();
+
+  return (
+    target.getFullYear() === today.getFullYear() &&
+    target.getMonth() === today.getMonth() &&
+    target.getDate() === today.getDate()
+  );
+}
+
 function matchPatient(patient: Patient, query: string) {
   if (!query) {
     return true;
@@ -2969,6 +3532,8 @@ function matchDoctor(doctor: Doctor, query: string) {
     doctor.crm,
     doctor.crmUf,
     doctor.phone,
+    doctor.sector?.name,
+    doctor.sector?.code,
     doctor.specialties.join(' '),
   ]
     .filter(Boolean)
@@ -3029,6 +3594,10 @@ function matchAppointment(appointment: Appointment, query: string) {
     appointment.status,
     appointment.type,
     appointment.notes,
+    appointment.diagnosis,
+    appointment.prescription,
+    appointment.doctor.sector?.name,
+    appointment.doctor.sector?.code,
   ]
     .filter(Boolean)
     .join(' ')

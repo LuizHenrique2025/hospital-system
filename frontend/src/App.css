@@ -325,7 +325,7 @@ textarea {
 
 .module-tabs {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 10px;
 }
 
@@ -455,6 +455,12 @@ textarea {
   display: grid;
   gap: 12px;
   align-items: center;
+}
+
+.table-row small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
 }
 
 .table-head {
@@ -763,6 +769,7 @@ textarea {
   .overview-grid,
   .module-grid,
   .care-layout,
+  .team-layout,
   .summary-strip,
   .overview-pulse,
   .module-tabs {
@@ -799,6 +806,7 @@ textarea {
   .patients-grid,
   .appointments-grid,
   .doctors-grid,
+  .nurses-grid,
   .care-grid {
     grid-template-columns: 1fr;
   }

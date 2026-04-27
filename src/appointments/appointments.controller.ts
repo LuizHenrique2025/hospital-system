@@ -35,7 +35,7 @@ export class AppointmentsController {
   constructor(private readonly appointmentsService: AppointmentsService) {}
 
   @Post()
-  @Roles(Role.ADMIN, Role.ATENDENTE)
+  @Roles(Role.ADMIN, Role.ATENDENTE, Role.ENFERMEIRO)
   @ApiOperation({ summary: 'Criar nova consulta' })
   @ApiResponse({ status: 201, description: 'Consulta criada com sucesso' })
   createAppointment(@Body() dto: CreateAppointmentDto) {
@@ -43,7 +43,7 @@ export class AppointmentsController {
   }
 
   @Get()
-  @Roles(Role.ADMIN, Role.MEDICO, Role.ATENDENTE)
+  @Roles(Role.ADMIN, Role.MEDICO, Role.ENFERMEIRO, Role.ATENDENTE)
   @ApiOperation({ summary: 'Listar consultas' })
   @ApiResponse({ status: 200, description: 'Lista de consultas retornada' })
   findAll() {
@@ -51,7 +51,7 @@ export class AppointmentsController {
   }
 
   @Get('patient/:patientId')
-  @Roles(Role.ADMIN, Role.MEDICO, Role.ATENDENTE)
+  @Roles(Role.ADMIN, Role.MEDICO, Role.ENFERMEIRO, Role.ATENDENTE)
   @ApiOperation({ summary: 'Listar consultas de um paciente' })
   @ApiParam({ name: 'patientId', description: 'ID do paciente' })
   findByPatient(@Param('patientId') patientId: string) {
@@ -59,7 +59,7 @@ export class AppointmentsController {
   }
 
   @Get('doctor/:doctorId')
-  @Roles(Role.ADMIN, Role.MEDICO, Role.ATENDENTE)
+  @Roles(Role.ADMIN, Role.MEDICO, Role.ENFERMEIRO, Role.ATENDENTE)
   @ApiOperation({ summary: 'Listar consultas de um medico' })
   @ApiParam({ name: 'doctorId', description: 'ID do medico' })
   findByDoctor(@Param('doctorId') doctorId: string) {
@@ -67,7 +67,7 @@ export class AppointmentsController {
   }
 
   @Get(':id')
-  @Roles(Role.ADMIN, Role.MEDICO, Role.ATENDENTE)
+  @Roles(Role.ADMIN, Role.MEDICO, Role.ENFERMEIRO, Role.ATENDENTE)
   @ApiOperation({ summary: 'Buscar consulta por ID' })
   @ApiParam({ name: 'id', description: 'ID da consulta' })
   @ApiResponse({ status: 200, description: 'Consulta encontrada' })
@@ -77,7 +77,7 @@ export class AppointmentsController {
   }
 
   @Put(':id')
-  @Roles(Role.ADMIN, Role.ATENDENTE)
+  @Roles(Role.ADMIN, Role.MEDICO, Role.ENFERMEIRO, Role.ATENDENTE)
   @ApiOperation({ summary: 'Atualizar consulta completamente' })
   @ApiParam({ name: 'id', description: 'ID da consulta' })
   updateAppointmentPut(
@@ -88,7 +88,7 @@ export class AppointmentsController {
   }
 
   @Patch(':id')
-  @Roles(Role.ADMIN, Role.ATENDENTE)
+  @Roles(Role.ADMIN, Role.MEDICO, Role.ENFERMEIRO, Role.ATENDENTE)
   @ApiOperation({ summary: 'Atualizar consulta parcialmente' })
   @ApiParam({ name: 'id', description: 'ID da consulta' })
   updateAppointmentPatch(
