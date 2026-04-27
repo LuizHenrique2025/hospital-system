@@ -1,7 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsOptional, IsInt, Min, IsString, IsEnum } from 'class-validator';
-import { Gender, BloodType } from '@prisma/client';
+import { Gender, BloodType, PatientStatus } from '@prisma/client';
 
 export class QueryPatientDto {
   @ApiPropertyOptional({ example: 1, default: 1 })
@@ -37,4 +37,9 @@ export class QueryPatientDto {
   @IsOptional()
   @IsEnum(BloodType)
   bloodType?: BloodType;
+
+  @ApiPropertyOptional({ enum: PatientStatus })
+  @IsOptional()
+  @IsEnum(PatientStatus)
+  status?: PatientStatus;
 }

@@ -24,6 +24,7 @@ import type {
   Nurse,
   PaginatedResponse,
   Patient,
+  PatientStatus,
   Role,
   Sector,
   UserProfile,
@@ -74,6 +75,9 @@ type PatientFormState = {
   emergencyPhone: string;
   allergies: string;
   medicalHistory: string;
+  status: PatientStatus;
+  blockReason: string;
+  documents: string;
 };
 
 type DoctorFormState = {
@@ -250,6 +254,27 @@ const appointmentStatuses = [
   'CANCELADA',
   'NAO_COMPARECEU',
 ] as const;
+const patientStatusOptions: Array<{
+  value: PatientStatus;
+  label: string;
+  hint: string;
+}> = [
+  {
+    value: 'ACTIVE',
+    label: 'Ativo',
+    hint: 'Liberado para agendamento e atendimento',
+  },
+  {
+    value: 'BLOCKED',
+    label: 'Bloqueado',
+    hint: 'Mantem cadastro, mas impede novos agendamentos',
+  },
+  {
+    value: 'INACTIVE',
+    label: 'Inativo',
+    hint: 'Paciente preservado apenas para historico',
+  },
+];
 const roleOptions: Role[] = [
   'ADMIN',
   'ATENDENTE',
@@ -277,6 +302,9 @@ const initialPatientForm: PatientFormState = {
   emergencyPhone: '',
   allergies: '',
   medicalHistory: '',
+  status: 'ACTIVE',
+  blockReason: '',
+  documents: '',
 };
 
 const initialDoctorForm: DoctorFormState = {
@@ -358,6 +386,7 @@ function App() {
     password: '',
   });
   const [patientForm, setPatientForm] = useState(initialPatientForm);
+  const [editingPatientId, setEditingPatientId] = useState<string | null>(null);
   const [userForm, setUserForm] = useState(initialUserForm);
   const [doctorForm, setDoctorForm] = useState(initialDoctorForm);
   const [nurseForm, setNurseForm] = useState(initialNurseForm);
@@ -582,6 +611,8 @@ function App() {
     setAppointments([]);
     setCommunicationDashboard(emptyCommunicationDashboard);
     setPatientTotal(0);
+    setPatientForm(initialPatientForm);
+    setEditingPatientId(null);
     setUserForm(initialUserForm);
     setDoctorForm(initialDoctorForm);
     setNurseForm(initialNurseForm);
@@ -594,7 +625,7 @@ function App() {
     navigate('/', { replace: true });
   }
 
-  async function createPatient(event: React.FormEvent<HTMLFormElement>) {
+  async function savePatient(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (!session?.token) {
@@ -604,29 +635,25 @@ function App() {
     setIsSubmitting(true);
 
     try {
-      await apiRequest<Patient>('/patients', {
-        token: session.token,
-        body: {
-          ...patientForm,
-          bloodType: patientForm.bloodType || undefined,
-          email: patientForm.email || undefined,
-          rg: patientForm.rg || undefined,
-          address: patientForm.address || undefined,
-          city: patientForm.city || undefined,
-          state: patientForm.state || undefined,
-          zipCode: patientForm.zipCode || undefined,
-          emergencyContact: patientForm.emergencyContact || undefined,
-          emergencyPhone: patientForm.emergencyPhone || undefined,
-          allergies: patientForm.allergies || undefined,
-          medicalHistory: patientForm.medicalHistory || undefined,
+      const isEditingPatient = Boolean(editingPatientId);
+
+      await apiRequest<Patient>(
+        isEditingPatient ? `/patients/${editingPatientId}` : '/patients',
+        {
+          token: session.token,
+          method: isEditingPatient ? 'PATCH' : undefined,
+          body: createPatientPayload(patientForm),
         },
-      });
+      );
 
       setPatientForm(initialPatientForm);
+      setEditingPatientId(null);
       await loadDashboard(session.token);
       setNotice({
         kind: 'success',
-        text: 'Paciente cadastrado com sucesso.',
+        text: isEditingPatient
+          ? 'Ficha do paciente atualizada com sucesso.'
+          : 'Paciente cadastrado com sucesso.',
       });
       navigate('/pacientes');
     } catch (error) {
@@ -635,11 +662,26 @@ function App() {
         text:
           error instanceof Error
             ? error.message
-            : 'Nao foi possivel cadastrar o paciente.',
+            : 'Nao foi possivel salvar o paciente.',
       });
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  function editPatient(patient: Patient) {
+    setPatientForm(createPatientForm(patient));
+    setEditingPatientId(patient.id);
+    setNotice({
+      kind: 'info',
+      text: 'Ficha carregada para edicao.',
+    });
+    navigate('/pacientes');
+  }
+
+  function resetPatientEditor() {
+    setPatientForm(initialPatientForm);
+    setEditingPatientId(null);
   }
 
   async function createDoctor(event: React.FormEvent<HTMLFormElement>) {
@@ -884,6 +926,17 @@ function App() {
   }
 
   function preparePatientForScheduling(patientId: string) {
+    const patient = patients.find((item) => item.id === patientId);
+
+    if (patient && !isPatientActive(patient)) {
+      setNotice({
+        kind: 'error',
+        text: 'Paciente bloqueado ou inativo nao pode ser agendado.',
+      });
+      navigate('/pacientes');
+      return;
+    }
+
     setAppointmentForm((current) => ({
       ...current,
       patientId,
@@ -924,7 +977,8 @@ function App() {
     navigate('/agendamento');
   }
 
-  const canCreateAppointment = patients.length > 0 && doctors.length > 0;
+  const canCreateAppointment =
+    patients.some(isPatientActive) && doctors.length > 0;
   const canManageCare = Boolean(
     session &&
       ['ADMIN', 'ATENDENTE', 'MEDICO', 'ENFERMEIRO'].includes(
@@ -1007,10 +1061,13 @@ function App() {
           path="/pacientes"
           element={
             <PatientsPage
+              editingPatientId={editingPatientId}
               form={patientForm}
               isSubmitting={isSubmitting}
+              onEditPatient={editPatient}
               onPreparePatient={preparePatientForScheduling}
-              onSubmit={createPatient}
+              onResetPatient={resetPatientEditor}
+              onSubmit={savePatient}
               patients={patients}
               patientTotal={patientTotal}
               setForm={setPatientForm}
@@ -1901,10 +1958,27 @@ function RegistrationCard({ card }: RegistrationCardProps) {
   );
 }
 
+type RecordLineProps = {
+  label: string;
+  value?: string | null;
+};
+
+function RecordLine({ label, value }: RecordLineProps) {
+  return (
+    <div className="record-line">
+      <span>{label}</span>
+      <strong>{value || 'Nao informado'}</strong>
+    </div>
+  );
+}
+
 type PatientsPageProps = {
+  editingPatientId: string | null;
   form: PatientFormState;
   isSubmitting: boolean;
+  onEditPatient: (patient: Patient) => void;
   onPreparePatient: (patientId: string) => void;
+  onResetPatient: () => void;
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => Promise<void>;
   patients: Patient[];
   patientTotal: number;
@@ -1912,9 +1986,12 @@ type PatientsPageProps = {
 };
 
 function PatientsPage({
+  editingPatientId,
   form,
   isSubmitting,
+  onEditPatient,
   onPreparePatient,
+  onResetPatient,
   onSubmit,
   patients,
   patientTotal,
@@ -1924,15 +2001,26 @@ function PatientsPage({
   const [activeTab, setActiveTab] = useState<
     'identificacao' | 'contato' | 'saude' | 'status'
   >('identificacao');
+  const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
   const filteredPatients = useMemo(
     () => patients.filter((patient) => matchPatient(patient, deferredSearch)),
     [deferredSearch, patients],
   );
   const previewPatient = filteredPatients[0] ?? patients[0] ?? null;
+  const focusedPatient =
+    patients.find((patient) => patient.id === selectedPatientId) ??
+    previewPatient;
+  const editingPatient =
+    patients.find((patient) => patient.id === editingPatientId) ?? null;
+  const cpfConflict = patients.some(
+    (patient) =>
+      normalizeDigits(patient.cpf) === normalizeDigits(form.cpf) &&
+      patient.id !== editingPatientId,
+  );
   const canSavePatient = [form.name, form.cpf, form.birthDate, form.phone].every(
     (value) => value.trim().length > 0,
-  );
+  ) && !cpfConflict;
   const tabs = [
     { id: 'identificacao', label: 'Identificacao', hint: 'Dados gerais' },
     { id: 'contato', label: 'Contato', hint: 'Endereco e emergencia' },
@@ -1961,19 +2049,20 @@ function PatientsPage({
           </div>
         </div>
 
-        {previewPatient ? (
+        {focusedPatient ? (
           <aside className="patient-preview-card">
             <div>
               <span className="section-title">Paciente em foco</span>
-              <strong>{previewPatient.name}</strong>
+              <strong>{focusedPatient.name}</strong>
               <small>
-                {previewPatient.cpf} - {formatDate(previewPatient.birthDate)}
+                {focusedPatient.cpf} - {formatDate(focusedPatient.birthDate)}
               </small>
             </div>
             <div className="patient-preview-meta">
-              <span>{previewPatient.phone}</span>
-              <span>{previewPatient.city || 'Cidade nao informada'}</span>
-              <span>{previewPatient.bloodType || 'Tipo sanguineo pendente'}</span>
+              <span>{focusedPatient.phone}</span>
+              <span>{focusedPatient.city || 'Cidade nao informada'}</span>
+              <span>{focusedPatient.bloodType || 'Tipo sanguineo pendente'}</span>
+              <span>{patientStatusLabel(focusedPatient.status)}</span>
             </div>
           </aside>
         ) : null}
@@ -1981,10 +2070,10 @@ function PatientsPage({
         <div className="table-shell">
           <div className="table-head patients-grid">
             <span>Paciente</span>
-            <span>CPF</span>
-            <span>Cidade</span>
+            <span>Documento</span>
+            <span>Status</span>
             <span>Telefone</span>
-            <span>Acao</span>
+            <span>Acoes</span>
           </div>
 
           {filteredPatients.length === 0 ? (
@@ -2000,28 +2089,124 @@ function PatientsPage({
                   {patient.cpf}
                   <small>{patient.rg ? `RG ${patient.rg}` : 'RG pendente'}</small>
                 </span>
-                <span>{patient.city || 'Nao informada'}</span>
+                <span>
+                  <em
+                    className={`patient-status-pill ${patientStatusTone(
+                      patient.status,
+                    )}`}
+                  >
+                    {patientStatusLabel(patient.status)}
+                  </em>
+                  <small>{patient.city || 'Cidade nao informada'}</small>
+                </span>
                 <span>{patient.phone}</span>
-                <button
-                  className="mini-button"
-                  onClick={() => onPreparePatient(patient.id)}
-                  type="button"
-                >
-                  Agendar
-                </button>
+                <div className="patient-actions">
+                  <button
+                    className="mini-button"
+                    onClick={() => setSelectedPatientId(patient.id)}
+                    type="button"
+                  >
+                    Ficha
+                  </button>
+                  <button
+                    className="mini-button"
+                    onClick={() => onEditPatient(patient)}
+                    type="button"
+                  >
+                    Editar
+                  </button>
+                  <button
+                    className="mini-button"
+                    disabled={!isPatientActive(patient)}
+                    onClick={() => onPreparePatient(patient.id)}
+                    type="button"
+                  >
+                    Agendar
+                  </button>
+                </div>
               </div>
             ))
           )}
         </div>
+
+        {focusedPatient ? (
+          <section className="patient-record-card">
+            <div className="page-header">
+              <div>
+                <p className="eyebrow">Ficha completa</p>
+                <h2>{focusedPatient.name}</h2>
+              </div>
+              <button
+                className="ghost-button"
+                onClick={() => onEditPatient(focusedPatient)}
+                type="button"
+              >
+                Editar ficha
+              </button>
+            </div>
+
+            <div className="record-grid">
+              <RecordLine label="CPF" value={focusedPatient.cpf} />
+              <RecordLine label="RG" value={focusedPatient.rg} />
+              <RecordLine
+                label="Nascimento"
+                value={formatDate(focusedPatient.birthDate)}
+              />
+              <RecordLine
+                label="Status"
+                value={patientStatusLabel(focusedPatient.status)}
+              />
+              <RecordLine label="Telefone" value={focusedPatient.phone} />
+              <RecordLine label="Email" value={focusedPatient.email} />
+              <RecordLine label="Endereco" value={focusedPatient.address} />
+              <RecordLine
+                label="Cidade/UF"
+                value={[focusedPatient.city, focusedPatient.state]
+                  .filter(Boolean)
+                  .join(' / ')}
+              />
+              <RecordLine
+                label="Contato emergencia"
+                value={focusedPatient.emergencyContact}
+              />
+              <RecordLine
+                label="Telefone emergencia"
+                value={focusedPatient.emergencyPhone}
+              />
+              <RecordLine label="Alergias" value={focusedPatient.allergies} />
+              <RecordLine
+                label="Historico"
+                value={focusedPatient.medicalHistory}
+              />
+            </div>
+
+            {focusedPatient.blockReason ? (
+              <p className="empty-state compact">{focusedPatient.blockReason}</p>
+            ) : null}
+
+            <div className="document-list">
+              <span className="section-title">Documentos anexados</span>
+              {focusedPatient.documents && focusedPatient.documents.length > 0 ? (
+                focusedPatient.documents.map((document) => (
+                  <small key={document}>{document}</small>
+                ))
+              ) : (
+                <small>Nenhum documento registrado ainda.</small>
+              )}
+            </div>
+          </section>
+        ) : null}
       </article>
 
       <form className="panel patient-editor" onSubmit={onSubmit}>
         <div className="page-header">
           <div>
             <p className="eyebrow">Cadastro assistido</p>
-            <h2>Novo paciente</h2>
+            <h2>{editingPatient ? 'Editar paciente' : 'Novo paciente'}</h2>
           </div>
-          <span className="inline-badge">Cadastro em abas</span>
+          <span className="inline-badge">
+            {editingPatient ? 'Ficha em edicao' : 'Cadastro em abas'}
+          </span>
         </div>
 
         <div className="patient-tabs" role="tablist" aria-label="Cadastro do paciente">
@@ -2058,10 +2243,18 @@ function PatientsPage({
                 <input
                   value={form.cpf}
                   onChange={(event) =>
-                    setForm((current) => ({ ...current, cpf: event.target.value }))
+                    setForm((current) => ({
+                      ...current,
+                      cpf: normalizeDigits(event.target.value).slice(0, 11),
+                    }))
                   }
                   required
                 />
+                {cpfConflict ? (
+                  <small className="form-warning">
+                    CPF ja esta vinculado a outro paciente.
+                  </small>
+                ) : null}
               </label>
               <label className="field">
                 <span>RG</span>
@@ -2263,22 +2456,67 @@ function PatientsPage({
         {activeTab === 'status' ? (
           <div className="section-block">
             <p className="section-title">Status operacional</p>
-            <div className="status-checklist">
-              <article>
-                <span>Prontuario</span>
-                <strong>Gerado automaticamente</strong>
-                <small>O codigo definitivo entra quando integrarmos prontuario.</small>
-              </article>
-              <article>
-                <span>Situacao</span>
-                <strong>Ativo no cadastro</strong>
-                <small>Paciente ja fica disponivel para agendamento.</small>
-              </article>
-              <article>
-                <span>Origem</span>
-                <strong>Cadastro local</strong>
-                <small>Depois podemos incluir importacao de legado.</small>
-              </article>
+            <div className="field-grid two-columns">
+              <label className="field">
+                <span>Status do paciente</span>
+                <select
+                  value={form.status}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      status: event.target.value as PatientStatus,
+                      blockReason:
+                        event.target.value === 'BLOCKED'
+                          ? current.blockReason
+                          : '',
+                    }))
+                  }
+                >
+                  {patientStatusOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="status-checklist">
+                {patientStatusOptions.map((option) => (
+                  <article key={option.value}>
+                    <span>{option.label}</span>
+                    <strong>
+                      {form.status === option.value ? 'Selecionado' : 'Disponivel'}
+                    </strong>
+                    <small>{option.hint}</small>
+                  </article>
+                ))}
+              </div>
+              <label className="field full-row">
+                <span>Motivo do bloqueio</span>
+                <textarea
+                  disabled={form.status !== 'BLOCKED'}
+                  placeholder="Obrigatorio apenas quando o paciente estiver bloqueado."
+                  value={form.blockReason}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      blockReason: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label className="field full-row">
+                <span>Documentos anexados</span>
+                <textarea
+                  placeholder="Informe um documento por linha: RG, CPF, comprovante, autorizacao..."
+                  value={form.documents}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      documents: event.target.value,
+                    }))
+                  }
+                />
+              </label>
             </div>
           </div>
         ) : null}
@@ -2286,10 +2524,10 @@ function PatientsPage({
         <div className="patient-editor-actions">
           <button
             className="ghost-button"
-            onClick={() => setForm(initialPatientForm)}
+            onClick={onResetPatient}
             type="button"
           >
-            Limpar
+            {editingPatient ? 'Cancelar edicao' : 'Limpar'}
           </button>
           <button
             className="primary-button"
@@ -2299,7 +2537,9 @@ function PatientsPage({
             {isSubmitting
               ? 'Salvando...'
               : canSavePatient
-                ? 'Salvar paciente'
+                ? editingPatient
+                  ? 'Atualizar ficha'
+                  : 'Salvar paciente'
                 : 'Preencha identificacao'}
           </button>
         </div>
@@ -2341,6 +2581,10 @@ function SchedulingPage({
         matchAppointment(appointment, deferredSearch),
       ),
     [appointments, deferredSearch],
+  );
+  const activePatients = useMemo(
+    () => patients.filter(isPatientActive),
+    [patients],
   );
   const selectedPatient =
     patients.find((patient) => patient.id === appointmentForm.patientId) ?? null;
@@ -2432,7 +2676,7 @@ function SchedulingPage({
               required
             >
               <option value="">Selecione</option>
-              {patients.map((patient) => (
+              {activePatients.map((patient) => (
                 <option key={patient.id} value={patient.id}>
                   {patient.name}
                 </option>
@@ -2533,7 +2777,7 @@ function SchedulingPage({
 
         {!canCreateAppointment ? (
           <p className="empty-state compact">
-            Cadastre ao menos um paciente e um medico antes de seguir.
+            Cadastre ao menos um paciente ativo e um medico antes de seguir.
           </p>
         ) : null}
       </form>
@@ -4322,6 +4566,9 @@ function matchPatient(patient: Patient, query: string) {
     patient.zipCode,
     patient.emergencyContact,
     patient.emergencyPhone,
+    patientStatusLabel(patient.status),
+    patient.blockReason,
+    patient.documents?.join(' '),
   ]
     .filter(Boolean)
     .join(' ')
@@ -4415,6 +4662,85 @@ function matchAppointment(appointment: Appointment, query: string) {
     .toLowerCase();
 
   return haystack.includes(query);
+}
+
+function createPatientPayload(form: PatientFormState) {
+  return {
+    ...form,
+    cpf: normalizeDigits(form.cpf),
+    bloodType: form.bloodType || undefined,
+    email: form.email || undefined,
+    rg: form.rg || undefined,
+    address: form.address || undefined,
+    city: form.city || undefined,
+    state: form.state || undefined,
+    zipCode: form.zipCode || undefined,
+    emergencyContact: form.emergencyContact || undefined,
+    emergencyPhone: form.emergencyPhone || undefined,
+    allergies: form.allergies || undefined,
+    medicalHistory: form.medicalHistory || undefined,
+    blockReason:
+      form.status === 'BLOCKED' ? form.blockReason || undefined : undefined,
+    documents: parseDocumentReferences(form.documents),
+  };
+}
+
+function createPatientForm(patient: Patient): PatientFormState {
+  return {
+    name: patient.name,
+    cpf: patient.cpf,
+    rg: patient.rg ?? '',
+    birthDate: formatDateInput(patient.birthDate),
+    gender: patient.gender,
+    bloodType: patient.bloodType ?? '',
+    phone: patient.phone,
+    email: patient.email ?? '',
+    address: patient.address ?? '',
+    city: patient.city ?? '',
+    state: patient.state ?? '',
+    zipCode: patient.zipCode ?? '',
+    emergencyContact: patient.emergencyContact ?? '',
+    emergencyPhone: patient.emergencyPhone ?? '',
+    allergies: patient.allergies ?? '',
+    medicalHistory: patient.medicalHistory ?? '',
+    status: patient.status ?? 'ACTIVE',
+    blockReason: patient.blockReason ?? '',
+    documents: (patient.documents ?? []).join('\n'),
+  };
+}
+
+function formatDateInput(value: string) {
+  return new Date(value).toISOString().slice(0, 10);
+}
+
+function normalizeDigits(value: string) {
+  return value.replace(/\D/g, '');
+}
+
+function isPatientActive(patient: Patient) {
+  return (patient.status ?? 'ACTIVE') === 'ACTIVE';
+}
+
+function patientStatusLabel(status?: PatientStatus) {
+  switch (status ?? 'ACTIVE') {
+    case 'BLOCKED':
+      return 'Bloqueado';
+    case 'INACTIVE':
+      return 'Inativo';
+    default:
+      return 'Ativo';
+  }
+}
+
+function patientStatusTone(status?: PatientStatus) {
+  switch (status ?? 'ACTIVE') {
+    case 'BLOCKED':
+      return 'status-blocked';
+    case 'INACTIVE':
+      return 'status-inactive';
+    default:
+      return 'status-active';
+  }
 }
 
 function readStoredValue<T>(key: string) {

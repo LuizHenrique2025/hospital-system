@@ -34,6 +34,12 @@ enum BloodType {
   O_NEGATIVO
 }
 
+enum PatientStatus {
+  ACTIVE
+  BLOCKED
+  INACTIVE
+}
+
 enum AppointmentStatus {
   AGENDADA
   CONFIRMADA
@@ -87,6 +93,9 @@ model Patient {
   emergencyPhone   String?
   allergies        String?
   medicalHistory   String?
+  status           PatientStatus @default(ACTIVE)
+  blockReason      String?
+  documents        String[]      @default([])
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
 

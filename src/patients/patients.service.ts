@@ -3,7 +3,7 @@ import {
   NotFoundException,
   ConflictException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { PatientStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePatientDto } from './dto/create-patient.dto';
 import { UpdatePatientDto } from './dto/update-patient.dto';
@@ -33,7 +33,7 @@ export class PatientsService {
   }
 
   async findAll(query: QueryPatientDto) {
-    const { page = 1, limit = 10, name, cpf, gender, bloodType } = query;
+    const { page = 1, limit = 10, name, cpf, gender, bloodType, status } = query;
     const skip = (page - 1) * limit;
 
     const where: Prisma.PatientWhereInput = {};
@@ -52,6 +52,10 @@ export class PatientsService {
 
     if (bloodType) {
       where.bloodType = bloodType;
+    }
+
+    if (status) {
+      where.status = status;
     }
 
     const [patients, total] = await Promise.all([
@@ -117,6 +121,10 @@ export class PatientsService {
 
     if (birthDate) {
       updateData.birthDate = new Date(birthDate);
+    }
+
+    if (dto.status && dto.status !== PatientStatus.BLOCKED) {
+      updateData.blockReason = null;
     }
 
     const patient = await this.prisma.patient.update({

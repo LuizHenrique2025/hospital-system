@@ -61,6 +61,8 @@ export type CommunicationDashboard = {
   emails: InternalEmail[];
 };
 
+export type PatientStatus = 'ACTIVE' | 'BLOCKED' | 'INACTIVE';
+
 export type Patient = {
   id: string;
   name: string;
@@ -79,6 +81,9 @@ export type Patient = {
   emergencyPhone?: string | null;
   allergies?: string | null;
   medicalHistory?: string | null;
+  status?: PatientStatus;
+  blockReason?: string | null;
+  documents?: string[];
 };
 
 export type Doctor = {

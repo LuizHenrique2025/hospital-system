@@ -781,6 +781,102 @@ textarea {
   font-weight: 700;
 }
 
+.patient-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.patient-status-pill {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 28px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.status-active {
+  background: rgba(5, 150, 105, 0.12);
+  color: #047857;
+}
+
+.status-blocked {
+  background: rgba(217, 119, 6, 0.14);
+  color: #92400e;
+}
+
+.status-inactive {
+  background: rgba(100, 116, 139, 0.16);
+  color: #475569;
+}
+
+.patient-record-card {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface-strong);
+}
+
+.record-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.record-line {
+  display: grid;
+  gap: 4px;
+  min-height: 72px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: var(--surface-muted);
+}
+
+.record-line span,
+.document-list small,
+.form-warning {
+  color: var(--muted);
+}
+
+.record-line span {
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.record-line strong {
+  overflow-wrap: anywhere;
+  font-size: 0.92rem;
+}
+
+.document-list {
+  display: grid;
+  gap: 8px;
+}
+
+.document-list small {
+  width: fit-content;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-muted);
+}
+
+.form-warning {
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
 .patient-tabs {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1002,7 +1098,7 @@ textarea {
 }
 
 .patients-grid {
-  grid-template-columns: 1.5fr 1.1fr 1fr 1fr 0.82fr;
+  grid-template-columns: 1.35fr 1.05fr 0.9fr 0.85fr 1.35fr;
 }
 
 .appointments-grid {
@@ -1341,6 +1437,7 @@ textarea {
   .holiday-grid,
   .patient-tabs,
   .patient-preview-card,
+  .record-grid,
   .queue-meta,
   .patients-grid,
   .appointments-grid,

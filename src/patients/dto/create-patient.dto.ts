@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  IsArray,
   IsString,
   IsNotEmpty,
   IsEmail,
@@ -9,7 +10,7 @@ import {
   Matches,
   MinLength,
 } from 'class-validator';
-import { Gender, BloodType } from '@prisma/client';
+import { Gender, BloodType, PatientStatus } from '@prisma/client';
 
 export class CreatePatientDto {
   @ApiProperty({ example: 'João da Silva' })
@@ -93,4 +94,22 @@ export class CreatePatientDto {
   @IsString()
   @IsOptional()
   medicalHistory?: string;
+
+  @ApiPropertyOptional({ enum: PatientStatus, example: 'ACTIVE' })
+  @IsEnum(PatientStatus)
+  @IsOptional()
+  status?: PatientStatus;
+
+  @ApiPropertyOptional({ example: 'Cadastro bloqueado por documento pendente' })
+  @IsString()
+  @IsOptional()
+  blockReason?: string;
+
+  @ApiPropertyOptional({
+    example: ['Documento de identidade', 'Comprovante de endereco'],
+  })
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  documents?: string[];
 }
