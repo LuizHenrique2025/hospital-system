@@ -11,7 +11,7 @@ import { PaginationDto, PaginatedResponseDto } from './dto/pagination.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserResponseDto } from './dto/user-response.dto';
 
-type AuthUser = Pick<User, 'id' | 'email' | 'password' | 'role'>;
+type AuthUser = Pick<User, 'id' | 'username' | 'email' | 'password' | 'role'>;
 
 @Injectable()
 export class UsersService {
@@ -22,6 +22,7 @@ export class UsersService {
       where: { email },
       select: {
         id: true,
+        username: true,
         email: true,
         password: true,
         role: true,
@@ -29,8 +30,21 @@ export class UsersService {
     });
   }
 
-  async findAuthUserByEmail(email: string): Promise<AuthUser | null> {
-    return this.findByEmail(email);
+  async findByUsername(username: string): Promise<AuthUser | null> {
+    return this.prisma.user.findUnique({
+      where: { username: this.normalizeUsername(username) },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        password: true,
+        role: true,
+      },
+    });
+  }
+
+  async findAuthUserByUsername(username: string): Promise<AuthUser | null> {
+    return this.findByUsername(username);
   }
 
   async findAll(
@@ -68,10 +82,18 @@ export class UsersService {
 
   async createUser(data: {
     name: string;
+    username: string;
     email: string;
     password: string;
     role: Role;
   }): Promise<UserResponseDto> {
+    const username = this.normalizeUsername(data.username);
+    const existingUsername = await this.findByUsername(username);
+
+    if (existingUsername) {
+      throw new ConflictException('Login ja esta em uso');
+    }
+
     const existingUser = await this.findByEmail(data.email);
 
     if (existingUser) {
@@ -83,6 +105,7 @@ export class UsersService {
     return this.prisma.user.create({
       data: {
         ...data,
+        username,
         password: hashedPassword,
       },
       select: this.safeUserSelect(),
@@ -104,7 +127,24 @@ export class UsersService {
       }
     }
 
-    const updateData: Prisma.UserUpdateInput = { ...data };
+    if (data.username) {
+      const username = this.normalizeUsername(data.username);
+
+      if (username !== user.username) {
+        const existingUsername = await this.findByUsername(username);
+
+        if (existingUsername) {
+          throw new ConflictException('Login ja esta em uso');
+        }
+      }
+    }
+
+    const updateData: Prisma.UserUpdateInput = {
+      ...data,
+      username: data.username
+        ? this.normalizeUsername(data.username)
+        : data.username,
+    };
 
     if (data.password) {
       updateData.password = await bcrypt.hash(data.password, 10);
@@ -133,10 +173,15 @@ export class UsersService {
     return {
       id: true,
       name: true,
+      username: true,
       email: true,
       role: true,
       createdAt: true,
       updatedAt: true,
     };
+  }
+
+  private normalizeUsername(username: string) {
+    return username.trim().toLowerCase();
   }
 }

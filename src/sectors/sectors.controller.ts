@@ -41,14 +41,30 @@ export class SectorsController {
   }
 
   @Get()
-  @Roles(Role.ADMIN, Role.ATENDENTE, Role.MEDICO, Role.ENFERMEIRO)
+  @Roles(
+    Role.ADMIN,
+    Role.ATENDENTE,
+    Role.MEDICO,
+    Role.ENFERMEIRO,
+    Role.FARMACIA,
+    Role.ESTOQUE,
+    Role.FATURAMENTO,
+  )
   @ApiOperation({ summary: 'Listar setores' })
   findAll() {
     return this.sectorsService.findAll();
   }
 
   @Get(':id')
-  @Roles(Role.ADMIN, Role.ATENDENTE, Role.MEDICO, Role.ENFERMEIRO)
+  @Roles(
+    Role.ADMIN,
+    Role.ATENDENTE,
+    Role.MEDICO,
+    Role.ENFERMEIRO,
+    Role.FARMACIA,
+    Role.ESTOQUE,
+    Role.FATURAMENTO,
+  )
   @ApiOperation({ summary: 'Buscar setor por ID' })
   @ApiParam({ name: 'id', description: 'ID do setor' })
   findOne(@Param('id') id: string) {

@@ -1,8 +1,16 @@
-export type Role = 'ADMIN' | 'MEDICO' | 'ENFERMEIRO' | 'ATENDENTE';
+export type Role =
+  | 'ADMIN'
+  | 'MEDICO'
+  | 'ENFERMEIRO'
+  | 'ATENDENTE'
+  | 'FARMACIA'
+  | 'ESTOQUE'
+  | 'FATURAMENTO';
 
 export type UserProfile = {
   id: string;
   name: string;
+  username: string;
   email: string;
   role: Role;
   createdAt?: string;
@@ -61,6 +69,7 @@ export type Doctor = {
   user: {
     id: string;
     name: string;
+    username?: string;
     email: string;
     role?: Role;
   };
@@ -88,6 +97,7 @@ export type Nurse = {
   user: {
     id: string;
     name: string;
+    username?: string;
     email: string;
     role?: Role;
   };
@@ -106,6 +116,7 @@ export type Sector = {
     user: {
       id: string;
       name: string;
+      username?: string;
       email: string;
     };
   }>;
@@ -116,6 +127,7 @@ export type Sector = {
     user: {
       id: string;
       name: string;
+      username?: string;
       email: string;
     };
   }>;

@@ -138,6 +138,7 @@ export class NursesService {
         select: {
           id: true,
           name: true,
+          username: true,
           email: true,
           role: true,
         },

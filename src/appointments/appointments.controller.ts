@@ -43,7 +43,15 @@ export class AppointmentsController {
   }
 
   @Get()
-  @Roles(Role.ADMIN, Role.MEDICO, Role.ENFERMEIRO, Role.ATENDENTE)
+  @Roles(
+    Role.ADMIN,
+    Role.MEDICO,
+    Role.ENFERMEIRO,
+    Role.ATENDENTE,
+    Role.FARMACIA,
+    Role.ESTOQUE,
+    Role.FATURAMENTO,
+  )
   @ApiOperation({ summary: 'Listar consultas' })
   @ApiResponse({ status: 200, description: 'Lista de consultas retornada' })
   findAll() {
@@ -51,7 +59,15 @@ export class AppointmentsController {
   }
 
   @Get('patient/:patientId')
-  @Roles(Role.ADMIN, Role.MEDICO, Role.ENFERMEIRO, Role.ATENDENTE)
+  @Roles(
+    Role.ADMIN,
+    Role.MEDICO,
+    Role.ENFERMEIRO,
+    Role.ATENDENTE,
+    Role.FARMACIA,
+    Role.ESTOQUE,
+    Role.FATURAMENTO,
+  )
   @ApiOperation({ summary: 'Listar consultas de um paciente' })
   @ApiParam({ name: 'patientId', description: 'ID do paciente' })
   findByPatient(@Param('patientId') patientId: string) {
@@ -59,7 +75,15 @@ export class AppointmentsController {
   }
 
   @Get('doctor/:doctorId')
-  @Roles(Role.ADMIN, Role.MEDICO, Role.ENFERMEIRO, Role.ATENDENTE)
+  @Roles(
+    Role.ADMIN,
+    Role.MEDICO,
+    Role.ENFERMEIRO,
+    Role.ATENDENTE,
+    Role.FARMACIA,
+    Role.ESTOQUE,
+    Role.FATURAMENTO,
+  )
   @ApiOperation({ summary: 'Listar consultas de um medico' })
   @ApiParam({ name: 'doctorId', description: 'ID do medico' })
   findByDoctor(@Param('doctorId') doctorId: string) {
@@ -67,7 +91,15 @@ export class AppointmentsController {
   }
 
   @Get(':id')
-  @Roles(Role.ADMIN, Role.MEDICO, Role.ENFERMEIRO, Role.ATENDENTE)
+  @Roles(
+    Role.ADMIN,
+    Role.MEDICO,
+    Role.ENFERMEIRO,
+    Role.ATENDENTE,
+    Role.FARMACIA,
+    Role.ESTOQUE,
+    Role.FATURAMENTO,
+  )
   @ApiOperation({ summary: 'Buscar consulta por ID' })
   @ApiParam({ name: 'id', description: 'ID da consulta' })
   @ApiResponse({ status: 200, description: 'Consulta encontrada' })

@@ -15,6 +15,12 @@ export class UserResponseDto {
   name: string;
 
   @ApiProperty({
+    description: 'Login unico do usuario',
+    example: 'joao.silva',
+  })
+  username: string;
+
+  @ApiProperty({
     description: 'Email do usuário',
     example: 'joao@example.com',
   })

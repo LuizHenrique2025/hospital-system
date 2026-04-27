@@ -52,7 +52,7 @@ export class UsersController {
     return this.usersService.createUser(dto);
   }
 
-  @Roles(Role.ADMIN, Role.MEDICO)
+  @Roles(Role.ADMIN)
   @Get()
   @ApiOperation({ summary: 'Listar todos os usuários (com paginação)' })
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
@@ -67,7 +67,7 @@ export class UsersController {
     return this.usersService.findAll(pagination);
   }
 
-  @Roles(Role.ADMIN, Role.MEDICO)
+  @Roles(Role.ADMIN)
   @Get(':id')
   @ApiOperation({ summary: 'Buscar usuário por ID' })
   @ApiParam({ name: 'id', description: 'ID do usuário' })

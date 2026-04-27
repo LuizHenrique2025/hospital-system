@@ -1,32 +1,39 @@
 import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Role } from '@prisma/client';
 import {
-  ApiTags,
+  ApiBearerAuth,
   ApiOperation,
   ApiResponse,
-  ApiBearerAuth,
+  ApiTags,
 } from '@nestjs/swagger';
+
+import { UserResponseDto } from '../users/dto/user-response.dto';
+import { GetUser } from './decorators/get-user.decorator';
+import { Public } from './decorators/public.decorator';
+import { Roles } from './decorators/roles.decorator';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
-import { UserResponseDto } from '../users/dto/user-response.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
-import { GetUser } from './decorators/get-user.decorator';
-import { Public } from './decorators/public.decorator';
+import { RolesGuard } from './guards/roles.guard';
 
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  @Public()
   @Post('register')
-  @ApiOperation({ summary: 'Registrar novo usuário' })
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Registrar novo usuario (apenas ADMIN)' })
   @ApiResponse({
     status: 201,
-    description: 'Usuário criado com sucesso',
+    description: 'Usuario criado com sucesso',
     type: UserResponseDto,
   })
-  @ApiResponse({ status: 409, description: 'Email já está em uso' })
+  @ApiResponse({ status: 403, description: 'Sem permissao (apenas ADMIN)' })
+  @ApiResponse({ status: 409, description: 'Login ou email ja esta em uso' })
   async register(@Body() dto: RegisterDto): Promise<UserResponseDto> {
     return this.authService.register(dto);
   }
@@ -47,7 +54,7 @@ export class AuthController {
       },
     },
   })
-  @ApiResponse({ status: 401, description: 'Credenciais inválidas' })
+  @ApiResponse({ status: 401, description: 'Credenciais invalidas' })
   async login(@Body() dto: LoginDto): Promise<{ access_token: string }> {
     return this.authService.login(dto);
   }
@@ -55,14 +62,14 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Get('profile')
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Obter perfil do usuário autenticado' })
+  @ApiOperation({ summary: 'Obter perfil do usuario autenticado' })
   @ApiResponse({
     status: 200,
-    description: 'Perfil do usuário',
+    description: 'Perfil do usuario',
     type: UserResponseDto,
   })
-  @ApiResponse({ status: 401, description: 'Não autorizado' })
-  @ApiResponse({ status: 404, description: 'Usuário não encontrado' })
+  @ApiResponse({ status: 401, description: 'Nao autorizado' })
+  @ApiResponse({ status: 404, description: 'Usuario nao encontrado' })
   async getProfile(
     @GetUser() user: { userId: string; role: string },
   ): Promise<UserResponseDto> {

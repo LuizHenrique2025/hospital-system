@@ -43,7 +43,15 @@ export class NursesController {
   }
 
   @Get()
-  @Roles(Role.ADMIN, Role.MEDICO, Role.ENFERMEIRO, Role.ATENDENTE)
+  @Roles(
+    Role.ADMIN,
+    Role.MEDICO,
+    Role.ENFERMEIRO,
+    Role.ATENDENTE,
+    Role.FARMACIA,
+    Role.ESTOQUE,
+    Role.FATURAMENTO,
+  )
   @ApiOperation({ summary: 'Listar todos os enfermeiros' })
   @ApiResponse({ status: 200, description: 'Lista de enfermeiros retornada' })
   findAll() {
@@ -59,7 +67,15 @@ export class NursesController {
   }
 
   @Get(':id')
-  @Roles(Role.ADMIN, Role.MEDICO, Role.ENFERMEIRO, Role.ATENDENTE)
+  @Roles(
+    Role.ADMIN,
+    Role.MEDICO,
+    Role.ENFERMEIRO,
+    Role.ATENDENTE,
+    Role.FARMACIA,
+    Role.ESTOQUE,
+    Role.FATURAMENTO,
+  )
   @ApiOperation({ summary: 'Buscar enfermeiro por ID' })
   @ApiParam({ name: 'id', description: 'ID do enfermeiro' })
   @ApiResponse({ status: 200, description: 'Enfermeiro encontrado' })

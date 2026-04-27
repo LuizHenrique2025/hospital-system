@@ -11,7 +11,8 @@ describe('AuthService', () => {
   const mockUsersService = {
     createUser: jest.fn(),
     findByEmail: jest.fn(),
-    findAuthUserByEmail: jest.fn(),
+    findByUsername: jest.fn(),
+    findAuthUserByUsername: jest.fn(),
   };
 
   const mockJwtService = {
@@ -45,6 +46,7 @@ describe('AuthService', () => {
     mockUsersService.createUser.mockResolvedValue({ id: '1', name: 'Test' });
     const result = await service.register({
       name: 'Test',
+      username: 'test',
       email: 'test@example.com',
       password: '123456',
       role: 'ADMIN',
@@ -55,16 +57,16 @@ describe('AuthService', () => {
 
   it('should login a user and return token', async () => {
     const hashedPassword = await bcrypt.hash('123456', 10);
-    mockUsersService.findAuthUserByEmail.mockResolvedValue({
+    mockUsersService.findAuthUserByUsername.mockResolvedValue({
       id: '1',
+      username: 'test',
       email: 'test@example.com',
       password: hashedPassword,
       role: 'ADMIN',
     });
     const result = await service.login({
-      email: 'test@example.com',
+      username: 'test',
       password: '123456',
-      
     });
     expect(result).toHaveProperty('access_token');
     expect(mockJwtService.sign).toHaveBeenCalled();

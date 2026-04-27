@@ -10,6 +10,7 @@
     "build:front": "npm --prefix frontend run build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "front:dev": "npm --prefix frontend run dev",
+    "migrate:usernames": "node --env-file=.env scripts/migrate-usernames.js",
     "seed:admin": "node --env-file=.env scripts/seed-admin.js",
     "seed:foundation": "node --env-file=.env scripts/seed-foundation.js",
     "start": "nest start",

@@ -16,7 +16,7 @@ import {
   useNavigate,
 } from 'react-router-dom';
 import './App.css';
-import { API_URL, apiRequest } from './lib/api';
+import { apiRequest } from './lib/api';
 import type {
   Appointment,
   Doctor,
@@ -34,6 +34,7 @@ type Session = {
 };
 
 type DashboardCache = {
+  users: UserProfile[];
   patients: Patient[];
   patientTotal: number;
   doctors: Doctor[];
@@ -63,6 +64,7 @@ type PatientFormState = {
 
 type DoctorFormState = {
   name: string;
+  username: string;
   email: string;
   password: string;
   crm: string;
@@ -80,6 +82,7 @@ type DoctorFormState = {
 
 type NurseFormState = {
   name: string;
+  username: string;
   email: string;
   password: string;
   coren: string;
@@ -99,6 +102,14 @@ type SectorFormState = {
   code: string;
   description: string;
   active: boolean;
+};
+
+type UserFormState = {
+  name: string;
+  username: string;
+  email: string;
+  role: Role;
+  password: string;
 };
 
 type AppointmentFormState = {
@@ -128,6 +139,7 @@ type ModuleItem = {
   path: string;
   label: string;
   hint: string;
+  roles?: Role[];
 };
 
 const storageKey = 'hospital-system.session';
@@ -135,17 +147,54 @@ const dashboardCacheKey = 'hospital-system.dashboard';
 
 const activeModules: ModuleItem[] = [
   { path: '/central', label: 'Central', hint: 'Resumo geral' },
-  { path: '/pacientes', label: 'Pacientes', hint: 'Cadastro e busca' },
-  { path: '/agendamento', label: 'Agendamento', hint: 'Agenda e triagem' },
+  {
+    path: '/usuarios',
+    label: 'Usuarios',
+    hint: 'Acessos e permissoes',
+    roles: ['ADMIN'],
+  },
+  {
+    path: '/pacientes',
+    label: 'Pacientes',
+    hint: 'Cadastro e busca',
+    roles: ['ATENDENTE', 'MEDICO', 'ENFERMEIRO', 'FATURAMENTO'],
+  },
+  {
+    path: '/agendamento',
+    label: 'Agendamento',
+    hint: 'Agenda e triagem',
+    roles: ['ATENDENTE', 'ENFERMEIRO'],
+  },
   {
     path: '/pronto-atendimento',
     label: 'Pronto Atendimento',
     hint: 'Triagem e fila PA',
+    roles: ['ATENDENTE', 'MEDICO', 'ENFERMEIRO'],
   },
-  { path: '/consultorio', label: 'Consultorio', hint: 'Atendimento medico' },
-  { path: '/equipe', label: 'Equipe', hint: 'Medicos e suporte' },
-  { path: '/farmacia', label: 'Farmacia', hint: 'Dispensacao' },
-  { path: '/faturamento', label: 'Faturamento', hint: 'Contas e notas' },
+  {
+    path: '/consultorio',
+    label: 'Consultorio',
+    hint: 'Atendimento medico',
+    roles: ['MEDICO', 'ENFERMEIRO'],
+  },
+  {
+    path: '/equipe',
+    label: 'Equipe',
+    hint: 'Medicos e suporte',
+    roles: ['ATENDENTE', 'MEDICO', 'ENFERMEIRO'],
+  },
+  {
+    path: '/farmacia',
+    label: 'Farmacia',
+    hint: 'Dispensacao',
+    roles: ['FARMACIA', 'ESTOQUE', 'ENFERMEIRO'],
+  },
+  {
+    path: '/faturamento',
+    label: 'Faturamento',
+    hint: 'Contas e notas',
+    roles: ['FATURAMENTO'],
+  },
 ];
 
 const upcomingModules = [
@@ -182,6 +231,15 @@ const appointmentStatuses = [
   'CANCELADA',
   'NAO_COMPARECEU',
 ] as const;
+const roleOptions: Role[] = [
+  'ADMIN',
+  'ATENDENTE',
+  'MEDICO',
+  'ENFERMEIRO',
+  'FARMACIA',
+  'ESTOQUE',
+  'FATURAMENTO',
+];
 
 const initialPatientForm: PatientFormState = {
   name: '',
@@ -199,6 +257,7 @@ const initialPatientForm: PatientFormState = {
 
 const initialDoctorForm: DoctorFormState = {
   name: '',
+  username: '',
   email: '',
   password: '',
   crm: '',
@@ -216,6 +275,7 @@ const initialDoctorForm: DoctorFormState = {
 
 const initialNurseForm: NurseFormState = {
   name: '',
+  username: '',
   email: '',
   password: '',
   coren: '',
@@ -235,6 +295,14 @@ const initialSectorForm: SectorFormState = {
   code: '',
   description: '',
   active: true,
+};
+
+const initialUserForm: UserFormState = {
+  name: '',
+  username: '',
+  email: '',
+  role: 'ATENDENTE',
+  password: '',
 };
 
 const initialAppointmentForm: AppointmentFormState = {
@@ -258,21 +326,22 @@ function App() {
   const [session, setSession] = useState<Session | null>(() =>
     readStoredValue<Session>(storageKey),
   );
-  const [notice, setNotice] = useState<Notice | null>({
-    kind: 'info',
-    text: 'Login de seed pronto: admin@hospital.local / Admin123!',
-  });
+  const [notice, setNotice] = useState<Notice | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loginForm, setLoginForm] = useState({
-    email: 'admin@hospital.local',
-    password: 'Admin123!',
+    username: '',
+    password: '',
   });
   const [patientForm, setPatientForm] = useState(initialPatientForm);
+  const [userForm, setUserForm] = useState(initialUserForm);
   const [doctorForm, setDoctorForm] = useState(initialDoctorForm);
   const [nurseForm, setNurseForm] = useState(initialNurseForm);
   const [sectorForm, setSectorForm] = useState(initialSectorForm);
   const [appointmentForm, setAppointmentForm] = useState(initialAppointmentForm);
+  const [users, setUsers] = useState<UserProfile[]>(
+    cachedDashboard?.users ?? [],
+  );
   const [patients, setPatients] = useState<Patient[]>(
     cachedDashboard?.patients ?? [],
   );
@@ -297,28 +366,34 @@ function App() {
       setIsBusy(true);
 
       try {
+        const profile = await apiRequest<UserProfile>('/auth/profile', {
+          token,
+        });
+
         const [
-          profile,
+          userResponse,
           patientResponse,
           doctorResponse,
           nurseResponse,
           sectorResponse,
           appointmentResponse,
-        ] =
-          await Promise.all([
-            apiRequest<UserProfile>('/auth/profile', { token }),
-            apiRequest<PaginatedResponse<Patient>>(
-              '/patients?page=1&limit=50',
-              {
-                token,
-              },
-            ),
-            apiRequest<Doctor[]>('/doctors', { token }),
-            apiRequest<Nurse[]>('/nurses', { token }),
-            apiRequest<Sector[]>('/sectors', { token }),
-            apiRequest<Appointment[]>('/appointments', { token }),
-          ]);
+        ] = await Promise.all([
+          profile.role === 'ADMIN'
+            ? apiRequest<PaginatedResponse<UserProfile>>(
+                '/users?page=1&limit=100',
+                { token },
+              )
+            : Promise.resolve({ data: [] }),
+          apiRequest<PaginatedResponse<Patient>>('/patients?page=1&limit=50', {
+            token,
+          }),
+          apiRequest<Doctor[]>('/doctors', { token }),
+          apiRequest<Nurse[]>('/nurses', { token }),
+          apiRequest<Sector[]>('/sectors', { token }),
+          apiRequest<Appointment[]>('/appointments', { token }),
+        ]);
 
+        const nextUsers = userResponse.data ?? [];
         const nextPatients = patientResponse.data ?? [];
         const nextPatientTotal =
           patientResponse.meta?.total ??
@@ -327,27 +402,29 @@ function App() {
         const nextSession = { token, profile };
 
         startTransition(() => {
-            setSession(nextSession);
-            setPatients(nextPatients);
-            setPatientTotal(nextPatientTotal);
-            setDoctors(doctorResponse);
-            setNurses(nurseResponse);
-            setSectors(sectorResponse);
-            setAppointments(appointmentResponse);
-          });
+          setSession(nextSession);
+          setUsers(nextUsers);
+          setPatients(nextPatients);
+          setPatientTotal(nextPatientTotal);
+          setDoctors(doctorResponse);
+          setNurses(nurseResponse);
+          setSectors(sectorResponse);
+          setAppointments(appointmentResponse);
+        });
 
         localStorage.setItem(storageKey, JSON.stringify(nextSession));
         localStorage.setItem(
           dashboardCacheKey,
           JSON.stringify({
-              patients: nextPatients,
-              patientTotal: nextPatientTotal,
-              doctors: doctorResponse,
-              nurses: nurseResponse,
-              sectors: sectorResponse,
-              appointments: appointmentResponse,
-            }),
-          );
+            users: nextUsers,
+            patients: nextPatients,
+            patientTotal: nextPatientTotal,
+            doctors: doctorResponse,
+            nurses: nurseResponse,
+            sectors: sectorResponse,
+            appointments: appointmentResponse,
+          }),
+        );
 
         setNotice({
           kind: 'success',
@@ -418,19 +495,63 @@ function App() {
     }
   }
 
+  async function createUserAccount(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!session?.token || session.profile.role !== 'ADMIN') {
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      await apiRequest<UserProfile>('/users', {
+        token: session.token,
+        body: {
+          name: userForm.name,
+          username: normalizeLogin(userForm.username),
+          email: userForm.email,
+          password: userForm.password,
+          role: userForm.role,
+        },
+      });
+
+      setUserForm(initialUserForm);
+      await loadDashboard(session.token);
+      setNotice({
+        kind: 'success',
+        text: 'Usuario cadastrado com login unico.',
+      });
+      navigate('/usuarios');
+    } catch (error) {
+      setNotice({
+        kind: 'error',
+        text:
+          error instanceof Error
+            ? error.message
+            : 'Nao foi possivel cadastrar o usuario.',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   function handleLogout() {
     localStorage.removeItem(storageKey);
     localStorage.removeItem(dashboardCacheKey);
-      setSession(null);
-      setPatients([]);
-      setDoctors([]);
-      setNurses([]);
-      setSectors([]);
-      setAppointments([]);
-      setPatientTotal(0);
-      setNurseForm(initialNurseForm);
-      setSectorForm(initialSectorForm);
-      setAppointmentForm(initialAppointmentForm);
+    setSession(null);
+    setUsers([]);
+    setPatients([]);
+    setDoctors([]);
+    setNurses([]);
+    setSectors([]);
+    setAppointments([]);
+    setPatientTotal(0);
+    setUserForm(initialUserForm);
+    setDoctorForm(initialDoctorForm);
+    setNurseForm(initialNurseForm);
+    setSectorForm(initialSectorForm);
+    setAppointmentForm(initialAppointmentForm);
     setNotice({
       kind: 'info',
       text: 'Sessao encerrada. Volte quando quiser.',
@@ -495,6 +616,7 @@ function App() {
         token: session.token,
         body: {
           name: doctorForm.name,
+          username: normalizeLogin(doctorForm.username),
           email: doctorForm.email,
           password: doctorForm.password,
           role: 'MEDICO' satisfies Role,
@@ -556,6 +678,7 @@ function App() {
         token: session.token,
         body: {
           name: nurseForm.name,
+          username: normalizeLogin(nurseForm.username),
           email: nurseForm.email,
           password: nurseForm.password,
           role: 'ENFERMEIRO' satisfies Role,
@@ -776,16 +899,20 @@ function App() {
         session.profile.role,
       ),
   );
+  const visibleModules = session
+    ? activeModules.filter(
+        (moduleItem) =>
+          session.profile.role === 'ADMIN' ||
+          !moduleItem.roles || moduleItem.roles.includes(session.profile.role),
+      )
+    : activeModules;
 
   if (!session) {
     return (
       <LoginScreen
-        appointments={appointments}
-        doctors={doctors}
         handleLogin={handleLogin}
         isSubmitting={isSubmitting}
         loginForm={loginForm}
-        patientTotal={patientTotal}
         setLoginForm={setLoginForm}
       />
     );
@@ -796,7 +923,7 @@ function App() {
       <Route
         element={
           <WorkspaceLayout
-            activeModules={activeModules}
+            activeModules={visibleModules}
             handleLogout={handleLogout}
             isBusy={isBusy}
             loadDashboard={loadDashboard}
@@ -821,6 +948,22 @@ function App() {
               patients={patients}
               upcomingModules={upcomingModules}
             />
+          }
+        />
+        <Route
+          path="/usuarios"
+          element={
+            session.profile.role === 'ADMIN' ? (
+              <UsersPage
+                form={userForm}
+                isSubmitting={isSubmitting}
+                onSubmit={createUserAccount}
+                setForm={setUserForm}
+                users={users}
+              />
+            ) : (
+              <Navigate replace to="/central" />
+            )
           }
         />
         <Route
@@ -931,91 +1074,46 @@ function App() {
 }
 
 type LoginScreenProps = {
-  appointments: Appointment[];
-  doctors: Doctor[];
   handleLogin: (event: React.FormEvent<HTMLFormElement>) => Promise<void>;
   isSubmitting: boolean;
   loginForm: {
-    email: string;
+    username: string;
     password: string;
   };
-  patientTotal: number;
   setLoginForm: React.Dispatch<
     React.SetStateAction<{
-      email: string;
+      username: string;
       password: string;
     }>
   >;
 };
 
 function LoginScreen({
-  appointments,
-  doctors,
   handleLogin,
   isSubmitting,
   loginForm,
-  patientTotal,
   setLoginForm,
 }: LoginScreenProps) {
   return (
     <main className="app-shell">
       <section className="login-shell">
-        <section className="login-banner">
-          <div className="banner-copy">
-            <p className="eyebrow">Hospital System</p>
-            <h1>Navegacao por modulos, mais direta e mais operacional.</h1>
-            <p className="banner-lead">
-              Agora o frontend ja nasce no formato de paginas inteiras por
-              modulo, com fluxo claro para Pacientes, Agendamento e
-              Atendimento.
-            </p>
-          </div>
-
-          <div className="banner-metrics">
-            <article className="banner-tile">
-              <span>Pacientes</span>
-              <strong>{patientTotal}</strong>
-              <small>base carregada</small>
-            </article>
-            <article className="banner-tile">
-              <span>Medicos</span>
-              <strong>{doctors.length}</strong>
-              <small>cadastro ativo</small>
-            </article>
-            <article className="banner-tile">
-              <span>Consultas</span>
-              <strong>{appointments.length}</strong>
-              <small>agenda registrada</small>
-            </article>
-          </div>
-
-          <div className="roadmap-strip">
-            {upcomingModules.map((moduleName) => (
-              <span className="roadmap-chip" key={moduleName}>
-                {moduleName}
-              </span>
-            ))}
-          </div>
-        </section>
-
         <form className="auth-card" onSubmit={handleLogin}>
           <div className="card-topline">
             <div>
               <p className="eyebrow">Acesso local</p>
               <h2>Entrar no painel</h2>
             </div>
-            <span className="inline-badge">API {API_URL}</span>
           </div>
 
           <label className="field">
-            <span>Email</span>
+            <span>Login</span>
             <input
-              type="email"
-              value={loginForm.email}
+              autoComplete="username"
+              value={loginForm.username}
               onChange={(event) =>
                 setLoginForm((current) => ({
                   ...current,
-                  email: event.target.value,
+                  username: normalizeLogin(event.target.value),
                 }))
               }
               required
@@ -1025,6 +1123,7 @@ function LoginScreen({
           <label className="field">
             <span>Senha</span>
             <input
+              autoComplete="current-password"
               type="password"
               value={loginForm.password}
               onChange={(event) =>
@@ -1040,15 +1139,204 @@ function LoginScreen({
           <button className="primary-button" type="submit" disabled={isSubmitting}>
             {isSubmitting ? 'Entrando...' : 'Acessar sistema'}
           </button>
-
-          <div className="helper-block">
-            <strong>Seed pronta</strong>
-            <span>admin@hospital.local</span>
-            <span>Admin123!</span>
-          </div>
         </form>
       </section>
     </main>
+  );
+}
+
+type UsersPageProps = {
+  form: UserFormState;
+  isSubmitting: boolean;
+  onSubmit: (event: React.FormEvent<HTMLFormElement>) => Promise<void>;
+  setForm: React.Dispatch<React.SetStateAction<UserFormState>>;
+  users: UserProfile[];
+};
+
+function UsersPage({
+  form,
+  isSubmitting,
+  onSubmit,
+  setForm,
+  users,
+}: UsersPageProps) {
+  const [search, setSearch] = useState('');
+  const deferredSearch = useDeferredValue(search.trim().toLowerCase());
+  const filteredUsers = useMemo(
+    () => users.filter((user) => matchUser(user, deferredSearch)),
+    [deferredSearch, users],
+  );
+  const adminCount = users.filter((user) => user.role === 'ADMIN').length;
+
+  return (
+    <>
+      <section className="summary-strip">
+        <article className="summary-card">
+          <span>Usuarios</span>
+          <strong>{users.length}</strong>
+          <small>logins cadastrados</small>
+        </article>
+        <article className="summary-card">
+          <span>Admins</span>
+          <strong>{adminCount}</strong>
+          <small>acesso total</small>
+        </article>
+        <article className="summary-card">
+          <span>Permissoes</span>
+          <strong>{roleOptions.length}</strong>
+          <small>cargos disponiveis</small>
+        </article>
+        <article className="summary-card">
+          <span>Regra</span>
+          <strong>Unico</strong>
+          <small>login sem duplicidade</small>
+        </article>
+      </section>
+
+      <section className="page-grid module-grid">
+        <article className="panel">
+          <div className="page-header">
+            <div>
+              <p className="eyebrow">Usuarios</p>
+              <h2>Acessos cadastrados</h2>
+            </div>
+            <div className="toolbar-inline">
+              <input
+                className="search-input"
+                placeholder="Buscar por nome, login, email ou cargo"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+              />
+              <span className="inline-badge">{filteredUsers.length} visiveis</span>
+            </div>
+          </div>
+
+          <div className="table-shell">
+            <div className="table-head users-grid">
+              <span>Nome</span>
+              <span>Login</span>
+              <span>Email</span>
+              <span>Cargo</span>
+            </div>
+
+            {filteredUsers.length === 0 ? (
+              <p className="empty-state">Nenhum usuario encontrado.</p>
+            ) : (
+              filteredUsers.map((user) => (
+                <div className="table-row users-grid" key={user.id}>
+                  <span>{user.name}</span>
+                  <span>{user.username}</span>
+                  <span>{user.email}</span>
+                  <span>{roleLabel(user.role)}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </article>
+
+        <form className="panel form-panel" onSubmit={onSubmit}>
+          <div className="page-header">
+            <div>
+              <p className="eyebrow">Cadastro administrativo</p>
+              <h2>Novo usuario</h2>
+            </div>
+          </div>
+
+          <div className="section-block">
+            <p className="section-title">Identificacao e login</p>
+            <div className="field-grid two-columns">
+              <label className="field">
+                <span>Nome completo</span>
+                <input
+                  value={form.name}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      name: event.target.value,
+                    }))
+                  }
+                  required
+                />
+              </label>
+              <label className="field">
+                <span>Login unico</span>
+                <input
+                  autoComplete="off"
+                  placeholder="ex: recepcao01"
+                  value={form.username}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      username: normalizeLogin(event.target.value),
+                    }))
+                  }
+                  required
+                />
+              </label>
+              <label className="field">
+                <span>Email</span>
+                <input
+                  type="email"
+                  value={form.email}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      email: event.target.value,
+                    }))
+                  }
+                  required
+                />
+              </label>
+              <label className="field">
+                <span>Senha inicial</span>
+                <input
+                  minLength={6}
+                  type="password"
+                  value={form.password}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      password: event.target.value,
+                    }))
+                  }
+                  required
+                />
+              </label>
+              <label className="field full-row">
+                <span>Cargo / permissao</span>
+                <select
+                  value={form.role}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      role: event.target.value as Role,
+                    }))
+                  }
+                >
+                  {roleOptions.map((role) => (
+                    <option key={role} value={role}>
+                      {roleLabel(role)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <div className="helper-block">
+            <strong>Permissao administrativa</strong>
+            <span>
+              Apenas ADMIN acessa esta tela. O cargo ADMIN fica com todos os
+              modulos liberados; os demais entram por permissao de setor.
+            </span>
+          </div>
+
+          <button className="primary-button" disabled={isSubmitting} type="submit">
+            {isSubmitting ? 'Salvando...' : 'Cadastrar usuario'}
+          </button>
+        </form>
+      </section>
+    </>
   );
 }
 
@@ -1086,7 +1374,9 @@ function WorkspaceLayout({
           <div className="topbar-meta">
             <div className="session-chip">
               <span className="session-name">{session.profile.name}</span>
-              <span className="session-role">{session.profile.role}</span>
+              <span className="session-role">
+                {session.profile.username} - {roleLabel(session.profile.role)}
+              </span>
             </div>
             <button
               className="ghost-button"
@@ -3007,6 +3297,21 @@ function TeamPage({
                   />
                 </label>
                 <label className="field">
+                  <span>Login</span>
+                  <input
+                    autoComplete="off"
+                    placeholder="ex: medico.carlos"
+                    value={form.username}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        username: normalizeLogin(event.target.value),
+                      }))
+                    }
+                    required
+                  />
+                </label>
+                <label className="field">
                   <span>Senha inicial</span>
                   <input
                     minLength={6}
@@ -3208,6 +3513,21 @@ function TeamPage({
                       setNurseForm((current) => ({
                         ...current,
                         email: event.target.value,
+                      }))
+                    }
+                    required
+                  />
+                </label>
+                <label className="field">
+                  <span>Login</span>
+                  <input
+                    autoComplete="off"
+                    placeholder="ex: enfermagem.pa"
+                    value={nurseForm.username}
+                    onChange={(event) =>
+                      setNurseForm((current) => ({
+                        ...current,
+                        username: normalizeLogin(event.target.value),
                       }))
                     }
                     required
@@ -3502,6 +3822,48 @@ function isSameLocalDate(value: string) {
   );
 }
 
+function normalizeLogin(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, '.');
+}
+
+function roleLabel(role: Role) {
+  switch (role) {
+    case 'ADMIN':
+      return 'Administrador';
+    case 'MEDICO':
+      return 'Medico';
+    case 'ENFERMEIRO':
+      return 'Enfermagem';
+    case 'FARMACIA':
+      return 'Farmacia';
+    case 'ESTOQUE':
+      return 'Estoque';
+    case 'FATURAMENTO':
+      return 'Faturamento';
+    default:
+      return 'Atendente';
+  }
+}
+
+function matchUser(user: UserProfile, query: string) {
+  if (!query) {
+    return true;
+  }
+
+  const haystack = [
+    user.name,
+    user.username,
+    user.email,
+    user.role,
+    roleLabel(user.role),
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  return haystack.includes(query);
+}
+
 function matchPatient(patient: Patient, query: string) {
   if (!query) {
     return true;
@@ -3528,6 +3890,7 @@ function matchDoctor(doctor: Doctor, query: string) {
 
   const haystack = [
     doctor.user.name,
+    doctor.user.username,
     doctor.user.email,
     doctor.crm,
     doctor.crmUf,
@@ -3550,6 +3913,7 @@ function matchNurse(nurse: Nurse, query: string) {
 
   const haystack = [
     nurse.user.name,
+    nurse.user.username,
     nurse.user.email,
     nurse.coren,
     nurse.corenUf,

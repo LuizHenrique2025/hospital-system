@@ -22,6 +22,14 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto): Promise<UserResponseDto> {
+    const existingUsername = await this.usersService.findByUsername(
+      dto.username,
+    );
+
+    if (existingUsername) {
+      throw new ConflictException('Login ja esta em uso');
+    }
+
     const existingUser = await this.usersService.findByEmail(dto.email);
 
     if (existingUser) {
@@ -30,6 +38,7 @@ export class AuthService {
 
     return this.usersService.createUser({
       name: dto.name,
+      username: dto.username,
       email: dto.email,
       password: dto.password,
       role: Role.ATENDENTE,
@@ -37,7 +46,7 @@ export class AuthService {
   }
 
   async login(dto: LoginDto): Promise<{ access_token: string }> {
-    const user = await this.usersService.findAuthUserByEmail(dto.email);
+    const user = await this.usersService.findAuthUserByUsername(dto.username);
 
     if (!user) {
       throw new UnauthorizedException('Credenciais invalidas');

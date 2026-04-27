@@ -46,7 +46,15 @@ export class PatientsController {
   }
 
   @Get()
-  @Roles(Role.ADMIN, Role.MEDICO, Role.ATENDENTE)
+  @Roles(
+    Role.ADMIN,
+    Role.MEDICO,
+    Role.ENFERMEIRO,
+    Role.ATENDENTE,
+    Role.FARMACIA,
+    Role.ESTOQUE,
+    Role.FATURAMENTO,
+  )
   @ApiOperation({ summary: 'Listar todos os pacientes' })
   @ApiResponse({ status: 200, description: 'Lista de pacientes retornada' })
   findAll(@Query() query: QueryPatientDto) {
@@ -54,7 +62,15 @@ export class PatientsController {
   }
 
   @Get('cpf/:cpf')
-  @Roles(Role.ADMIN, Role.MEDICO, Role.ATENDENTE)
+  @Roles(
+    Role.ADMIN,
+    Role.MEDICO,
+    Role.ENFERMEIRO,
+    Role.ATENDENTE,
+    Role.FARMACIA,
+    Role.ESTOQUE,
+    Role.FATURAMENTO,
+  )
   @ApiOperation({ summary: 'Buscar paciente por CPF' })
   @ApiParam({ name: 'cpf', description: 'CPF do paciente' })
   @ApiResponse({ status: 200, description: 'Paciente encontrado' })
@@ -64,7 +80,15 @@ export class PatientsController {
   }
 
   @Get(':id')
-  @Roles(Role.ADMIN, Role.MEDICO, Role.ATENDENTE)
+  @Roles(
+    Role.ADMIN,
+    Role.MEDICO,
+    Role.ENFERMEIRO,
+    Role.ATENDENTE,
+    Role.FARMACIA,
+    Role.ESTOQUE,
+    Role.FATURAMENTO,
+  )
   @ApiOperation({ summary: 'Buscar paciente por ID' })
   @ApiParam({ name: 'id', description: 'ID do paciente' })
   @ApiResponse({ status: 200, description: 'Paciente encontrado' })

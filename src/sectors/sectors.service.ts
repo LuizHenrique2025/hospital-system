@@ -100,6 +100,7 @@ export class SectorsService {
             select: {
               id: true,
               name: true,
+              username: true,
               email: true,
             },
           },
@@ -114,6 +115,7 @@ export class SectorsService {
             select: {
               id: true,
               name: true,
+              username: true,
               email: true,
             },
           },

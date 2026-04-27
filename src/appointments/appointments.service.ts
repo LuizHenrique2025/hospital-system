@@ -54,7 +54,9 @@ export class AppointmentsService {
       include: {
         doctor: {
           include: {
-            user: { select: { id: true, name: true, email: true } },
+            user: {
+              select: { id: true, name: true, username: true, email: true },
+            },
             sector: {
               select: { id: true, name: true, code: true, active: true },
             },
@@ -145,7 +147,9 @@ export class AppointmentsService {
       patient: true,
       doctor: {
         include: {
-          user: { select: { id: true, name: true, email: true } },
+          user: {
+            select: { id: true, name: true, username: true, email: true },
+          },
           sector: {
             select: { id: true, name: true, code: true, active: true },
           },

@@ -4,6 +4,7 @@ import {
   IsEmail,
   IsOptional,
   IsEnum,
+  Matches,
   MinLength,
   MaxLength,
 } from 'class-validator';
@@ -22,6 +23,22 @@ export class UpdateUserDto {
   @MinLength(2)
   @MaxLength(100)
   name?: string;
+
+  @ApiProperty({
+    description: 'Login unico do usuario',
+    example: 'joao.silva',
+    minLength: 3,
+    maxLength: 40,
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  @MinLength(3)
+  @MaxLength(40)
+  @Matches(/^[a-zA-Z0-9._-]+$/, {
+    message: 'Login deve usar apenas letras, numeros, ponto, hifen ou underline',
+  })
+  username?: string;
 
   @ApiProperty({
     description: 'Email do usuário',
