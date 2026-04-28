@@ -1160,6 +1160,10 @@ textarea {
   box-shadow: 0 18px 42px rgba(15, 23, 42, 0.16);
 }
 
+.sidebar-user-popover.compact {
+  justify-items: end;
+}
+
 .sidebar-user-popover a,
 .sidebar-user-popover button {
   width: 100%;
@@ -1177,6 +1181,29 @@ textarea {
 .sidebar-user-popover a:hover,
 .sidebar-user-popover button:hover {
   background: color-mix(in srgb, var(--env-color) 11%, #f8fafc);
+}
+
+.sidebar-user-popover .sidebar-logout-icon {
+  width: 42px;
+  min-height: 42px;
+  display: inline-grid;
+  justify-self: end;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #ffffff;
+  color: #475569;
+}
+
+.sidebar-logout-icon svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
 }
 
 .environment-backdrop {
@@ -1423,6 +1450,121 @@ textarea {
 
 .team-layout {
   grid-template-columns: minmax(700px, 1.3fr) minmax(460px, 0.95fr);
+}
+
+.settings-workspace {
+  grid-template-columns: minmax(680px, 1.4fr) minmax(360px, 0.75fr);
+  align-items: start;
+}
+
+.settings-vision-panel {
+  gap: 30px;
+  padding: clamp(24px, 2vw, 36px);
+}
+
+.settings-vision-panel h2 {
+  max-width: 18ch;
+  font-size: clamp(1.8rem, 3vw, 2.65rem);
+  line-height: 1;
+}
+
+.settings-vision-panel > div:first-child p:not(.eyebrow) {
+  max-width: 74ch;
+  color: var(--muted);
+  line-height: 1.68;
+}
+
+.settings-icon-blocks {
+  display: grid;
+  gap: clamp(20px, 1.7vw, 30px);
+}
+
+.settings-icon-block {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.settings-icon {
+  width: 28px;
+  height: 28px;
+  margin-top: 4px;
+  display: inline-grid;
+  place-items: center;
+  color: var(--accent-strong);
+}
+
+.settings-icon svg {
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.85;
+}
+
+.settings-icon-block h3 {
+  margin: 0;
+  font-size: 1.06rem;
+}
+
+.settings-icon-block p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.settings-action {
+  width: fit-content;
+  min-height: 34px;
+  margin-top: 12px;
+  padding: 7px 11px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.settings-action.disabled {
+  color: var(--muted);
+}
+
+.settings-status-panel {
+  position: sticky;
+  top: 18px;
+}
+
+.settings-metrics {
+  display: grid;
+  gap: 10px;
+}
+
+.settings-metrics article {
+  padding: 14px;
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.settings-metrics span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.settings-metrics strong {
+  font-family: 'Sora', 'IBM Plex Sans', sans-serif;
+  font-size: 1.8rem;
 }
 
 .stack-column {
@@ -2206,6 +2348,7 @@ textarea {
   .module-grid,
   .care-layout,
   .team-layout,
+  .settings-workspace,
   .patients-workspace,
   .procedures-workspace,
   .exam-orders-workspace,
@@ -2965,6 +3108,7 @@ textarea {
   .agreements-workspace,
   .care-layout,
   .team-layout,
+  .settings-workspace,
   .summary-strip,
   .cbhpm-stat-grid,
   .overview-pulse,
@@ -3005,6 +3149,10 @@ textarea {
 
   .placeholder-flow {
     grid-template-columns: 1fr;
+  }
+
+  .settings-status-panel {
+    position: static;
   }
 }
 

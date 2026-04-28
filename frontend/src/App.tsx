@@ -291,9 +291,9 @@ const activeModules: ModuleItem[] = [
     roles: ['ADMIN', 'ATENDENTE', 'FATURAMENTO'],
   },
   {
-    path: '/usuarios',
-    label: 'Usuarios',
-    hint: 'Acessos e permissoes',
+    path: '/configuracoes',
+    label: 'Configuracoes',
+    hint: 'Admin, permissoes e parametros',
     roles: ['ADMIN'],
   },
   {
@@ -492,7 +492,7 @@ const administrativeModuleGroups: AdministrativeModuleGroup[] = [
       '/central',
       '/cadastros',
       '/convenios',
-      '/usuarios',
+      '/configuracoes',
       '/equipe',
       '/pacientes',
       '/procedimentos',
@@ -1630,6 +1630,16 @@ function App() {
           element={<AgreementsPage sessionToken={session.token} />}
         />
         <Route
+          path="/configuracoes"
+          element={
+            session.profile.role === 'ADMIN' ? (
+              <SettingsPage users={users} />
+            ) : (
+              <Navigate replace to="/central" />
+            )
+          }
+        />
+        <Route
           path="/usuarios"
           element={
             session.profile.role === 'ADMIN' ? (
@@ -2215,6 +2225,129 @@ type UsersPageProps = {
   setForm: React.Dispatch<React.SetStateAction<UserFormState>>;
   users: UserProfile[];
 };
+
+type SettingsPageProps = {
+  users: UserProfile[];
+};
+
+function SettingsPage({ users }: SettingsPageProps) {
+  const userCount = users.length;
+  const adminCount = users.filter((user) => user.role === 'ADMIN').length;
+  const settingsBlocks = [
+    {
+      title: 'Acessos e permissoes',
+      description:
+        'Cadastre usuarios, defina cargos e mantenha logins unicos para evitar conflito operacional.',
+      path: '/usuarios',
+      action: 'Abrir usuarios',
+      icon: (
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        </svg>
+      ),
+    },
+    {
+      title: 'Setores e ambientes',
+      description:
+        'Organize a navegacao por setor para que cada profissional veja apenas o necessario.',
+      action: 'Planejado',
+      icon: (
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z" />
+          <path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" />
+          <path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2" />
+          <path d="M10 6h4" />
+          <path d="M10 10h4" />
+          <path d="M10 14h4" />
+          <path d="M10 18h4" />
+        </svg>
+      ),
+    },
+    {
+      title: 'Parametros operacionais',
+      description:
+        'Centralize regras de busca, paginacao, seguranca, auditoria e comportamento dos modulos.',
+      action: 'Em parametrizacao',
+      icon: (
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5Z" />
+          <path d="M19.4 15a1.8 1.8 0 0 0 .36 1.98l.06.06a2.1 2.1 0 1 1-2.98 2.98l-.06-.06a1.8 1.8 0 0 0-1.98-.36 1.8 1.8 0 0 0-1.1 1.66V21.4a2.1 2.1 0 1 1-4.2 0v-.14A1.8 1.8 0 0 0 8.4 19.6a1.8 1.8 0 0 0-1.98.36l-.06.06a2.1 2.1 0 1 1-2.98-2.98l.06-.06A1.8 1.8 0 0 0 3.8 15a1.8 1.8 0 0 0-1.66-1.1H2a2.1 2.1 0 1 1 0-4.2h.14A1.8 1.8 0 0 0 3.8 8.6a1.8 1.8 0 0 0-.36-1.98l-.06-.06a2.1 2.1 0 1 1 2.98-2.98l.06.06A1.8 1.8 0 0 0 8.4 4a1.8 1.8 0 0 0 1.1-1.66V2.2a2.1 2.1 0 1 1 4.2 0v.14A1.8 1.8 0 0 0 14.8 4a1.8 1.8 0 0 0 1.98-.36l.06-.06a2.1 2.1 0 1 1 2.98 2.98l-.06.06A1.8 1.8 0 0 0 19.4 8.6a1.8 1.8 0 0 0 1.66 1.1h.14a2.1 2.1 0 1 1 0 4.2h-.14A1.8 1.8 0 0 0 19.4 15Z" />
+        </svg>
+      ),
+    },
+  ];
+
+  return (
+    <section className="page-grid settings-workspace">
+      <article className="panel settings-vision-panel">
+        <div>
+          <p className="eyebrow">Configuracoes</p>
+          <h2>Centro administrativo do sistema</h2>
+          <p>
+            Reuna aqui as regras que afetam acesso, seguranca, ambientes e
+            parametros globais. A tela segue o modelo de blocos com icones para
+            ficar mais rapida de ler e menos poluida.
+          </p>
+        </div>
+
+        <div className="settings-icon-blocks">
+          {settingsBlocks.map((block) => (
+            <div className="settings-icon-block" key={block.title}>
+              <span className="settings-icon">{block.icon}</span>
+              <div>
+                <h3>{block.title}</h3>
+                <p>{block.description}</p>
+                {block.path ? (
+                  <NavLink className="settings-action" to={block.path}>
+                    {block.action}
+                  </NavLink>
+                ) : (
+                  <span className="settings-action disabled">{block.action}</span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </article>
+
+      <aside className="panel settings-status-panel">
+        <div className="page-header">
+          <div>
+            <p className="eyebrow">Controle</p>
+            <h2>Resumo admin</h2>
+          </div>
+          <span className="inline-badge">ADMIN</span>
+        </div>
+
+        <div className="settings-metrics">
+          <article>
+            <span>Usuarios cadastrados</span>
+            <strong>{userCount}</strong>
+          </article>
+          <article>
+            <span>Administradores</span>
+            <strong>{adminCount}</strong>
+          </article>
+          <article>
+            <span>Perfis base</span>
+            <strong>{roleOptions.length}</strong>
+          </article>
+        </div>
+
+        <div className="helper-block">
+          <strong>Acesso protegido</strong>
+          <span>
+            Esta area aparece somente para administradores. Demais cargos
+            continuam vendo apenas os modulos liberados para o setor.
+          </span>
+        </div>
+      </aside>
+    </section>
+  );
+}
 
 function UsersPage({
   form,
@@ -2935,11 +3068,26 @@ function SidebarUserMenu({
         </span>
       </summary>
 
-      <div className="sidebar-user-popover">
-        <NavLink to="/usuarios">Usuarios e permissoes</NavLink>
-        <NavLink to="/central">Caixa interna</NavLink>
-        <button onClick={handleLogout} type="button">
-          Sair do sistema
+      <div
+        className={`sidebar-user-popover ${
+          role === 'ADMIN' ? '' : 'compact'
+        }`}
+      >
+        {role === 'ADMIN' ? (
+          <NavLink to="/configuracoes">Configuracoes</NavLink>
+        ) : null}
+        <button
+          aria-label="Sair do sistema"
+          className="sidebar-logout-icon"
+          onClick={handleLogout}
+          title="Sair do sistema"
+          type="button"
+        >
+          <svg aria-hidden="true" viewBox="0 0 24 24">
+            <path d="M10.8 5.2H6.4a1.6 1.6 0 0 0-1.6 1.6v10.4a1.6 1.6 0 0 0 1.6 1.6h4.4" />
+            <path d="M15.2 16.2 19.4 12l-4.2-4.2" />
+            <path d="M19.1 12H9.8" />
+          </svg>
         </button>
       </div>
     </details>
