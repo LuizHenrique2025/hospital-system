@@ -61,6 +61,13 @@ enum CommunicationType {
   HOLIDAY
 }
 
+enum InternalMessagePriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
 enum ProcedureType {
   PROCEDURE
   LAB_EXAM
@@ -85,6 +92,7 @@ enum PricingTableType {
   AGREEMENT
   OWN
   OPERATIONAL_FEE
+  MATERIAL_MEDICATION
 }
 
 model User {
@@ -97,8 +105,10 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  doctor Doctor?
-  nurse  Nurse?
+  doctor                   Doctor?
+  nurse                    Nurse?
+  sentInternalMessages     InternalMessage[] @relation("SentInternalMessages")
+  receivedInternalMessages InternalMessage[] @relation("ReceivedInternalMessages")
 }
 
 model Patient {
@@ -246,6 +256,44 @@ model InternalEmail {
   @@map("internal_emails")
 }
 
+model InternalMessage {
+  id                  String                  @id @default(uuid())
+  senderId            String
+  recipientId         String
+  subject             String
+  body                String
+  priority            InternalMessagePriority @default(NORMAL)
+  readAt              DateTime?
+  archivedBySender    Boolean                 @default(false)
+  archivedByRecipient Boolean                 @default(false)
+  deletedBySender     Boolean                 @default(false)
+  deletedByRecipient  Boolean                 @default(false)
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+
+  sender    User @relation("SentInternalMessages", fields: [senderId], references: [id])
+  recipient User @relation("ReceivedInternalMessages", fields: [recipientId], references: [id])
+
+  @@index([recipientId, createdAt])
+  @@index([senderId, createdAt])
+  @@index([recipientId, readAt])
+  @@map("internal_messages")
+}
+
+model HealthInsuranceProvider {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  code      String   @unique
+  active    Boolean  @default(true)
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  pricingRules AgreementPricingRule[]
+
+  @@map("health_insurance_providers")
+}
+
 model Procedure {
   id                    String           @id @default(uuid())
   code                  String           @unique
@@ -279,10 +327,33 @@ model PricingTable {
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 
-  prices ProcedurePrice[]
+  prices         ProcedurePrice[]
+  agreementRules AgreementPricingRule[]
 
   @@unique([name, year])
   @@map("pricing_tables")
+}
+
+model AgreementPricingRule {
+  id                    String    @id @default(uuid())
+  providerId            String
+  pricingTableId        String
+  multiplierBasisPoints Int       @default(10000)
+  requiresAuthorization Boolean   @default(false)
+  active                Boolean   @default(true)
+  validFrom             DateTime?
+  validTo               DateTime?
+  notes                 String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  provider     HealthInsuranceProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  pricingTable PricingTable            @relation(fields: [pricingTableId], references: [id], onDelete: Restrict)
+
+  @@unique([providerId, pricingTableId])
+  @@index([providerId, active])
+  @@index([pricingTableId])
+  @@map("agreement_pricing_rules")
 }
 
 model ProcedurePrice {

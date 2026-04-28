@@ -1285,6 +1285,11 @@ textarea {
   align-items: start;
 }
 
+.agreements-workspace {
+  grid-template-columns: minmax(780px, 1.35fr) minmax(420px, 0.75fr);
+  align-items: start;
+}
+
 .patient-directory,
 .patient-editor,
 .procedure-directory,
@@ -1868,6 +1873,7 @@ textarea {
 
 .communication-date-card span,
 .communication-item span,
+.notice-card span,
 .holiday-card span,
 .mail-row span {
   color: var(--muted);
@@ -1884,6 +1890,68 @@ textarea {
 
 .communication-grid {
   grid-template-columns: minmax(0, 1.2fr) minmax(340px, 0.9fr);
+}
+
+.internal-communication-grid {
+  grid-template-columns: minmax(0, 1.35fr) minmax(360px, 0.75fr);
+  align-items: start;
+}
+
+.internal-board-panel,
+.internal-mail-panel {
+  min-height: 360px;
+}
+
+.internal-board-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 34px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.compact-button {
+  min-height: 38px;
+  padding: 8px 12px;
+  white-space: nowrap;
+}
+
+.compact-button:disabled {
+  cursor: not-allowed;
+}
+
+.mailbox-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mailbox-tabs button {
+  min-height: 34px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.mailbox-tabs button.is-active {
+  border-color: var(--accent-strong);
+  background: rgba(251, 146, 60, 0.14);
+  color: var(--text);
 }
 
 .communication-list,
@@ -1926,6 +1994,18 @@ textarea {
   padding: 14px;
 }
 
+.mail-row-button {
+  width: 100%;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.mail-row-button.is-selected {
+  border-color: var(--accent-strong);
+  box-shadow: inset 3px 0 0 var(--accent-strong);
+}
+
 .mail-row.is-unread {
   border-color: var(--line-strong);
   background: rgba(255, 255, 255, 0.64);
@@ -1934,6 +2014,38 @@ textarea {
 .mail-row small {
   color: var(--muted);
   font-weight: 700;
+}
+
+.mail-detail-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px dashed var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.mail-detail-card h3 {
+  margin: 0;
+  font-family: 'Sora', 'IBM Plex Sans', sans-serif;
+}
+
+.mail-detail-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.58;
+  white-space: pre-wrap;
+}
+
+.mail-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.message-compose-modal {
+  width: min(760px, 100%);
 }
 
 .table-shell,
@@ -1990,6 +2102,10 @@ textarea {
 
 .cbhpm-grid {
   grid-template-columns: 0.8fr minmax(280px, 1.6fr) 0.48fr 0.55fr 0.86fr 0.52fr;
+}
+
+.agreements-grid {
+  grid-template-columns: minmax(280px, 1.4fr) 0.82fr 0.6fr 0.52fr;
 }
 
 .appointments-grid {
@@ -2338,6 +2454,8 @@ textarea {
   .login-shell,
   .overview-grid,
   .communication-grid,
+  .internal-communication-grid,
+  .internal-board-list,
   .communication-hero-grid,
   .module-grid,
   .patients-workspace,
@@ -2345,6 +2463,7 @@ textarea {
   .exam-orders-workspace,
   .pricing-workspace,
   .cbhpm-workspace,
+  .agreements-workspace,
   .care-layout,
   .team-layout,
   .summary-strip,
@@ -2410,6 +2529,7 @@ textarea {
   .exam-orders-grid,
   .pricing-tables-grid,
   .cbhpm-grid,
+  .agreements-grid,
   .appointments-grid,
   .users-grid,
   .doctors-grid,

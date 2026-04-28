@@ -43,22 +43,61 @@ export type CommunicationEntry = {
   publishAt?: string;
 };
 
+export type InternalMessagePriority = 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT';
+
 export type InternalEmail = {
   id: string;
   from: string;
+  to?: string;
+  senderId?: string;
+  recipientId?: string;
   subject: string;
   preview: string;
   body?: string | null;
+  priority?: InternalMessagePriority;
   timeLabel?: string | null;
   unread: boolean;
   sentAt?: string;
+  readAt?: string | null;
 };
+
+export type InternalRecipient = {
+  id: string;
+  name: string;
+  username: string;
+  role: Role;
+};
+
+export type MailboxFolder = 'inbox' | 'sent' | 'archived' | 'trash';
 
 export type CommunicationDashboard = {
   updates: CommunicationEntry[];
   notices: CommunicationEntry[];
   commemorativeDates: CommunicationEntry[];
   emails: InternalEmail[];
+};
+
+export type Agreement = {
+  id: string;
+  name: string;
+  code: string;
+  active: boolean;
+  notes?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type AgreementPricingRule = {
+  id: string;
+  providerId: string;
+  pricingTableId: string;
+  multiplierBasisPoints: number;
+  requiresAuthorization: boolean;
+  active: boolean;
+  validFrom?: string | null;
+  validTo?: string | null;
+  notes?: string | null;
+  pricingTable: PricingTable;
 };
 
 export type PatientStatus = 'ACTIVE' | 'BLOCKED' | 'INACTIVE';
@@ -75,7 +114,8 @@ export type PricingTableType =
   | 'CBHPM'
   | 'AGREEMENT'
   | 'OWN'
-  | 'OPERATIONAL_FEE';
+  | 'OPERATIONAL_FEE'
+  | 'MATERIAL_MEDICATION';
 
 export type Procedure = {
   id: string;

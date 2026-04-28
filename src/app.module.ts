@@ -15,6 +15,7 @@ import { ProceduresModule } from './procedures/procedures.module';
 import { ExamOrdersModule } from './exam-orders/exam-orders.module';
 import { PricingModule } from './pricing/pricing.module';
 import { CbhpmModule } from './cbhpm/cbhpm.module';
+import { AgreementsModule } from './agreements/agreements.module';
 import configuration from './config/configuration';
 
 @Module({
@@ -37,6 +38,7 @@ import configuration from './config/configuration';
     ExamOrdersModule,
     PricingModule,
     CbhpmModule,
+    AgreementsModule,
   ],
   providers: [
     {

@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "PricingTableType" ADD VALUE 'MATERIAL_MEDICATION';
