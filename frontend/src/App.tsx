@@ -146,6 +146,15 @@ type UserFormState = {
   password: string;
 };
 
+type PermissionPreviewOption = {
+  checked: boolean;
+  description: string;
+  label: string;
+  value: string;
+};
+
+type PaginationPageItem = number | 'gap';
+
 type AppointmentFormState = {
   patientId: string;
   doctorId: string;
@@ -264,6 +273,8 @@ type AdministrativeModuleGroup = {
 const storageKey = 'hospital-system.session';
 const dashboardCacheKey = 'hospital-system.dashboard';
 const environmentStorageKey = 'hospital-system.environment';
+const compactPageSize = 12;
+const regularPageSize = 20;
 
 const activeModules: ModuleItem[] = [
   { path: '/central', label: 'Principal', hint: 'Comunicacao interna' },
@@ -716,6 +727,33 @@ const roleOptions: Role[] = [
   'FATURAMENTO',
 ];
 
+const userParameterOptions: PermissionPreviewOption[] = [
+  {
+    value: 'unique_login',
+    label: 'Login unico obrigatorio',
+    description: 'Impede duplicidade de acesso e conflito entre usuarios.',
+    checked: true,
+  },
+  {
+    value: 'admin_only',
+    label: 'Cadastro restrito ao administrador',
+    description: 'Somente ADMIN cria ou libera novos acessos do sistema.',
+    checked: true,
+  },
+  {
+    value: 'sector_profile',
+    label: 'Perfil separado por setor',
+    description: 'A navegacao mostra apenas modulos relacionados ao cargo.',
+    checked: true,
+  },
+  {
+    value: 'audit_ready',
+    label: 'Pronto para auditoria futura',
+    description: 'Base preparada para registrar permissoes granulares por acao.',
+    checked: false,
+  },
+];
+
 const initialPatientForm: PatientFormState = {
   name: '',
   cpf: '',
@@ -876,7 +914,7 @@ function App() {
   const [transitionEnvironment, setTransitionEnvironment] =
     useState<NavigationEnvironment | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
-  const [isBusy, setIsBusy] = useState(false);
+  const [, setIsBusy] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loginForm, setLoginForm] = useState({
     username: '',
@@ -990,10 +1028,7 @@ function App() {
           }),
         );
 
-        setNotice({
-          kind: 'success',
-          text: 'Base sincronizada com a API.',
-        });
+        setNotice(null);
       } catch (error) {
         localStorage.removeItem(storageKey);
         localStorage.removeItem(dashboardCacheKey);
@@ -1557,8 +1592,6 @@ function App() {
             environments={navigationEnvironments}
             handleLogout={handleLogout}
             isEnvironmentPickerOpen={isEnvironmentPickerOpen}
-            isBusy={isBusy}
-            loadDashboard={loadDashboard}
             notice={notice}
             onChangeEnvironment={changeEnvironment}
             onCloseEnvironmentPicker={() => setIsEnvironmentPickerOpen(false)}
@@ -2078,50 +2111,52 @@ function LoginScreen({
       <section className="login-shell clinic-login-shell">
         <form className="auth-card clinic-login-card" onSubmit={handleLogin}>
           <div className="clinic-login-title">
-            <div className="clinic-login-logo" aria-label="Hospital Revitalite">
-              <span>R</span>
-            </div>
+            <span className="clinic-login-eyebrow">Acesso operacional</span>
             <h1>Sistema Revitalite</h1>
+            <p>Entre com seu usuario e senha autorizados.</p>
           </div>
 
-          <label className="clinic-login-field">
-            <span className="field-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" role="img">
-                <path d="M12 12.6a4.1 4.1 0 1 0 0-8.2 4.1 4.1 0 0 0 0 8.2Z" />
-                <path d="M4.8 20.2a7.2 7.2 0 0 1 14.4 0" />
-              </svg>
-            </span>
-            <span className="sr-only">Login</span>
-            <input
-              aria-label="Login"
-              autoComplete="username"
-              placeholder="Digite seu login"
-              value={loginForm.username}
-              onChange={(event) =>
-                setLoginForm((current) => ({
-                  ...current,
-                  username: normalizeLogin(event.target.value),
-                }))
-              }
-              required
-            />
-            <button
-              aria-label="Limpar login"
-              className="login-reset-button"
-              type="button"
-              onClick={() =>
-                setLoginForm((current) => ({
-                  ...current,
-                  username: '',
-                }))
-              }
-            >
-              <svg viewBox="0 0 24 24" role="img">
-                <path d="M20 12a8 8 0 1 1-2.35-5.65" />
-                <path d="M20 4.8v5.1h-5.1" />
-              </svg>
-            </button>
-          </label>
+          <div className="clinic-field-block">
+            <span className="clinic-password-label">Login</span>
+            <label className="clinic-login-field">
+              <span className="field-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" role="img">
+                  <path d="M12 12.6a4.1 4.1 0 1 0 0-8.2 4.1 4.1 0 0 0 0 8.2Z" />
+                  <path d="M4.8 20.2a7.2 7.2 0 0 1 14.4 0" />
+                </svg>
+              </span>
+              <span className="sr-only">Login</span>
+              <input
+                aria-label="Login"
+                autoComplete="username"
+                placeholder="Digite seu login"
+                value={loginForm.username}
+                onChange={(event) =>
+                  setLoginForm((current) => ({
+                    ...current,
+                    username: normalizeLogin(event.target.value),
+                  }))
+                }
+                required
+              />
+              <button
+                aria-label="Limpar login"
+                className="login-reset-button"
+                type="button"
+                onClick={() =>
+                  setLoginForm((current) => ({
+                    ...current,
+                    username: '',
+                  }))
+                }
+              >
+                <svg viewBox="0 0 24 24" role="img">
+                  <path d="M20 12a8 8 0 1 1-2.35-5.65" />
+                  <path d="M20 4.8v5.1h-5.1" />
+                </svg>
+              </button>
+            </label>
+          </div>
 
           <label className="clinic-password-block">
             <span className="clinic-password-label">Senha</span>
@@ -2156,18 +2191,6 @@ function LoginScreen({
 
           <div className="clinic-login-actions">
             <button
-              className="clinic-secondary-button"
-              type="button"
-              onClick={() =>
-                setLoginForm((current) => ({
-                  ...current,
-                  password: '',
-                }))
-              }
-            >
-              Voltar
-            </button>
-            <button
               className="primary-button clinic-access-button"
               type="submit"
               disabled={isSubmitting}
@@ -2175,6 +2198,10 @@ function LoginScreen({
               {isSubmitting ? 'Entrando...' : 'Acessar'}
             </button>
           </div>
+
+          <p className="clinic-login-footnote">
+            Acesso restrito aos setores autorizados do Hospital Revitalite.
+          </p>
         </form>
       </section>
     </main>
@@ -2198,6 +2225,7 @@ function UsersPage({
 }: UsersPageProps) {
   const [search, setSearch] = useState('');
   const [hasSearchedUsers, setHasSearchedUsers] = useState(false);
+  const [userPage, setUserPage] = useState(1);
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
   const canSearchUsers = search.trim().length >= 2;
   const filteredUsers = useMemo(
@@ -2207,18 +2235,28 @@ function UsersPage({
         : [],
     [deferredSearch, hasSearchedUsers, users],
   );
+  const paginatedUsers = useMemo(
+    () => paginateRecords(filteredUsers, userPage, compactPageSize),
+    [filteredUsers, userPage],
+  );
   const adminCount = users.filter((user) => user.role === 'ADMIN').length;
+  const selectedRolePermissionOptions = useMemo(
+    () => getRolePermissionOptions(form.role),
+    [form.role],
+  );
 
   function searchUsers(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (canSearchUsers) {
+      setUserPage(1);
       setHasSearchedUsers(true);
     }
   }
 
   function clearUsersSearch() {
     setSearch('');
+    setUserPage(1);
     setHasSearchedUsers(false);
   }
 
@@ -2294,7 +2332,7 @@ function UsersPage({
                 description="Revise o termo pesquisado ou cadastre um novo usuario com login unico."
               />
             ) : (
-              filteredUsers.map((user) => (
+              paginatedUsers.map((user) => (
                 <div className="table-row users-grid" key={user.id}>
                   <span>{user.name}</span>
                   <span>{user.username}</span>
@@ -2304,6 +2342,14 @@ function UsersPage({
               ))
             )}
           </div>
+
+          <ResultPagination
+            currentPage={userPage}
+            label="usuarios"
+            onPageChange={setUserPage}
+            pageSize={compactPageSize}
+            totalItems={filteredUsers.length}
+          />
         </article>
 
         <form className="panel form-panel" onSubmit={onSubmit}>
@@ -2395,6 +2441,20 @@ function UsersPage({
             </div>
           </div>
 
+          <PermissionCheckboxFieldset
+            legend={`Permissoes para ${roleLabel(form.role)}`}
+            name="role-permissions"
+            options={selectedRolePermissionOptions}
+            text="Previa do que este cargo consegue acessar. Em uma proxima etapa, estes itens podem virar permissoes granulares salvas no banco."
+          />
+
+          <PermissionCheckboxFieldset
+            legend="Parametros de seguranca"
+            name="user-parameters"
+            options={userParameterOptions}
+            text="Regras operacionais aplicadas ao cadastro de usuarios e preparadas para auditoria."
+          />
+
           <div className="helper-block">
             <strong>Permissao administrativa</strong>
             <span>
@@ -2416,14 +2476,140 @@ function UsersPage({
   );
 }
 
+type PermissionCheckboxFieldsetProps = {
+  legend: string;
+  name: string;
+  options: PermissionPreviewOption[];
+  text: string;
+};
+
+function PermissionCheckboxFieldset({
+  legend,
+  name,
+  options,
+  text,
+}: PermissionCheckboxFieldsetProps) {
+  return (
+    <fieldset className="permission-fieldset">
+      <legend>{legend}</legend>
+      <p>{text}</p>
+
+      <div className="permission-checkbox-group">
+        {options.map((option) => (
+          <label
+            className={
+              option.checked
+                ? 'permission-checkbox-card checked'
+                : 'permission-checkbox-card'
+            }
+            key={option.value}
+          >
+            <input
+              aria-readonly="true"
+              checked={option.checked}
+              name={name}
+              readOnly
+              type="checkbox"
+              value={option.value}
+            />
+            <span className="permission-checkbox-visual" aria-hidden="true" />
+            <span className="permission-checkbox-copy">
+              <strong>{option.label}</strong>
+              <small>{option.description}</small>
+            </span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+type ResultPaginationProps = {
+  currentPage: number;
+  isLoading?: boolean;
+  label: string;
+  onPageChange: (page: number) => void;
+  pageSize: number;
+  totalItems: number;
+};
+
+function ResultPagination({
+  currentPage,
+  isLoading = false,
+  label,
+  onPageChange,
+  pageSize,
+  totalItems,
+}: ResultPaginationProps) {
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const safePage = Math.min(Math.max(currentPage, 1), totalPages);
+  const startItem = totalItems === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const endItem = Math.min(safePage * pageSize, totalItems);
+
+  if (totalItems <= pageSize) {
+    return null;
+  }
+
+  return (
+    <nav className="result-pagination" aria-label={`Paginacao de ${label}`}>
+      <span className="pagination-summary">
+        {startItem}-{endItem} de {totalItems.toLocaleString('pt-BR')}
+      </span>
+
+      <div className="pagination-controls">
+        <button
+          className="pagination-button"
+          disabled={isLoading || safePage <= 1}
+          onClick={() => onPageChange(safePage - 1)}
+          type="button"
+        >
+          Anterior
+        </button>
+
+        <div className="pagination-pages">
+          {buildPaginationPages(safePage, totalPages).map((pageItem, index) =>
+            pageItem === 'gap' ? (
+              <span className="pagination-gap" key={`gap-${index}`}>
+                ...
+              </span>
+            ) : (
+              <button
+                aria-current={pageItem === safePage ? 'page' : undefined}
+                className={
+                  pageItem === safePage
+                    ? 'pagination-page current'
+                    : 'pagination-page'
+                }
+                disabled={isLoading}
+                key={pageItem}
+                onClick={() => onPageChange(pageItem)}
+                type="button"
+              >
+                {pageItem}
+              </button>
+            ),
+          )}
+        </div>
+
+        <button
+          className="pagination-button"
+          disabled={isLoading || safePage >= totalPages}
+          onClick={() => onPageChange(safePage + 1)}
+          type="button"
+        >
+          Proxima
+        </button>
+      </div>
+    </nav>
+  );
+}
+
 type WorkspaceLayoutProps = {
   activeEnvironment: NavigationEnvironment;
   activeModules: ModuleItem[];
   environments: NavigationEnvironment[];
   handleLogout: () => void;
   isEnvironmentPickerOpen: boolean;
-  isBusy: boolean;
-  loadDashboard: () => Promise<void>;
   notice: Notice | null;
   onChangeEnvironment: (environmentId: EnvironmentId) => void;
   onCloseEnvironmentPicker: () => void;
@@ -2439,8 +2625,6 @@ function WorkspaceLayout({
   environments,
   handleLogout,
   isEnvironmentPickerOpen,
-  isBusy,
-  loadDashboard,
   notice,
   onChangeEnvironment,
   onCloseEnvironmentPicker,
@@ -2478,21 +2662,6 @@ function WorkspaceLayout({
             </button>
             <button
               className="ghost-button"
-              onClick={() => void loadDashboard()}
-              type="button"
-            >
-              {isBusy ? 'Sincronizando...' : 'Atualizar'}
-            </button>
-            <a
-              className="ghost-button anchor-button"
-              href="http://localhost:3000/api/docs"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Swagger
-            </a>
-            <button
-              className="ghost-button"
               onClick={handleLogout}
               type="button"
             >
@@ -2501,24 +2670,7 @@ function WorkspaceLayout({
           </div>
         </header>
 
-        <section className="module-bar">
-          <div className={`environment-current ${activeEnvironment.toneClass}`}>
-            <div>
-              <span className="module-caption">Ambiente atual</span>
-              <strong>{activeEnvironment.label}</strong>
-              <small>{activeEnvironment.hint}</small>
-            </div>
-            <button
-              className="ghost-button"
-              onClick={onOpenEnvironmentPicker}
-              type="button"
-            >
-              Alterar ambiente
-            </button>
-          </div>
-        </section>
-
-        {notice ? (
+        {notice?.kind === 'error' ? (
           <div className={`notice-banner notice-${notice.kind}`}>
             {notice.text}
           </div>
@@ -2528,11 +2680,41 @@ function WorkspaceLayout({
           <aside
             className={`environment-sidebar ${activeEnvironment.toneClass}`}
           >
-            {activeEnvironment.id === 'administrativo' ? (
-              <AdministrativeModuleGrid modules={activeModules} />
-            ) : (
-              <EnvironmentModuleNav modules={activeModules} />
-            )}
+            <div className="sidebar-header">
+              <button
+                className="sidebar-environment-button"
+                onClick={onOpenEnvironmentPicker}
+                type="button"
+              >
+                <span className="sidebar-avatar">{activeEnvironment.symbol}</span>
+                <span className="sidebar-environment-copy">
+                  <span>Ambiente atual</span>
+                  <strong>{activeEnvironment.label}</strong>
+                  <small>{activeEnvironment.hint}</small>
+                </span>
+                <span className="sidebar-chevron" aria-hidden="true">
+                  v
+                </span>
+              </button>
+
+              <nav className="sidebar-quick-actions" aria-label="Atalhos rapidos">
+                <NavLink className="sidebar-quick-link" to="/central">
+                  <span className="sidebar-quick-icon">IN</span>
+                  <span>
+                    <strong>Caixa interna</strong>
+                    <small>Mural e mensagens</small>
+                  </span>
+                </NavLink>
+              </nav>
+            </div>
+
+            <div className="sidebar-scroll-area">
+              {activeEnvironment.id === 'administrativo' ? (
+                <AdministrativeModuleGrid modules={activeModules} />
+              ) : (
+                <EnvironmentModuleNav modules={activeModules} />
+              )}
+            </div>
 
             <div className="module-future">
               <span className="module-caption">Trilha</span>
@@ -2544,6 +2726,13 @@ function WorkspaceLayout({
                 ))}
               </div>
             </div>
+
+            <SidebarUserMenu
+              handleLogout={handleLogout}
+              role={session.profile.role}
+              username={session.profile.username}
+              userName={session.profile.name}
+            />
           </aside>
 
           <section className="workspace-content">
@@ -2608,8 +2797,16 @@ function EnvironmentModuleNav({ modules }: EnvironmentModuleNavProps) {
               }
               to={moduleItem.path}
             >
-              <strong>{moduleItem.label}</strong>
-              <span>{moduleItem.hint}</span>
+              <span className="module-nav-icon">
+                {moduleInitials(moduleItem.label)}
+              </span>
+              <span className="module-nav-copy">
+                <strong>{moduleItem.label}</strong>
+                <span>{moduleItem.hint}</span>
+              </span>
+              <span className="module-nav-arrow" aria-hidden="true">
+                &gt;
+              </span>
             </NavLink>
           ))
         )}
@@ -2691,8 +2888,13 @@ function AdministrativeModuleGrid({ modules }: AdministrativeModuleGridProps) {
                       key={moduleItem.path}
                       to={moduleItem.path}
                     >
-                      <strong>{moduleItem.label}</strong>
-                      <span>{moduleItem.hint}</span>
+                      <span className="module-nav-icon compact">
+                        {moduleInitials(moduleItem.label)}
+                      </span>
+                      <span className="module-nav-copy">
+                        <strong>{moduleItem.label}</strong>
+                        <span>{moduleItem.hint}</span>
+                      </span>
                     </NavLink>
                   ))}
                 </div>
@@ -2702,6 +2904,45 @@ function AdministrativeModuleGrid({ modules }: AdministrativeModuleGridProps) {
         )}
       </section>
     </div>
+  );
+}
+
+type SidebarUserMenuProps = {
+  handleLogout: () => void;
+  role: Role;
+  username: string;
+  userName: string;
+};
+
+function SidebarUserMenu({
+  handleLogout,
+  role,
+  username,
+  userName,
+}: SidebarUserMenuProps) {
+  return (
+    <details className="sidebar-user-menu">
+      <summary className="sidebar-user-summary">
+        <span className="sidebar-user-avatar">{userInitials(userName)}</span>
+        <span className="sidebar-user-copy">
+          <strong>{userName}</strong>
+          <small>
+            {username} - {roleLabel(role)}
+          </small>
+        </span>
+        <span className="sidebar-chevron" aria-hidden="true">
+          ^
+        </span>
+      </summary>
+
+      <div className="sidebar-user-popover">
+        <NavLink to="/usuarios">Usuarios e permissoes</NavLink>
+        <NavLink to="/central">Caixa interna</NavLink>
+        <button onClick={handleLogout} type="button">
+          Sair do sistema
+        </button>
+      </div>
+    </details>
   );
 }
 
@@ -3646,6 +3887,7 @@ function AgreementsPage({ sessionToken }: AgreementsPageProps) {
     'idle' | 'loading' | 'ready' | 'error'
   >('idle');
   const [isSavingRule, setIsSavingRule] = useState(false);
+  const [agreementPage, setAgreementPage] = useState(1);
   const [hasSearchedAgreements, setHasSearchedAgreements] = useState(false);
   const [searchStatus, setSearchStatus] = useState<
     'idle' | 'loading' | 'ready' | 'error'
@@ -3668,17 +3910,17 @@ function AgreementsPage({ sessionToken }: AgreementsPageProps) {
       return;
     }
 
-    await loadAgreements(searchTerm);
+    await loadAgreements(searchTerm, 1);
   }
 
-  async function loadAgreements(term = searchTerm) {
+  async function loadAgreements(term = searchTerm, page = agreementPage) {
     setSearchStatus('loading');
     setSearchError('');
 
     try {
       const queryParams = new URLSearchParams({
-        page: '1',
-        limit: '80',
+        page: String(page),
+        limit: String(compactPageSize),
       });
 
       if (term) {
@@ -3695,6 +3937,7 @@ function AgreementsPage({ sessionToken }: AgreementsPageProps) {
       setAgreementTotal(
         response.meta?.total ?? response.total ?? nextAgreements.length,
       );
+      setAgreementPage(page);
       setSelectedAgreementId(null);
       setPricingRules([]);
       setRuleForm(initialAgreementPricingRuleForm);
@@ -3720,6 +3963,7 @@ function AgreementsPage({ sessionToken }: AgreementsPageProps) {
     setSearch('');
     setAgreements([]);
     setAgreementTotal(0);
+    setAgreementPage(1);
     setSelectedAgreementId(null);
     setPricingRules([]);
     setRuleForm(initialAgreementPricingRuleForm);
@@ -3881,27 +4125,38 @@ function AgreementsPage({ sessionToken }: AgreementsPageProps) {
               description="Revise o nome ou limpe a busca para ver todos os convenios ativos."
             />
           ) : (
-            agreements.map((agreement) => (
-              <div className="table-row agreements-grid" key={agreement.id}>
-                <span>
-                  {agreement.name}
-                  <small>{agreement.notes || 'Cadastro operacional'}</small>
-                </span>
-                <span>{agreement.code}</span>
-                <span>{agreement.active ? 'Ativo' : 'Inativo'}</span>
-                <div className="patient-actions">
-                  <button
-                    className="mini-button"
-                    onClick={() => void selectAgreement(agreement)}
-                    type="button"
-                  >
-                    Ver
-                  </button>
+            <>
+              {agreements.map((agreement) => (
+                <div className="table-row agreements-grid" key={agreement.id}>
+                  <span>
+                    {agreement.name}
+                    <small>{agreement.notes || 'Cadastro operacional'}</small>
+                  </span>
+                  <span>{agreement.code}</span>
+                  <span>{agreement.active ? 'Ativo' : 'Inativo'}</span>
+                  <div className="patient-actions">
+                    <button
+                      className="mini-button"
+                      onClick={() => void selectAgreement(agreement)}
+                      type="button"
+                    >
+                      Ver
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))
+              ))}
+            </>
           )}
         </div>
+
+        <ResultPagination
+          currentPage={agreementPage}
+          isLoading={searchStatus === 'loading'}
+          label="convenios"
+          onPageChange={(page) => void loadAgreements(searchTerm, page)}
+          pageSize={compactPageSize}
+          totalItems={agreementTotal}
+        />
       </article>
 
       <aside className="panel form-panel">
@@ -4129,6 +4384,7 @@ function PatientsPage({
   const [hasSearchedPatients, setHasSearchedPatients] = useState(false);
   const [patientResults, setPatientResults] = useState<Patient[]>([]);
   const [patientResultTotal, setPatientResultTotal] = useState(0);
+  const [patientPage, setPatientPage] = useState(1);
   const [patientSearchStatus, setPatientSearchStatus] = useState<
     'idle' | 'loading' | 'ready' | 'error'
   >('idle');
@@ -4169,9 +4425,7 @@ function PatientsPage({
     { id: 'status', label: 'Status', hint: 'Fluxo do prontuario' },
   ] as const;
 
-  async function searchPatients(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
+  async function loadPatientPage(page = patientPage) {
     if (!canSearchPatient) {
       setPatientSearchStatus('idle');
       setPatientSearchError('Digite ao menos 2 caracteres para pesquisar.');
@@ -4183,8 +4437,8 @@ function PatientsPage({
 
     try {
       const queryParams = new URLSearchParams({
-        page: '1',
-        limit: '25',
+        page: String(page),
+        limit: String(compactPageSize),
         q: searchTerm,
       });
       const response = await apiRequest<PaginatedResponse<Patient>>(
@@ -4197,6 +4451,7 @@ function PatientsPage({
 
       setPatientResults(nextPatients);
       setPatientResultTotal(nextTotal);
+      setPatientPage(page);
       setSelectedPatientId(nextPatients[0]?.id ?? null);
       setHasSearchedPatients(true);
       setPatientSearchStatus('ready');
@@ -4212,6 +4467,11 @@ function PatientsPage({
           : 'Nao foi possivel buscar pacientes.',
       );
     }
+  }
+
+  async function searchPatients(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await loadPatientPage(1);
   }
 
   function openNewPatientEditor() {
@@ -4231,6 +4491,7 @@ function PatientsPage({
     setHasSearchedPatients(false);
     setPatientResults([]);
     setPatientResultTotal(0);
+    setPatientPage(1);
     setPatientSearchStatus('idle');
     setPatientSearchError('');
     setSelectedPatientId(null);
@@ -4265,7 +4526,7 @@ function PatientsPage({
 
         <OperationalSearchCard
           canSearch={canSearchPatient}
-          description="Pesquise por nome, CPF, RG, telefone, email ou cidade. A busca vai direto no banco e retorna ate 25 resultados por vez."
+          description="Pesquise por nome, CPF, RG, telefone, email ou cidade. A busca vai direto no banco e retorna resultados paginados."
           error={patientSearchError}
           isLoading={patientSearchStatus === 'loading'}
           onChange={setSearch}
@@ -4381,6 +4642,15 @@ function PatientsPage({
             </>
           )}
         </div>
+
+        <ResultPagination
+          currentPage={patientPage}
+          isLoading={patientSearchStatus === 'loading'}
+          label="pacientes"
+          onPageChange={(page) => void loadPatientPage(page)}
+          pageSize={compactPageSize}
+          totalItems={patientResultTotal}
+        />
 
         {focusedPatient ? (
           <section className="patient-record-card">
@@ -4866,6 +5136,7 @@ function ProceduresPage({ sessionToken }: ProceduresPageProps) {
   const [hasSearchedProcedures, setHasSearchedProcedures] = useState(false);
   const [procedureResults, setProcedureResults] = useState<Procedure[]>([]);
   const [procedureResultTotal, setProcedureResultTotal] = useState(0);
+  const [procedurePage, setProcedurePage] = useState(1);
   const [procedureSearchStatus, setProcedureSearchStatus] = useState<
     'idle' | 'loading' | 'ready' | 'error'
   >('idle');
@@ -4893,7 +5164,7 @@ function ProceduresPage({ sessionToken }: ProceduresPageProps) {
     procedureForm.code.trim().length > 0 &&
     procedureForm.description.trim().length > 2;
 
-  async function performProcedureSearch(term: string) {
+  async function performProcedureSearch(term: string, page = procedurePage) {
     if (term.trim().length < 2) {
       setProcedureSearchStatus('idle');
       setProcedureSearchError('Digite ao menos 2 caracteres para pesquisar.');
@@ -4905,8 +5176,8 @@ function ProceduresPage({ sessionToken }: ProceduresPageProps) {
 
     try {
       const queryParams = new URLSearchParams({
-        page: '1',
-        limit: '25',
+        page: String(page),
+        limit: String(compactPageSize),
         q: term.trim(),
       });
       const response = await apiRequest<PaginatedResponse<Procedure>>(
@@ -4919,6 +5190,7 @@ function ProceduresPage({ sessionToken }: ProceduresPageProps) {
 
       setProcedureResults(nextProcedures);
       setProcedureResultTotal(nextTotal);
+      setProcedurePage(page);
       setSelectedProcedureId(nextProcedures[0]?.id ?? null);
       setHasSearchedProcedures(true);
       setProcedureSearchStatus('ready');
@@ -4938,7 +5210,7 @@ function ProceduresPage({ sessionToken }: ProceduresPageProps) {
 
   async function searchProcedures(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await performProcedureSearch(searchTerm);
+    await performProcedureSearch(searchTerm, 1);
   }
 
   function openNewProcedureEditor() {
@@ -4958,6 +5230,7 @@ function ProceduresPage({ sessionToken }: ProceduresPageProps) {
     setHasSearchedProcedures(false);
     setProcedureResults([]);
     setProcedureResultTotal(0);
+    setProcedurePage(1);
     setProcedureSearchStatus('idle');
     setProcedureSearchError('');
     setSelectedProcedureId(null);
@@ -5039,7 +5312,7 @@ function ProceduresPage({ sessionToken }: ProceduresPageProps) {
 
         <OperationalSearchCard
           canSearch={canSearchProcedure}
-          description="Pesquise por codigo, descricao, tabela, grupo, unidade ou observacao. O retorno vem direto do banco e limita a 25 resultados."
+          description="Pesquise por codigo, descricao, tabela, grupo, unidade ou observacao. O retorno vem direto do banco com paginacao."
           error={procedureSearchError}
           isLoading={procedureSearchStatus === 'loading'}
           onChange={setSearch}
@@ -5151,6 +5424,15 @@ function ProceduresPage({ sessionToken }: ProceduresPageProps) {
             </>
           )}
         </div>
+
+        <ResultPagination
+          currentPage={procedurePage}
+          isLoading={procedureSearchStatus === 'loading'}
+          label="procedimentos"
+          onPageChange={(page) => void performProcedureSearch(searchTerm, page)}
+          pageSize={compactPageSize}
+          totalItems={procedureResultTotal}
+        />
 
         {focusedProcedure ? (
           <section className="patient-record-card">
@@ -5481,6 +5763,7 @@ function PricingTablesPage({ sessionToken }: PricingTablesPageProps) {
   const [hasSearchedTables, setHasSearchedTables] = useState(false);
   const [pricingTables, setPricingTables] = useState<PricingTable[]>([]);
   const [pricingTableTotal, setPricingTableTotal] = useState(0);
+  const [pricingTablePage, setPricingTablePage] = useState(1);
   const [tableSearchStatus, setTableSearchStatus] = useState<
     'idle' | 'loading' | 'ready' | 'error'
   >('idle');
@@ -5522,17 +5805,17 @@ function PricingTablesPage({ sessionToken }: PricingTablesPageProps) {
       return;
     }
 
-    await loadPricingTables(tableSearchTerm);
+    await loadPricingTables(tableSearchTerm, 1);
   }
 
-  async function loadPricingTables(term = tableSearchTerm) {
+  async function loadPricingTables(term = tableSearchTerm, page = pricingTablePage) {
     setTableSearchStatus('loading');
     setTableError('');
 
     try {
       const queryParams = new URLSearchParams({
-        page: '1',
-        limit: '30',
+        page: String(page),
+        limit: String(compactPageSize),
         q: term,
       });
       const response = await apiRequest<PaginatedResponse<PricingTable>>(
@@ -5544,6 +5827,7 @@ function PricingTablesPage({ sessionToken }: PricingTablesPageProps) {
 
       setPricingTables(nextTables);
       setPricingTableTotal(nextTotal);
+      setPricingTablePage(page);
       setSelectedTableId(nextTables[0]?.id ?? null);
       setPriceForm((current) => ({
         ...current,
@@ -5760,6 +6044,7 @@ function PricingTablesPage({ sessionToken }: PricingTablesPageProps) {
     setHasSearchedTables(false);
     setPricingTables([]);
     setPricingTableTotal(0);
+    setPricingTablePage(1);
     setSelectedTableId(null);
     setProcedurePrices([]);
     setPriceTotal(0);
@@ -5849,6 +6134,15 @@ function PricingTablesPage({ sessionToken }: PricingTablesPageProps) {
             ))
           )}
         </div>
+
+        <ResultPagination
+          currentPage={pricingTablePage}
+          isLoading={tableSearchStatus === 'loading'}
+          label="tabelas"
+          onPageChange={(page) => void loadPricingTables(tableSearchTerm, page)}
+          pageSize={compactPageSize}
+          totalItems={pricingTableTotal}
+        />
 
         {selectedTable ? (
           <section className="patient-record-card">
@@ -6227,6 +6521,7 @@ function CbhpmPage({ sessionToken }: CbhpmPageProps) {
   const [hasSearched, setHasSearched] = useState(false);
   const [procedures, setProcedures] = useState<CbhpmProcedure[]>([]);
   const [procedureTotal, setProcedureTotal] = useState(0);
+  const [procedurePage, setProcedurePage] = useState(1);
   const [searchStatus, setSearchStatus] = useState<
     'idle' | 'loading' | 'ready' | 'error'
   >('idle');
@@ -6358,17 +6653,21 @@ function CbhpmPage({ sessionToken }: CbhpmPageProps) {
       return;
     }
 
-    await loadCbhpmProcedures(searchTerm, selectedYear);
+    await loadCbhpmProcedures(searchTerm, selectedYear, 1);
   }
 
-  async function loadCbhpmProcedures(term = searchTerm, year = selectedYear) {
+  async function loadCbhpmProcedures(
+    term = searchTerm,
+    year = selectedYear,
+    page = procedurePage,
+  ) {
     setSearchStatus('loading');
     setSearchError('');
 
     try {
       const queryParams = new URLSearchParams({
-        page: '1',
-        limit: '50',
+        page: String(page),
+        limit: String(regularPageSize),
       });
 
       if (term) {
@@ -6389,6 +6688,7 @@ function CbhpmPage({ sessionToken }: CbhpmPageProps) {
       setProcedureTotal(
         response.meta?.total ?? response.total ?? nextProcedures.length,
       );
+      setProcedurePage(page);
       setSelectedProcedureId(null);
       setHasSearched(true);
       setSearchStatus('ready');
@@ -6408,7 +6708,7 @@ function CbhpmPage({ sessionToken }: CbhpmPageProps) {
 
   function selectImportSummary(summary: CbhpmImportSummary) {
     setSelectedYear(summary.editionYear);
-    void loadCbhpmProcedures(searchTerm, summary.editionYear);
+    void loadCbhpmProcedures(searchTerm, summary.editionYear, 1);
   }
 
   function selectPorteSummary(summary: CbhpmPorteSummary) {
@@ -6417,7 +6717,7 @@ function CbhpmPage({ sessionToken }: CbhpmPageProps) {
     setSelectedYear(summary.editionYear);
     setSearch(nextSearch);
     setSelectedProcedureId(null);
-    void loadCbhpmProcedures(nextSearch, summary.editionYear);
+    void loadCbhpmProcedures(nextSearch, summary.editionYear, 1);
   }
 
   function clearSearch() {
@@ -6426,6 +6726,7 @@ function CbhpmPage({ sessionToken }: CbhpmPageProps) {
     setHasSearched(false);
     setProcedures([]);
     setProcedureTotal(0);
+    setProcedurePage(1);
     setSelectedProcedureId(null);
     setSearchStatus('idle');
     setSearchError('');
@@ -6556,6 +6857,17 @@ function CbhpmPage({ sessionToken }: CbhpmPageProps) {
             ))
           )}
         </div>
+
+        <ResultPagination
+          currentPage={procedurePage}
+          isLoading={searchStatus === 'loading'}
+          label="CBHPM"
+          onPageChange={(page) =>
+            void loadCbhpmProcedures(searchTerm, selectedYear, page)
+          }
+          pageSize={regularPageSize}
+          totalItems={procedureTotal}
+        />
 
       </article>
 
@@ -6768,6 +7080,7 @@ function ExamOrdersPage({
   const [hasSearchedOrders, setHasSearchedOrders] = useState(false);
   const [orderResults, setOrderResults] = useState<ExamOrder[]>([]);
   const [orderResultTotal, setOrderResultTotal] = useState(0);
+  const [orderPage, setOrderPage] = useState(1);
   const [orderSearchStatus, setOrderSearchStatus] = useState<
     'idle' | 'loading' | 'ready' | 'error'
   >('idle');
@@ -6811,9 +7124,7 @@ function ExamOrdersPage({
   }));
   const canSaveOrder = Boolean(form.patientId) && form.items.length > 0;
 
-  async function searchOrders(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
+  async function loadOrderPage(page = orderPage) {
     if (!canSearchOrders) {
       setOrderSearchStatus('idle');
       setOrderSearchError('Digite ao menos 2 caracteres para pesquisar.');
@@ -6825,8 +7136,8 @@ function ExamOrdersPage({
 
     try {
       const queryParams = new URLSearchParams({
-        page: '1',
-        limit: '25',
+        page: String(page),
+        limit: String(compactPageSize),
         q: orderSearchTerm,
       });
       const response = await apiRequest<PaginatedResponse<ExamOrder>>(
@@ -6838,6 +7149,7 @@ function ExamOrdersPage({
 
       setOrderResults(nextOrders);
       setOrderResultTotal(nextTotal);
+      setOrderPage(page);
       setSelectedOrderId(nextOrders[0]?.id ?? null);
       setHasSearchedOrders(true);
       setOrderSearchStatus('ready');
@@ -6853,6 +7165,11 @@ function ExamOrdersPage({
           : 'Nao foi possivel buscar pedidos.',
       );
     }
+  }
+
+  async function searchOrders(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await loadOrderPage(1);
   }
 
   async function searchPatientsForOrder(
@@ -7025,6 +7342,7 @@ function ExamOrdersPage({
     setHasSearchedOrders(false);
     setOrderResults([]);
     setOrderResultTotal(0);
+    setOrderPage(1);
     setOrderSearchStatus('idle');
     setOrderSearchError('');
     setSelectedOrderId(null);
@@ -7124,6 +7442,15 @@ function ExamOrdersPage({
             </>
           )}
         </div>
+
+        <ResultPagination
+          currentPage={orderPage}
+          isLoading={orderSearchStatus === 'loading'}
+          label="pedidos de exame"
+          onPageChange={(page) => void loadOrderPage(page)}
+          pageSize={compactPageSize}
+          totalItems={orderResultTotal}
+        />
 
         {focusedOrder ? (
           <section className="patient-record-card">
@@ -9713,6 +10040,101 @@ function normalizeLogin(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, '.');
 }
 
+function getRolePermissionOptions(role: Role): PermissionPreviewOption[] {
+  return [
+    {
+      value: 'administrative_access',
+      label: 'Acesso administrativo completo',
+      description: 'Libera usuarios, cadastros estruturais e todos os ambientes.',
+      checked: role === 'ADMIN',
+    },
+    {
+      value: 'front_desk_access',
+      label: 'Recepcao, pacientes e agenda',
+      description: 'Permite localizar paciente, cadastrar passagem e operar agenda.',
+      checked: hasRoleAccess(role, ['ATENDENTE']),
+    },
+    {
+      value: 'medical_access',
+      label: 'Consultorio e rotina medica',
+      description: 'Libera atendimento medico, pedidos, laudos e evolucao clinica.',
+      checked: hasRoleAccess(role, ['MEDICO']),
+    },
+    {
+      value: 'nursing_access',
+      label: 'Enfermagem e triagem',
+      description: 'Permite sinais vitais, classificacao e apoio ao atendimento.',
+      checked: hasRoleAccess(role, ['ENFERMEIRO']),
+    },
+    {
+      value: 'pharmacy_stock_access',
+      label: 'Farmacia e estoque',
+      description: 'Libera dispensacao, produtos, lotes e medicamentos.',
+      checked: hasRoleAccess(role, ['FARMACIA', 'ESTOQUE']),
+    },
+    {
+      value: 'billing_access',
+      label: 'Faturamento, guias e tabelas',
+      description: 'Permite contas, NF, glosas, convenios e tabelas de preco.',
+      checked: hasRoleAccess(role, ['FATURAMENTO']),
+    },
+    {
+      value: 'cbhpm_reference_access',
+      label: 'Consulta CBHPM e procedimentos',
+      description: 'Permite consultar codigos, portes e valores de referencia.',
+      checked: hasRoleAccess(role, [
+        'ATENDENTE',
+        'MEDICO',
+        'ENFERMEIRO',
+        'FATURAMENTO',
+      ]),
+    },
+  ];
+}
+
+function hasRoleAccess(role: Role, allowedRoles: Role[]) {
+  return role === 'ADMIN' || allowedRoles.includes(role);
+}
+
+function buildPaginationPages(
+  currentPage: number,
+  totalPages: number,
+): PaginationPageItem[] {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const pages = new Set<number>([
+    1,
+    2,
+    totalPages - 1,
+    totalPages,
+    currentPage - 1,
+    currentPage,
+    currentPage + 1,
+  ]);
+  const sortedPages = Array.from(pages)
+    .filter((page) => page >= 1 && page <= totalPages)
+    .sort((left, right) => left - right);
+
+  return sortedPages.reduce<PaginationPageItem[]>((items, page, index) => {
+    const previousPage = sortedPages[index - 1];
+
+    if (previousPage && page - previousPage > 1) {
+      items.push('gap');
+    }
+
+    items.push(page);
+    return items;
+  }, []);
+}
+
+function paginateRecords<T>(records: T[], page: number, pageSize: number) {
+  const start = (Math.max(page, 1) - 1) * pageSize;
+
+  return records.slice(start, start + pageSize);
+}
+
 function roleLabel(role: Role) {
   switch (role) {
     case 'ADMIN':
@@ -10222,6 +10644,38 @@ function matchModuleSearch(values: Array<string | undefined>, query: string) {
   }
 
   return values.filter(Boolean).join(' ').toLowerCase().includes(query);
+}
+
+function moduleInitials(label: string) {
+  const normalized = label
+    .replace(/[^a-zA-Z0-9\s]/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (normalized.length === 0) {
+    return 'MD';
+  }
+
+  if (normalized.length === 1) {
+    return normalized[0].slice(0, 2).toUpperCase();
+  }
+
+  return `${normalized[0][0]}${normalized[1][0]}`.toUpperCase();
+}
+
+function userInitials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+
+  if (parts.length === 0) {
+    return 'US';
+  }
+
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 }
 
 function isEnvironmentId(value: string | null): value is EnvironmentId {
