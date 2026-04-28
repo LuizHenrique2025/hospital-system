@@ -19,12 +19,22 @@ import './App.css';
 import { apiRequest } from './lib/api';
 import type {
   Appointment,
+  CbhpmImportSummary,
+  CbhpmPorteSummary,
+  CbhpmProcedure,
   CommunicationDashboard,
   Doctor,
+  ExamOrder,
+  ExamOrderStatus,
   Nurse,
   PaginatedResponse,
   Patient,
   PatientStatus,
+  PricingTable,
+  PricingTableType,
+  Procedure,
+  ProcedurePrice,
+  ProcedureType,
   Role,
   Sector,
   UserProfile,
@@ -139,6 +149,57 @@ type AppointmentFormState = {
   notes: string;
 };
 
+type ProcedureFormState = {
+  code: string;
+  description: string;
+  type: ProcedureType;
+  tableCode: string;
+  groupName: string;
+  unit: string;
+  referencePrice: string;
+  requiresAuthorization: boolean;
+  requiresReport: boolean;
+  billable: boolean;
+  active: boolean;
+  notes: string;
+};
+
+type PricingTableFormState = {
+  name: string;
+  type: PricingTableType;
+  year: string;
+  code: string;
+  description: string;
+  active: boolean;
+};
+
+type ProcedurePriceFormState = {
+  procedureId: string;
+  pricingTableId: string;
+  price: string;
+  operationalCost: string;
+  billingUnit: string;
+  effectiveFrom: string;
+  effectiveTo: string;
+  active: boolean;
+  notes: string;
+};
+
+type ExamOrderFormItem = {
+  procedureId: string;
+  quantity: number;
+  notes: string;
+};
+
+type ExamOrderFormState = {
+  patientId: string;
+  requesterDoctorId: string;
+  priority: string;
+  clinicalIndication: string;
+  notes: string;
+  items: ExamOrderFormItem[];
+};
+
 type CareRecordPayload = {
   status?: string;
   notes?: string;
@@ -206,6 +267,24 @@ const activeModules: ModuleItem[] = [
     path: '/pacientes',
     label: 'Pacientes',
     hint: 'Cadastro e busca',
+    roles: ['ATENDENTE', 'MEDICO', 'ENFERMEIRO', 'FATURAMENTO'],
+  },
+  {
+    path: '/procedimentos',
+    label: 'Procedimentos',
+    hint: 'Tabelas e exames',
+    roles: ['ATENDENTE', 'MEDICO', 'ENFERMEIRO', 'FATURAMENTO'],
+  },
+  {
+    path: '/tabelas-precos',
+    label: 'Tabela Proc.',
+    hint: 'CBHPM e valores',
+    roles: ['ATENDENTE', 'FATURAMENTO'],
+  },
+  {
+    path: '/cbhpm',
+    label: 'CBHPM',
+    hint: 'Importacoes e consulta',
     roles: ['ATENDENTE', 'MEDICO', 'ENFERMEIRO', 'FATURAMENTO'],
   },
   {
@@ -382,7 +461,16 @@ const administrativeModuleGroups: AdministrativeModuleGroup[] = [
   {
     label: 'Base administrativa',
     hint: 'Configuracao, usuarios e cadastros principais',
-    paths: ['/central', '/cadastros', '/usuarios', '/equipe', '/pacientes'],
+    paths: [
+      '/central',
+      '/cadastros',
+      '/usuarios',
+      '/equipe',
+      '/pacientes',
+      '/procedimentos',
+      '/tabelas-precos',
+      '/cbhpm',
+    ],
   },
   {
     label: 'Hospitalar',
@@ -390,6 +478,9 @@ const administrativeModuleGroups: AdministrativeModuleGroup[] = [
     paths: [
       '/agendamento',
       '/atender',
+      '/procedimentos',
+      '/tabelas-precos',
+      '/cbhpm',
       '/pedidos-exames',
       '/laudos',
       '/recibo-nfse',
@@ -429,6 +520,7 @@ const administrativeModuleGroups: AdministrativeModuleGroup[] = [
     label: 'Faturamento',
     hint: 'Guias, contas, NF, glosas e XML',
     paths: [
+      '/cbhpm',
       '/faturamento',
       '/guias',
       '/contas',
@@ -519,6 +611,9 @@ const navigationEnvironments: NavigationEnvironment[] = [
     toneClass: 'env-billing',
     modulePaths: [
       '/central',
+      '/procedimentos',
+      '/tabelas-precos',
+      '/cbhpm',
       '/faturamento',
       '/guias',
       '/contas',
@@ -556,6 +651,21 @@ const appointmentStatuses = [
   'CANCELADA',
   'NAO_COMPARECEU',
 ] as const;
+const procedureTypes: ProcedureType[] = [
+  'PROCEDURE',
+  'LAB_EXAM',
+  'IMAGE_EXAM',
+  'CONSULTATION',
+  'SURGERY',
+  'ROOM_FEE',
+  'PACKAGE',
+];
+const pricingTableTypes: PricingTableType[] = [
+  'CBHPM',
+  'AGREEMENT',
+  'OWN',
+  'OPERATIONAL_FEE',
+];
 const patientStatusOptions: Array<{
   value: PatientStatus;
   label: string;
@@ -666,6 +776,51 @@ const initialAppointmentForm: AppointmentFormState = {
   type: 'PRIMEIRA_CONSULTA',
   status: 'AGENDADA',
   notes: '',
+};
+
+const initialProcedureForm: ProcedureFormState = {
+  code: '',
+  description: '',
+  type: 'PROCEDURE',
+  tableCode: '',
+  groupName: '',
+  unit: '',
+  referencePrice: '',
+  requiresAuthorization: false,
+  requiresReport: false,
+  billable: true,
+  active: true,
+  notes: '',
+};
+
+const initialPricingTableForm: PricingTableFormState = {
+  name: '',
+  type: 'CBHPM',
+  year: '',
+  code: '',
+  description: '',
+  active: true,
+};
+
+const initialProcedurePriceForm: ProcedurePriceFormState = {
+  procedureId: '',
+  pricingTableId: '',
+  price: '',
+  operationalCost: '',
+  billingUnit: 'Unidade',
+  effectiveFrom: '',
+  effectiveTo: '',
+  active: true,
+  notes: '',
+};
+
+const initialExamOrderForm: ExamOrderFormState = {
+  patientId: '',
+  requesterDoctorId: '',
+  priority: 'Rotina',
+  clinicalIndication: '',
+  notes: '',
+  items: [],
 };
 
 function App() {
@@ -1442,6 +1597,22 @@ function App() {
           }
         />
         <Route
+          path="/procedimentos"
+          element={<ProceduresPage sessionToken={session.token} />}
+        />
+        <Route
+          path="/tabelas-precos"
+          element={<PricingTablesPage sessionToken={session.token} />}
+        />
+        <Route
+          path="/cbhpm"
+          element={<CbhpmPage sessionToken={session.token} />}
+        />
+        <Route
+          path="/procedimentos-exames"
+          element={<Navigate replace to="/procedimentos" />}
+        />
+        <Route
           path="/agendamento"
           element={
             <SchedulingPage
@@ -1495,15 +1666,10 @@ function App() {
         <Route
           path="/pedidos-exames"
           element={
-            <ModulePlaceholderPage
-              environment="Hospitalar"
-              title="Pedidos de Exames"
-              description="Solicitacoes de exames ambulatoriais e eletivos."
-              steps={[
-                'Criar pedido vinculado ao paciente',
-                'Separar exames laboratoriais, imagem e procedimentos',
-                'Acompanhar status ate laudo ou liberacao',
-              ]}
+            <ExamOrdersPage
+              doctors={doctors}
+              patients={patients}
+              sessionToken={session.token}
             />
           }
         />
@@ -2856,7 +3022,8 @@ const administrativeRegistrationCards = [
   {
     label: 'Procedimento',
     hint: 'Codigos, grupos e exigencias',
-    status: 'Proximo',
+    path: '/procedimentos',
+    status: 'Ativo',
   },
   {
     label: 'Pacote Proc.',
@@ -2871,7 +3038,8 @@ const administrativeRegistrationCards = [
   {
     label: 'Tabela Proc.',
     hint: 'Tabelas, valores e vigencias',
-    status: 'Proximo',
+    path: '/tabelas-precos',
+    status: 'Ativo',
   },
   {
     label: 'Grp. Convenio',
@@ -2895,7 +3063,8 @@ const operationalRegistrationCards = [
   {
     label: 'Pedidos Exames',
     hint: 'Solicitacoes e acompanhamento',
-    status: 'Em breve',
+    path: '/pedidos-exames',
+    status: 'Proximo',
   },
   {
     label: 'Mov. Guias',
@@ -3880,6 +4049,2605 @@ function PatientsPage({
           </button>
         </aside>
       )}
+    </section>
+  );
+}
+
+type ProceduresPageProps = {
+  sessionToken: string;
+};
+
+function ProceduresPage({ sessionToken }: ProceduresPageProps) {
+  const [search, setSearch] = useState('');
+  const [hasSearchedProcedures, setHasSearchedProcedures] = useState(false);
+  const [procedureResults, setProcedureResults] = useState<Procedure[]>([]);
+  const [procedureResultTotal, setProcedureResultTotal] = useState(0);
+  const [procedureSearchStatus, setProcedureSearchStatus] = useState<
+    'idle' | 'loading' | 'ready' | 'error'
+  >('idle');
+  const [procedureSearchError, setProcedureSearchError] = useState('');
+  const [selectedProcedureId, setSelectedProcedureId] = useState<string | null>(
+    null,
+  );
+  const [isEditorRequested, setIsEditorRequested] = useState(false);
+  const [editingProcedureId, setEditingProcedureId] = useState<string | null>(
+    null,
+  );
+  const [procedureForm, setProcedureForm] = useState(initialProcedureForm);
+  const [isSavingProcedure, setIsSavingProcedure] = useState(false);
+  const searchTerm = search.trim();
+  const canSearchProcedure = searchTerm.length >= 2;
+  const focusedProcedure =
+    procedureResults.find((procedure) => procedure.id === selectedProcedureId) ??
+    procedureResults[0] ??
+    null;
+  const editingProcedure =
+    procedureResults.find((procedure) => procedure.id === editingProcedureId) ??
+    null;
+  const isEditorVisible = isEditorRequested || Boolean(editingProcedureId);
+  const canSaveProcedure =
+    procedureForm.code.trim().length > 0 &&
+    procedureForm.description.trim().length > 2;
+
+  async function performProcedureSearch(term: string) {
+    if (term.trim().length < 2) {
+      setProcedureSearchStatus('idle');
+      setProcedureSearchError('Digite ao menos 2 caracteres para pesquisar.');
+      return;
+    }
+
+    setProcedureSearchStatus('loading');
+    setProcedureSearchError('');
+
+    try {
+      const queryParams = new URLSearchParams({
+        page: '1',
+        limit: '25',
+        q: term.trim(),
+      });
+      const response = await apiRequest<PaginatedResponse<Procedure>>(
+        `/procedures?${queryParams.toString()}`,
+        { token: sessionToken },
+      );
+      const nextProcedures = response.data ?? [];
+      const nextTotal =
+        response.meta?.total ?? response.total ?? nextProcedures.length;
+
+      setProcedureResults(nextProcedures);
+      setProcedureResultTotal(nextTotal);
+      setSelectedProcedureId(nextProcedures[0]?.id ?? null);
+      setHasSearchedProcedures(true);
+      setProcedureSearchStatus('ready');
+    } catch (error) {
+      setProcedureResults([]);
+      setProcedureResultTotal(0);
+      setSelectedProcedureId(null);
+      setHasSearchedProcedures(true);
+      setProcedureSearchStatus('error');
+      setProcedureSearchError(
+        error instanceof Error
+          ? error.message
+          : 'Nao foi possivel buscar procedimentos.',
+      );
+    }
+  }
+
+  async function searchProcedures(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await performProcedureSearch(searchTerm);
+  }
+
+  function openNewProcedureEditor() {
+    setProcedureForm(initialProcedureForm);
+    setEditingProcedureId(null);
+    setIsEditorRequested(true);
+  }
+
+  function closeProcedureEditor() {
+    setProcedureForm(initialProcedureForm);
+    setEditingProcedureId(null);
+    setIsEditorRequested(false);
+  }
+
+  function clearProcedureSearch() {
+    setSearch('');
+    setHasSearchedProcedures(false);
+    setProcedureResults([]);
+    setProcedureResultTotal(0);
+    setProcedureSearchStatus('idle');
+    setProcedureSearchError('');
+    setSelectedProcedureId(null);
+    closeProcedureEditor();
+  }
+
+  function openProcedureForEdit(procedure: Procedure) {
+    setProcedureForm(createProcedureForm(procedure));
+    setEditingProcedureId(procedure.id);
+    setIsEditorRequested(true);
+  }
+
+  async function saveProcedure(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!canSaveProcedure) {
+      return;
+    }
+
+    setIsSavingProcedure(true);
+
+    try {
+      const isEditingProcedure = Boolean(editingProcedureId);
+      const savedProcedure = await apiRequest<Procedure>(
+        isEditingProcedure
+          ? `/procedures/${editingProcedureId}`
+          : '/procedures',
+        {
+          token: sessionToken,
+          method: isEditingProcedure ? 'PATCH' : undefined,
+          body: createProcedurePayload(procedureForm),
+        },
+      );
+
+      setProcedureForm(initialProcedureForm);
+      setEditingProcedureId(null);
+      setIsEditorRequested(false);
+
+      if (hasSearchedProcedures && searchTerm.length >= 2) {
+        await performProcedureSearch(searchTerm);
+      } else {
+        setProcedureResults([savedProcedure]);
+        setProcedureResultTotal(1);
+        setSelectedProcedureId(savedProcedure.id);
+        setHasSearchedProcedures(true);
+        setProcedureSearchStatus('ready');
+      }
+    } catch (error) {
+      setProcedureSearchStatus('error');
+      setProcedureSearchError(
+        error instanceof Error
+          ? error.message
+          : 'Nao foi possivel salvar o procedimento.',
+      );
+    } finally {
+      setIsSavingProcedure(false);
+    }
+  }
+
+  return (
+    <section className="page-grid procedures-workspace">
+      <article className="panel procedure-directory">
+        <div className="page-header">
+          <div>
+            <p className="eyebrow">Procedimentos e exames</p>
+            <h2>Buscar tabela operacional</h2>
+          </div>
+          <div className="toolbar-inline">
+            <button
+              className="primary-button"
+              onClick={openNewProcedureEditor}
+              type="button"
+            >
+              Novo procedimento
+            </button>
+            <span className="inline-badge">consulta no banco</span>
+          </div>
+        </div>
+
+        <OperationalSearchCard
+          canSearch={canSearchProcedure}
+          description="Pesquise por codigo, descricao, tabela, grupo, unidade ou observacao. O retorno vem direto do banco e limita a 25 resultados."
+          error={procedureSearchError}
+          isLoading={procedureSearchStatus === 'loading'}
+          onChange={setSearch}
+          onClear={clearProcedureSearch}
+          onSearch={searchProcedures}
+          placeholder="Digite codigo, nome do exame ou grupo"
+          resultText={
+            hasSearchedProcedures && procedureSearchStatus === 'ready'
+              ? `${procedureResults.length} de ${procedureResultTotal} registros encontrados`
+              : undefined
+          }
+          title="Consulte antes de cadastrar ou editar."
+          value={search}
+        />
+
+        {focusedProcedure ? (
+          <aside className="patient-preview-card">
+            <div>
+              <span className="section-title">Procedimento em foco</span>
+              <strong>{focusedProcedure.description}</strong>
+              <small>
+                {focusedProcedure.code} - {procedureTypeLabel(focusedProcedure.type)}
+              </small>
+            </div>
+            <div className="patient-preview-meta">
+              <span>{focusedProcedure.tableCode || 'Tabela pendente'}</span>
+              <span>{focusedProcedure.groupName || 'Grupo nao informado'}</span>
+              <span>
+                {formatCurrencyFromCents(focusedProcedure.referencePriceCents)}
+              </span>
+              <span>{focusedProcedure.active ? 'Ativo' : 'Inativo'}</span>
+            </div>
+          </aside>
+        ) : null}
+
+        <div className="table-shell">
+          <div className="table-head procedures-grid">
+            <span>Codigo</span>
+            <span>Descricao</span>
+            <span>Tipo</span>
+            <span>Regras</span>
+            <span>Acoes</span>
+          </div>
+
+          {!hasSearchedProcedures ? (
+            <DirectoryState
+              code="01"
+              title="Nenhuma tabela carregada automaticamente."
+              description="Use a busca para consultar procedimentos/exames ou abra um novo cadastro quando tiver certeza que o item nao existe."
+            />
+          ) : procedureSearchStatus === 'loading' ? (
+            <p className="empty-state">Buscando procedimentos no banco...</p>
+          ) : procedureSearchStatus === 'error' ? (
+            <p className="empty-state">
+              {procedureSearchError ||
+                'Nao foi possivel buscar procedimentos.'}
+            </p>
+          ) : procedureResults.length === 0 ? (
+            <DirectoryState
+              code="00"
+              title="Nenhum procedimento encontrado."
+              description="Confira o codigo/descricao pesquisado ou cadastre um novo item se for uma tabela nova."
+            />
+          ) : (
+            <>
+              <p className="result-caption">
+                {procedureResults.length} de {procedureResultTotal} registros
+                encontrados
+              </p>
+              {procedureResults.map((procedure) => (
+                <div className="table-row procedures-grid" key={procedure.id}>
+                  <span>
+                    {procedure.code}
+                    <small>{procedure.tableCode || 'Tabela pendente'}</small>
+                  </span>
+                  <span>
+                    {procedure.description}
+                    <small>{procedure.groupName || 'Grupo nao informado'}</small>
+                  </span>
+                  <span>{procedureTypeLabel(procedure.type)}</span>
+                  <span>
+                    {procedure.requiresAuthorization
+                      ? 'Requer autorizacao'
+                      : 'Sem autorizacao'}
+                    <small>
+                      {procedure.requiresReport
+                        ? 'Requer laudo'
+                        : 'Sem laudo obrigatorio'}
+                    </small>
+                  </span>
+                  <div className="patient-actions">
+                    <button
+                      className="mini-button"
+                      onClick={() => setSelectedProcedureId(procedure.id)}
+                      type="button"
+                    >
+                      Ficha
+                    </button>
+                    <button
+                      className="mini-button"
+                      onClick={() => openProcedureForEdit(procedure)}
+                      type="button"
+                    >
+                      Editar
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+
+        {focusedProcedure ? (
+          <section className="patient-record-card">
+            <div className="page-header">
+              <div>
+                <p className="eyebrow">Ficha tecnica</p>
+                <h2>{focusedProcedure.description}</h2>
+              </div>
+              <button
+                className="ghost-button"
+                onClick={() => openProcedureForEdit(focusedProcedure)}
+                type="button"
+              >
+                Editar procedimento
+              </button>
+            </div>
+
+            <div className="record-grid">
+              <RecordLine label="Codigo" value={focusedProcedure.code} />
+              <RecordLine
+                label="Tipo"
+                value={procedureTypeLabel(focusedProcedure.type)}
+              />
+              <RecordLine label="Tabela" value={focusedProcedure.tableCode} />
+              <RecordLine label="Grupo" value={focusedProcedure.groupName} />
+              <RecordLine label="Unidade" value={focusedProcedure.unit} />
+              <RecordLine
+                label="Valor referencia"
+                value={formatCurrencyFromCents(
+                  focusedProcedure.referencePriceCents,
+                )}
+              />
+              <RecordLine
+                label="Autorizacao"
+                value={
+                  focusedProcedure.requiresAuthorization
+                    ? 'Obrigatoria'
+                    : 'Nao obrigatoria'
+                }
+              />
+              <RecordLine
+                label="Laudo"
+                value={
+                  focusedProcedure.requiresReport
+                    ? 'Obrigatorio'
+                    : 'Nao obrigatorio'
+                }
+              />
+              <RecordLine
+                label="Faturavel"
+                value={focusedProcedure.billable ? 'Sim' : 'Nao'}
+              />
+              <RecordLine
+                label="Status"
+                value={focusedProcedure.active ? 'Ativo' : 'Inativo'}
+              />
+            </div>
+
+            {focusedProcedure.notes ? (
+              <p className="empty-state compact">{focusedProcedure.notes}</p>
+            ) : null}
+          </section>
+        ) : null}
+      </article>
+
+      {isEditorVisible ? (
+        <form className="panel procedure-editor" onSubmit={saveProcedure}>
+          <div className="page-header">
+            <div>
+              <p className="eyebrow">Cadastro parametrizado</p>
+              <h2>
+                {editingProcedure ? 'Editar procedimento' : 'Novo procedimento'}
+              </h2>
+            </div>
+            <span className="inline-badge">
+              {editingProcedure ? 'Ficha em edicao' : 'Base de tabela'}
+            </span>
+          </div>
+
+          <div className="section-block">
+            <p className="section-title">Identificacao</p>
+            <div className="field-grid two-columns">
+              <label className="field">
+                <span>Codigo</span>
+                <input
+                  value={procedureForm.code}
+                  onChange={(event) =>
+                    setProcedureForm((current) => ({
+                      ...current,
+                      code: normalizeProcedureCode(event.target.value),
+                    }))
+                  }
+                  required
+                />
+              </label>
+              <label className="field">
+                <span>Tipo</span>
+                <select
+                  value={procedureForm.type}
+                  onChange={(event) =>
+                    setProcedureForm((current) => ({
+                      ...current,
+                      type: event.target.value as ProcedureType,
+                    }))
+                  }
+                >
+                  {procedureTypes.map((type) => (
+                    <option key={type} value={type}>
+                      {procedureTypeLabel(type)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field full-row">
+                <span>Descricao</span>
+                <input
+                  value={procedureForm.description}
+                  onChange={(event) =>
+                    setProcedureForm((current) => ({
+                      ...current,
+                      description: event.target.value,
+                    }))
+                  }
+                  required
+                />
+              </label>
+            </div>
+          </div>
+
+          <div className="section-block">
+            <p className="section-title">Tabela e faturamento</p>
+            <div className="field-grid three-columns">
+              <label className="field">
+                <span>Tabela</span>
+                <input
+                  placeholder="AMB, CBHPM, propria..."
+                  value={procedureForm.tableCode}
+                  onChange={(event) =>
+                    setProcedureForm((current) => ({
+                      ...current,
+                      tableCode: event.target.value.toUpperCase(),
+                    }))
+                  }
+                />
+              </label>
+              <label className="field">
+                <span>Grupo</span>
+                <input
+                  placeholder="Laboratorio, imagem..."
+                  value={procedureForm.groupName}
+                  onChange={(event) =>
+                    setProcedureForm((current) => ({
+                      ...current,
+                      groupName: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label className="field">
+                <span>Unidade</span>
+                <input
+                  placeholder="Un, pacote, sessao..."
+                  value={procedureForm.unit}
+                  onChange={(event) =>
+                    setProcedureForm((current) => ({
+                      ...current,
+                      unit: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label className="field">
+                <span>Valor referencia</span>
+                <input
+                  inputMode="decimal"
+                  placeholder="0,00"
+                  value={procedureForm.referencePrice}
+                  onChange={(event) =>
+                    setProcedureForm((current) => ({
+                      ...current,
+                      referencePrice: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label className="field">
+                <span>Faturavel</span>
+                <select
+                  value={procedureForm.billable ? 'SIM' : 'NAO'}
+                  onChange={(event) =>
+                    setProcedureForm((current) => ({
+                      ...current,
+                      billable: event.target.value === 'SIM',
+                    }))
+                  }
+                >
+                  <option value="SIM">Sim</option>
+                  <option value="NAO">Nao</option>
+                </select>
+              </label>
+              <label className="field">
+                <span>Status</span>
+                <select
+                  value={procedureForm.active ? 'ATIVO' : 'INATIVO'}
+                  onChange={(event) =>
+                    setProcedureForm((current) => ({
+                      ...current,
+                      active: event.target.value === 'ATIVO',
+                    }))
+                  }
+                >
+                  <option value="ATIVO">Ativo</option>
+                  <option value="INATIVO">Inativo</option>
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <div className="section-block">
+            <p className="section-title">Regras assistenciais</p>
+            <div className="procedure-flags">
+              <label className="procedure-flag">
+                <input
+                  checked={procedureForm.requiresAuthorization}
+                  onChange={(event) =>
+                    setProcedureForm((current) => ({
+                      ...current,
+                      requiresAuthorization: event.target.checked,
+                    }))
+                  }
+                  type="checkbox"
+                />
+                <span>
+                  <strong>Requer autorizacao</strong>
+                  <small>Controla senha e liberacao de convenio.</small>
+                </span>
+              </label>
+              <label className="procedure-flag">
+                <input
+                  checked={procedureForm.requiresReport}
+                  onChange={(event) =>
+                    setProcedureForm((current) => ({
+                      ...current,
+                      requiresReport: event.target.checked,
+                    }))
+                  }
+                  type="checkbox"
+                />
+                <span>
+                  <strong>Requer laudo</strong>
+                  <small>Envia o item para fluxo de resultados/laudos.</small>
+                </span>
+              </label>
+            </div>
+            <label className="field">
+              <span>Observacoes operacionais</span>
+              <textarea
+                placeholder="Preparo, jejum, restricoes, regras internas..."
+                value={procedureForm.notes}
+                onChange={(event) =>
+                  setProcedureForm((current) => ({
+                    ...current,
+                    notes: event.target.value,
+                  }))
+                }
+              />
+            </label>
+          </div>
+
+          <div className="patient-editor-actions">
+            <button
+              className="ghost-button"
+              onClick={closeProcedureEditor}
+              type="button"
+            >
+              {editingProcedure ? 'Cancelar edicao' : 'Fechar cadastro'}
+            </button>
+            <button
+              className="primary-button"
+              disabled={isSavingProcedure || !canSaveProcedure}
+              type="submit"
+            >
+              {isSavingProcedure
+                ? 'Salvando...'
+                : canSaveProcedure
+                  ? editingProcedure
+                    ? 'Atualizar procedimento'
+                    : 'Salvar procedimento'
+                  : 'Preencha codigo e descricao'}
+            </button>
+          </div>
+        </form>
+      ) : (
+        <aside className="panel procedure-editor patient-editor-empty">
+          <div className="page-header">
+            <div>
+              <p className="eyebrow">Cadastro parametrizado</p>
+              <h2>Nenhum item aberto</h2>
+            </div>
+            <span className="inline-badge">Fluxo protegido</span>
+          </div>
+
+          <DirectoryState
+            code="02"
+            title="Cadastre apenas depois de consultar a tabela."
+            description="Primeiro procure pelo codigo ou descricao para evitar duplicidade. Se nao existir, abra um cadastro limpo."
+          />
+
+          <button
+            className="primary-button"
+            onClick={openNewProcedureEditor}
+            type="button"
+          >
+            Abrir novo procedimento
+          </button>
+        </aside>
+      )}
+    </section>
+  );
+}
+
+type PricingTablesPageProps = {
+  sessionToken: string;
+};
+
+function PricingTablesPage({ sessionToken }: PricingTablesPageProps) {
+  const [tableSearch, setTableSearch] = useState('');
+  const [hasSearchedTables, setHasSearchedTables] = useState(false);
+  const [pricingTables, setPricingTables] = useState<PricingTable[]>([]);
+  const [pricingTableTotal, setPricingTableTotal] = useState(0);
+  const [tableSearchStatus, setTableSearchStatus] = useState<
+    'idle' | 'loading' | 'ready' | 'error'
+  >('idle');
+  const [tableError, setTableError] = useState('');
+  const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
+  const [tableForm, setTableForm] = useState(initialPricingTableForm);
+  const [procedureSearch, setProcedureSearch] = useState('');
+  const [procedureOptions, setProcedureOptions] = useState<Procedure[]>([]);
+  const [procedureSearchStatus, setProcedureSearchStatus] = useState<
+    'idle' | 'loading' | 'ready' | 'error'
+  >('idle');
+  const [priceForm, setPriceForm] = useState(initialProcedurePriceForm);
+  const [procedurePrices, setProcedurePrices] = useState<ProcedurePrice[]>([]);
+  const [priceTotal, setPriceTotal] = useState(0);
+  const [isSavingTable, setIsSavingTable] = useState(false);
+  const [isSavingPrice, setIsSavingPrice] = useState(false);
+  const [isCreatingCbhpmRange, setIsCreatingCbhpmRange] = useState(false);
+  const tableSearchTerm = tableSearch.trim();
+  const procedureSearchTerm = procedureSearch.trim();
+  const canSearchTables = tableSearchTerm.length >= 2;
+  const canSearchProcedure = procedureSearchTerm.length >= 2;
+  const selectedTable =
+    pricingTables.find((table) => table.id === selectedTableId) ?? null;
+  const selectedProcedure =
+    procedureOptions.find((procedure) => procedure.id === priceForm.procedureId) ??
+    null;
+  const canSaveTable = tableForm.name.trim().length > 2;
+  const canSavePrice =
+    Boolean(priceForm.pricingTableId) &&
+    Boolean(priceForm.procedureId) &&
+    priceForm.price.trim().length > 0;
+
+  async function searchPricingTables(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!canSearchTables) {
+      setTableSearchStatus('idle');
+      setTableError('Digite ao menos 2 caracteres para pesquisar tabelas.');
+      return;
+    }
+
+    await loadPricingTables(tableSearchTerm);
+  }
+
+  async function loadPricingTables(term = tableSearchTerm) {
+    setTableSearchStatus('loading');
+    setTableError('');
+
+    try {
+      const queryParams = new URLSearchParams({
+        page: '1',
+        limit: '30',
+        q: term,
+      });
+      const response = await apiRequest<PaginatedResponse<PricingTable>>(
+        `/pricing-tables?${queryParams.toString()}`,
+        { token: sessionToken },
+      );
+      const nextTables = response.data ?? [];
+      const nextTotal = response.meta?.total ?? response.total ?? nextTables.length;
+
+      setPricingTables(nextTables);
+      setPricingTableTotal(nextTotal);
+      setSelectedTableId(nextTables[0]?.id ?? null);
+      setPriceForm((current) => ({
+        ...current,
+        pricingTableId: nextTables[0]?.id ?? '',
+      }));
+      setHasSearchedTables(true);
+      setTableSearchStatus('ready');
+
+      if (nextTables[0]) {
+        await loadProcedurePrices(nextTables[0].id);
+      } else {
+        setProcedurePrices([]);
+        setPriceTotal(0);
+      }
+    } catch (error) {
+      setPricingTables([]);
+      setPricingTableTotal(0);
+      setSelectedTableId(null);
+      setProcedurePrices([]);
+      setPriceTotal(0);
+      setHasSearchedTables(true);
+      setTableSearchStatus('error');
+      setTableError(
+        error instanceof Error
+          ? error.message
+          : 'Nao foi possivel buscar tabelas.',
+      );
+    }
+  }
+
+  async function createPricingTable(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!canSaveTable) {
+      setTableError('Informe o nome da tabela.');
+      return;
+    }
+
+    setIsSavingTable(true);
+    setTableError('');
+
+    try {
+      const createdTable = await apiRequest<PricingTable>('/pricing-tables', {
+        token: sessionToken,
+        body: createPricingTablePayload(tableForm),
+      });
+
+      setPricingTables((current) => mergePricingTables([createdTable, ...current]));
+      setPricingTableTotal((current) => current + 1);
+      setSelectedTableId(createdTable.id);
+      setPriceForm((current) => ({
+        ...current,
+        pricingTableId: createdTable.id,
+      }));
+      setTableForm(initialPricingTableForm);
+      setHasSearchedTables(true);
+      setTableSearchStatus('ready');
+      await loadProcedurePrices(createdTable.id);
+    } catch (error) {
+      setTableError(
+        error instanceof Error
+          ? error.message
+          : 'Nao foi possivel cadastrar a tabela.',
+      );
+    } finally {
+      setIsSavingTable(false);
+    }
+  }
+
+  async function createCbhpmRange() {
+    setIsCreatingCbhpmRange(true);
+    setTableError('');
+
+    try {
+      const createdTables = await apiRequest<PricingTable[]>(
+        '/pricing-tables/cbhpm-range',
+        {
+          token: sessionToken,
+          body: { startYear: 2004, endYear: 2017 },
+        },
+      );
+
+      setPricingTables((current) =>
+        mergePricingTables([...createdTables, ...current]),
+      );
+      setPricingTableTotal((current) =>
+        Math.max(current, mergePricingTables(createdTables).length),
+      );
+      setSelectedTableId(createdTables[0]?.id ?? null);
+      setPriceForm((current) => ({
+        ...current,
+        pricingTableId: createdTables[0]?.id ?? '',
+      }));
+      setHasSearchedTables(true);
+      setTableSearchStatus('ready');
+
+      if (createdTables[0]) {
+        await loadProcedurePrices(createdTables[0].id);
+      }
+    } catch (error) {
+      setTableError(
+        error instanceof Error
+          ? error.message
+          : 'Nao foi possivel criar as tabelas CBHPM.',
+      );
+    } finally {
+      setIsCreatingCbhpmRange(false);
+    }
+  }
+
+  async function selectPricingTable(table: PricingTable) {
+    setSelectedTableId(table.id);
+    setPriceForm((current) => ({
+      ...current,
+      pricingTableId: table.id,
+    }));
+    await loadProcedurePrices(table.id);
+  }
+
+  async function loadProcedurePrices(pricingTableId: string) {
+    const queryParams = new URLSearchParams({
+      page: '1',
+      limit: '50',
+      pricingTableId,
+    });
+    const response = await apiRequest<PaginatedResponse<ProcedurePrice>>(
+      `/procedure-prices?${queryParams.toString()}`,
+      { token: sessionToken },
+    );
+    const nextPrices = response.data ?? [];
+
+    setProcedurePrices(nextPrices);
+    setPriceTotal(response.meta?.total ?? response.total ?? nextPrices.length);
+  }
+
+  async function searchProceduresForPricing(
+    event: React.FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
+    if (!canSearchProcedure) {
+      setTableError('Digite ao menos 2 caracteres para localizar procedimento.');
+      return;
+    }
+
+    setProcedureSearchStatus('loading');
+    setTableError('');
+
+    try {
+      const queryParams = new URLSearchParams({
+        page: '1',
+        limit: '15',
+        q: procedureSearchTerm,
+      });
+      const response = await apiRequest<PaginatedResponse<Procedure>>(
+        `/procedures?${queryParams.toString()}`,
+        { token: sessionToken },
+      );
+
+      setProcedureOptions(response.data ?? []);
+      setProcedureSearchStatus('ready');
+    } catch (error) {
+      setProcedureOptions([]);
+      setProcedureSearchStatus('error');
+      setTableError(
+        error instanceof Error
+          ? error.message
+          : 'Nao foi possivel buscar procedimentos.',
+      );
+    }
+  }
+
+  async function createProcedurePrice(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!canSavePrice) {
+      setTableError('Selecione tabela, procedimento e valor.');
+      return;
+    }
+
+    setIsSavingPrice(true);
+    setTableError('');
+
+    try {
+      const createdPrice = await apiRequest<ProcedurePrice>(
+        '/procedure-prices',
+        {
+          token: sessionToken,
+          body: createProcedurePricePayload(priceForm),
+        },
+      );
+
+      setProcedurePrices((current) => [createdPrice, ...current]);
+      setPriceTotal((current) => current + 1);
+      setPriceForm((current) => ({
+        ...initialProcedurePriceForm,
+        pricingTableId: current.pricingTableId,
+      }));
+      setProcedureSearch('');
+      setProcedureOptions([]);
+    } catch (error) {
+      setTableError(
+        error instanceof Error
+          ? error.message
+          : 'Nao foi possivel salvar o valor.',
+      );
+    } finally {
+      setIsSavingPrice(false);
+    }
+  }
+
+  function clearTableSearch() {
+    setTableSearch('');
+    setHasSearchedTables(false);
+    setPricingTables([]);
+    setPricingTableTotal(0);
+    setSelectedTableId(null);
+    setProcedurePrices([]);
+    setPriceTotal(0);
+    setTableSearchStatus('idle');
+    setTableError('');
+  }
+
+  return (
+    <section className="page-grid pricing-workspace">
+      <article className="panel">
+        <div className="page-header">
+          <div>
+            <p className="eyebrow">Tabelas Proc.</p>
+            <h2>CBHPM e precificacao</h2>
+          </div>
+          <button
+            className="primary-button"
+            disabled={isCreatingCbhpmRange}
+            onClick={createCbhpmRange}
+            type="button"
+          >
+            {isCreatingCbhpmRange ? 'Criando...' : 'Criar CBHPM 2004-2017'}
+          </button>
+        </div>
+
+        <OperationalSearchCard
+          canSearch={canSearchTables}
+          description="Pesquise por CBHPM, ano, convenio, tabela propria ou taxa operacional."
+          error={tableError}
+          isLoading={tableSearchStatus === 'loading'}
+          onChange={setTableSearch}
+          onClear={clearTableSearch}
+          onSearch={searchPricingTables}
+          placeholder="Ex: CBHPM 2017, Unimed, taxa de sala"
+          resultText={
+            hasSearchedTables && tableSearchStatus === 'ready'
+              ? `${pricingTables.length} de ${pricingTableTotal} tabelas encontradas`
+              : undefined
+          }
+          title="Localize a tabela antes de precificar."
+          value={tableSearch}
+        />
+
+        <div className="table-shell">
+          <div className="table-head pricing-tables-grid">
+            <span>Tabela</span>
+            <span>Tipo</span>
+            <span>Ano</span>
+            <span>Itens</span>
+            <span>Acoes</span>
+          </div>
+
+          {!hasSearchedTables ? (
+            <DirectoryState
+              code="01"
+              title="Nenhuma tabela carregada automaticamente."
+              description="Busque uma tabela existente ou crie o intervalo CBHPM 2004-2017 para comecar."
+            />
+          ) : tableSearchStatus === 'loading' ? (
+            <p className="empty-state">Buscando tabelas no banco...</p>
+          ) : pricingTables.length === 0 ? (
+            <DirectoryState
+              code="00"
+              title="Nenhuma tabela encontrada."
+              description="Cadastre uma tabela propria, conveniada ou gere o intervalo CBHPM."
+            />
+          ) : (
+            pricingTables.map((table) => (
+              <div className="table-row pricing-tables-grid" key={table.id}>
+                <span>
+                  {table.name}
+                  <small>{table.code || 'Sem codigo'}</small>
+                </span>
+                <span>{pricingTableTypeLabel(table.type)}</span>
+                <span>{table.year || 'Livre'}</span>
+                <span>{table._count?.prices ?? 0} valores</span>
+                <div className="patient-actions">
+                  <button
+                    className="mini-button"
+                    onClick={() => void selectPricingTable(table)}
+                    type="button"
+                  >
+                    Usar
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {selectedTable ? (
+          <section className="patient-record-card">
+            <div className="page-header">
+              <div>
+                <p className="eyebrow">Tabela em foco</p>
+                <h2>{selectedTable.name}</h2>
+              </div>
+              <span className="inline-badge">
+                {pricingTableTypeLabel(selectedTable.type)}
+              </span>
+            </div>
+
+            <div className="record-grid">
+              <RecordLine label="Ano" value={String(selectedTable.year || '')} />
+              <RecordLine label="Codigo" value={selectedTable.code} />
+              <RecordLine
+                label="Status"
+                value={selectedTable.active ? 'Ativa' : 'Inativa'}
+              />
+              <RecordLine label="Valores" value={`${priceTotal} item(ns)`} />
+            </div>
+
+            <div className="exam-item-list">
+              <span className="section-title">Valores cadastrados</span>
+              {procedurePrices.length === 0 ? (
+                <p className="empty-state compact">
+                  Nenhum procedimento precificado nesta tabela ainda.
+                </p>
+              ) : (
+                procedurePrices.map((price) => (
+                  <article className="exam-item-card" key={price.id}>
+                    <strong>{price.procedure.description}</strong>
+                    <small>
+                      {price.procedure.code} -{' '}
+                      {formatCurrencyFromCents(price.priceCents)}
+                    </small>
+                    <small>
+                      {price.billingUnit || 'Unidade'}
+                      {price.operationalCostCents
+                        ? ` - custo ${formatCurrencyFromCents(
+                            price.operationalCostCents,
+                          )}`
+                        : ''}
+                    </small>
+                  </article>
+                ))
+              )}
+            </div>
+          </section>
+        ) : null}
+      </article>
+
+      <aside className="panel form-panel">
+        <form className="section-block" onSubmit={createPricingTable}>
+          <div className="page-header">
+            <div>
+              <p className="eyebrow">Nova tabela</p>
+              <h2>Cadastro de regra</h2>
+            </div>
+          </div>
+
+          <div className="field-grid two-columns">
+            <label className="field full-row">
+              <span>Nome da tabela</span>
+              <input
+                placeholder="CBHPM 2017, Tabela particular..."
+                value={tableForm.name}
+                onChange={(event) =>
+                  setTableForm((current) => ({
+                    ...current,
+                    name: event.target.value,
+                  }))
+                }
+                required
+              />
+            </label>
+            <label className="field">
+              <span>Tipo</span>
+              <select
+                value={tableForm.type}
+                onChange={(event) =>
+                  setTableForm((current) => ({
+                    ...current,
+                    type: event.target.value as PricingTableType,
+                  }))
+                }
+              >
+                {pricingTableTypes.map((type) => (
+                  <option key={type} value={type}>
+                    {pricingTableTypeLabel(type)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>Ano</span>
+              <input
+                inputMode="numeric"
+                placeholder="2017"
+                value={tableForm.year}
+                onChange={(event) =>
+                  setTableForm((current) => ({
+                    ...current,
+                    year: normalizeDigits(event.target.value).slice(0, 4),
+                  }))
+                }
+              />
+            </label>
+            <label className="field">
+              <span>Codigo interno</span>
+              <input
+                value={tableForm.code}
+                onChange={(event) =>
+                  setTableForm((current) => ({
+                    ...current,
+                    code: event.target.value.toUpperCase(),
+                  }))
+                }
+              />
+            </label>
+            <label className="field">
+              <span>Status</span>
+              <select
+                value={tableForm.active ? 'ATIVA' : 'INATIVA'}
+                onChange={(event) =>
+                  setTableForm((current) => ({
+                    ...current,
+                    active: event.target.value === 'ATIVA',
+                  }))
+                }
+              >
+                <option value="ATIVA">Ativa</option>
+                <option value="INATIVA">Inativa</option>
+              </select>
+            </label>
+            <label className="field full-row">
+              <span>Descricao</span>
+              <textarea
+                value={tableForm.description}
+                onChange={(event) =>
+                  setTableForm((current) => ({
+                    ...current,
+                    description: event.target.value,
+                  }))
+                }
+              />
+            </label>
+          </div>
+
+          <button
+            className="primary-button"
+            disabled={isSavingTable || !canSaveTable}
+            type="submit"
+          >
+            {isSavingTable ? 'Salvando...' : 'Salvar tabela'}
+          </button>
+        </form>
+
+        <form
+          className="operational-search-card"
+          onSubmit={searchProceduresForPricing}
+        >
+          <div>
+            <span className="section-title">Precificar procedimento</span>
+            <strong>Localize o item da base operacional.</strong>
+            <small>Use codigo, descricao, grupo ou tabela.</small>
+          </div>
+          <div className="operational-search-actions">
+            <input
+              className="search-input"
+              placeholder="Ex: consulta, cirurgia, vitamina"
+              value={procedureSearch}
+              onChange={(event) => setProcedureSearch(event.target.value)}
+            />
+            <button
+              className="ghost-button"
+              disabled={
+                procedureSearchStatus === 'loading' || !canSearchProcedure
+              }
+              type="submit"
+            >
+              {procedureSearchStatus === 'loading' ? 'Buscando...' : 'Buscar'}
+            </button>
+            <button
+              className="ghost-button"
+              onClick={() => {
+                setProcedureSearch('');
+                setProcedureOptions([]);
+              }}
+              type="button"
+            >
+              Limpar
+            </button>
+          </div>
+        </form>
+
+        {procedureOptions.length > 0 ? (
+          <div className="selection-list">
+            {procedureOptions.map((procedure) => (
+              <button
+                className="selection-row"
+                key={procedure.id}
+                onClick={() =>
+                  setPriceForm((current) => ({
+                    ...current,
+                    procedureId: procedure.id,
+                  }))
+                }
+                type="button"
+              >
+                <strong>{procedure.description}</strong>
+                <small>
+                  {procedure.code} - {procedureTypeLabel(procedure.type)}
+                </small>
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        <form className="section-block" onSubmit={createProcedurePrice}>
+          <div className="field-grid two-columns">
+            <label className="field full-row">
+              <span>Tabela selecionada</span>
+              <select
+                value={priceForm.pricingTableId}
+                onChange={(event) =>
+                  setPriceForm((current) => ({
+                    ...current,
+                    pricingTableId: event.target.value,
+                  }))
+                }
+                required
+              >
+                <option value="">Selecione</option>
+                {pricingTables.map((table) => (
+                  <option key={table.id} value={table.id}>
+                    {table.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field full-row">
+              <span>Procedimento selecionado</span>
+              <input
+                readOnly
+                value={
+                  selectedProcedure
+                    ? `${selectedProcedure.code} - ${selectedProcedure.description}`
+                    : 'Busque e selecione um procedimento'
+                }
+              />
+            </label>
+            <label className="field">
+              <span>Valor final</span>
+              <input
+                inputMode="decimal"
+                placeholder="0,00"
+                value={priceForm.price}
+                onChange={(event) =>
+                  setPriceForm((current) => ({
+                    ...current,
+                    price: event.target.value,
+                  }))
+                }
+                required
+              />
+            </label>
+            <label className="field">
+              <span>Custo operacional</span>
+              <input
+                inputMode="decimal"
+                placeholder="0,00"
+                value={priceForm.operationalCost}
+                onChange={(event) =>
+                  setPriceForm((current) => ({
+                    ...current,
+                    operationalCost: event.target.value,
+                  }))
+                }
+              />
+            </label>
+            <label className="field">
+              <span>Unidade de cobranca</span>
+              <input
+                placeholder="Unidade, CH, UCO, taxa..."
+                value={priceForm.billingUnit}
+                onChange={(event) =>
+                  setPriceForm((current) => ({
+                    ...current,
+                    billingUnit: event.target.value,
+                  }))
+                }
+              />
+            </label>
+            <label className="field">
+              <span>Status</span>
+              <select
+                value={priceForm.active ? 'ATIVO' : 'INATIVO'}
+                onChange={(event) =>
+                  setPriceForm((current) => ({
+                    ...current,
+                    active: event.target.value === 'ATIVO',
+                  }))
+                }
+              >
+                <option value="ATIVO">Ativo</option>
+                <option value="INATIVO">Inativo</option>
+              </select>
+            </label>
+            <label className="field">
+              <span>Vigencia inicial</span>
+              <input
+                type="date"
+                value={priceForm.effectiveFrom}
+                onChange={(event) =>
+                  setPriceForm((current) => ({
+                    ...current,
+                    effectiveFrom: event.target.value,
+                  }))
+                }
+              />
+            </label>
+            <label className="field">
+              <span>Vigencia final</span>
+              <input
+                type="date"
+                value={priceForm.effectiveTo}
+                onChange={(event) =>
+                  setPriceForm((current) => ({
+                    ...current,
+                    effectiveTo: event.target.value,
+                  }))
+                }
+              />
+            </label>
+            <label className="field full-row">
+              <span>Observacoes</span>
+              <textarea
+                value={priceForm.notes}
+                onChange={(event) =>
+                  setPriceForm((current) => ({
+                    ...current,
+                    notes: event.target.value,
+                  }))
+                }
+              />
+            </label>
+          </div>
+
+          <button
+            className="primary-button"
+            disabled={isSavingPrice || !canSavePrice}
+            type="submit"
+          >
+            {isSavingPrice ? 'Salvando...' : 'Salvar valor na tabela'}
+          </button>
+        </form>
+      </aside>
+    </section>
+  );
+}
+
+type CbhpmPageProps = {
+  sessionToken: string;
+};
+
+function CbhpmPage({ sessionToken }: CbhpmPageProps) {
+  const [summaries, setSummaries] = useState<CbhpmImportSummary[]>([]);
+  const [summaryStatus, setSummaryStatus] = useState<
+    'loading' | 'ready' | 'error'
+  >('loading');
+  const [summaryError, setSummaryError] = useState('');
+  const [search, setSearch] = useState('');
+  const [selectedYear, setSelectedYear] = useState<number | ''>('');
+  const [hasSearched, setHasSearched] = useState(false);
+  const [procedures, setProcedures] = useState<CbhpmProcedure[]>([]);
+  const [procedureTotal, setProcedureTotal] = useState(0);
+  const [searchStatus, setSearchStatus] = useState<
+    'idle' | 'loading' | 'ready' | 'error'
+  >('idle');
+  const [searchError, setSearchError] = useState('');
+  const [selectedProcedureId, setSelectedProcedureId] = useState<string | null>(
+    null,
+  );
+  const [porteSearch, setPorteSearch] = useState('');
+  const [porteSummaries, setPorteSummaries] = useState<CbhpmPorteSummary[]>([]);
+  const [porteStatus, setPorteStatus] = useState<
+    'idle' | 'loading' | 'ready' | 'error'
+  >('idle');
+  const [porteError, setPorteError] = useState('');
+  const searchTerm = search.trim();
+  const canSearch = searchTerm.length >= 2 || Boolean(selectedYear);
+  const importedTotal = summaries.reduce((total, summary) => total + summary.total, 0);
+  const availableYears = Array.from(
+    new Set(summaries.map((summary) => summary.editionYear)),
+  ).sort((left, right) => right - left);
+  const porteYear = selectedYear || availableYears[0] || '';
+  const selectedSummary =
+    summaries.find((summary) => summary.editionYear === selectedYear) ?? null;
+  const focusedProcedure = selectedProcedureId
+    ? (procedures.find((procedure) => procedure.id === selectedProcedureId) ??
+      null)
+    : null;
+
+  const loadPorteSummaries = useCallback(
+    async (year: number | '', term = '') => {
+      if (!year) {
+        setPorteSummaries([]);
+        setPorteStatus('idle');
+        return;
+      }
+
+      setPorteStatus('loading');
+      setPorteError('');
+
+      try {
+        const queryParams = new URLSearchParams({
+          editionYear: String(year),
+          limit: '80',
+        });
+
+        if (term) {
+          queryParams.set('q', term);
+        }
+
+        const response = await apiRequest<CbhpmPorteSummary[]>(
+          `/cbhpm/portes?${queryParams.toString()}`,
+          { token: sessionToken },
+        );
+
+        setPorteSummaries(response);
+        setPorteStatus('ready');
+      } catch (error) {
+        setPorteSummaries([]);
+        setPorteStatus('error');
+        setPorteError(
+          error instanceof Error
+            ? error.message
+            : 'Nao foi possivel carregar os portes CBHPM.',
+        );
+      }
+    },
+    [sessionToken],
+  );
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadImportSummaries() {
+      setSummaryStatus('loading');
+      setSummaryError('');
+
+      try {
+        const response = await apiRequest<CbhpmImportSummary[]>(
+          '/cbhpm/imports/summary',
+          { token: sessionToken },
+        );
+        const latestYear = response.reduce(
+          (latest, summary) => Math.max(latest, summary.editionYear),
+          0,
+        );
+
+        if (!isMounted) {
+          return;
+        }
+
+        setSummaries(response);
+        setSelectedYear((current) => current || latestYear || '');
+        setSummaryStatus('ready');
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
+        setSummaries([]);
+        setSummaryStatus('error');
+        setSummaryError(
+          error instanceof Error
+            ? error.message
+            : 'Nao foi possivel carregar as importacoes CBHPM.',
+        );
+      }
+    }
+
+    void loadImportSummaries();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [sessionToken]);
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      void loadPorteSummaries(porteYear, porteSearch.trim());
+    }, 180);
+
+    return () => window.clearTimeout(handle);
+  }, [loadPorteSummaries, porteSearch, porteYear]);
+
+  async function searchCbhpm(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!canSearch) {
+      setSearchStatus('idle');
+      setSearchError('Digite ao menos 2 caracteres ou selecione um ano.');
+      return;
+    }
+
+    await loadCbhpmProcedures(searchTerm, selectedYear);
+  }
+
+  async function loadCbhpmProcedures(term = searchTerm, year = selectedYear) {
+    setSearchStatus('loading');
+    setSearchError('');
+
+    try {
+      const queryParams = new URLSearchParams({
+        page: '1',
+        limit: '50',
+      });
+
+      if (term) {
+        queryParams.set('q', term);
+      }
+
+      if (year) {
+        queryParams.set('editionYear', String(year));
+      }
+
+      const response = await apiRequest<PaginatedResponse<CbhpmProcedure>>(
+        `/cbhpm?${queryParams.toString()}`,
+        { token: sessionToken },
+      );
+      const nextProcedures = response.data ?? [];
+
+      setProcedures(nextProcedures);
+      setProcedureTotal(
+        response.meta?.total ?? response.total ?? nextProcedures.length,
+      );
+      setSelectedProcedureId(null);
+      setHasSearched(true);
+      setSearchStatus('ready');
+    } catch (error) {
+      setProcedures([]);
+      setProcedureTotal(0);
+      setSelectedProcedureId(null);
+      setHasSearched(true);
+      setSearchStatus('error');
+      setSearchError(
+        error instanceof Error
+          ? error.message
+          : 'Nao foi possivel buscar procedimentos CBHPM.',
+      );
+    }
+  }
+
+  function selectImportSummary(summary: CbhpmImportSummary) {
+    setSelectedYear(summary.editionYear);
+    void loadCbhpmProcedures(searchTerm, summary.editionYear);
+  }
+
+  function selectPorteSummary(summary: CbhpmPorteSummary) {
+    const nextSearch = summary.porte ?? '';
+
+    setSelectedYear(summary.editionYear);
+    setSearch(nextSearch);
+    setSelectedProcedureId(null);
+    void loadCbhpmProcedures(nextSearch, summary.editionYear);
+  }
+
+  function clearSearch() {
+    setSearch('');
+    setSelectedYear('');
+    setHasSearched(false);
+    setProcedures([]);
+    setProcedureTotal(0);
+    setSelectedProcedureId(null);
+    setSearchStatus('idle');
+    setSearchError('');
+  }
+
+  return (
+    <section className="page-grid cbhpm-workspace">
+      <article className="panel">
+        <div className="page-header">
+          <div>
+            <p className="eyebrow">CBHPM importada</p>
+            <h2>Consulta por codigo e edicao</h2>
+          </div>
+          <span className="inline-badge">
+            {importedTotal.toLocaleString('pt-BR')} registros
+          </span>
+        </div>
+
+        <div className="cbhpm-stat-grid">
+          <article className="summary-card">
+            <span>Edicoes</span>
+            <strong>{availableYears.length}</strong>
+            <small>{availableYears.join(', ') || 'Aguardando importacao'}</small>
+          </article>
+          <article className="summary-card">
+            <span>Ano em foco</span>
+            <strong>{selectedYear || 'Todos'}</strong>
+            <small>{selectedSummary?.sourceFile || 'Filtro livre'}</small>
+          </article>
+          <article className="summary-card">
+            <span>Resultado</span>
+            <strong>{hasSearched ? procedureTotal : 0}</strong>
+            <small>itens encontrados na consulta</small>
+          </article>
+        </div>
+
+        <OperationalSearchCard
+          canSearch={canSearch}
+          description="Use codigo, nome do procedimento, porte ou arquivo. Selecione um ano para conferir a edicao correta."
+          error={searchError}
+          isLoading={searchStatus === 'loading'}
+          label="Consulta parametrizada"
+          onChange={setSearch}
+          onClear={clearSearch}
+          onSearch={searchCbhpm}
+          placeholder="Ex: 10101012, consulta, anestesico..."
+          resultText={
+            hasSearched && searchStatus === 'ready'
+              ? `${procedures.length} de ${procedureTotal} procedimentos encontrados`
+              : undefined
+          }
+          title="Localize o procedimento antes de precificar."
+          value={search}
+        />
+
+        <label className="field cbhpm-year-filter">
+          <span>Filtrar por edicao</span>
+          <select
+            value={selectedYear}
+            onChange={(event) =>
+              setSelectedYear(
+                event.target.value ? Number(event.target.value) : '',
+              )
+            }
+          >
+            <option value="">Todas as edicoes</option>
+            {availableYears.map((year) => (
+              <option key={year} value={year}>
+                CBHPM {year}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <div className="table-shell">
+          <div className="table-head cbhpm-grid">
+            <span>Codigo</span>
+            <span>Procedimento</span>
+            <span>Ano</span>
+            <span>Porte</span>
+            <span>Valores</span>
+            <span>Acoes</span>
+          </div>
+
+          {!hasSearched ? (
+            <DirectoryState
+              code="01"
+              title="Nenhum procedimento carregado automaticamente."
+              description="Pesquise por codigo ou escolha um ano para consultar a base importada."
+            />
+          ) : searchStatus === 'loading' ? (
+            <p className="empty-state">Buscando na base CBHPM...</p>
+          ) : procedures.length === 0 ? (
+            <DirectoryState
+              code="00"
+              title="Nenhum procedimento encontrado."
+              description="Revise o codigo, descricao ou selecione outra edicao da CBHPM."
+            />
+          ) : (
+            procedures.map((procedure) => (
+              <div className="table-row cbhpm-grid" key={procedure.id}>
+                <span>
+                  {procedure.codigo}
+                  <small>{procedure.sourceFile || 'Fonte nao informada'}</small>
+                </span>
+                <span>{procedure.procedimento}</span>
+                <span>{procedure.editionYear}</span>
+                <span>{procedure.porte || 'Sem porte'}</span>
+                <span>
+                  Honorario {formatCurrencyFromCents(procedure.totalPorteCents)}
+                  <small>
+                    Total{' '}
+                    {formatCurrencyFromCents(
+                      procedure.subtotalCents ?? procedure.totalPorteCents,
+                    )}
+                  </small>
+                </span>
+                <div className="patient-actions">
+                  <button
+                    className="mini-button"
+                    onClick={() => setSelectedProcedureId(procedure.id)}
+                    type="button"
+                  >
+                    Ver
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+      </article>
+
+      <aside className="panel form-panel cbhpm-import-panel">
+        <div className="page-header">
+          <div>
+            <p className="eyebrow">Arquivos importados</p>
+            <h2>Historico por edicao</h2>
+          </div>
+        </div>
+
+        {summaryStatus === 'loading' ? (
+          <p className="empty-state compact">Carregando importacoes...</p>
+        ) : summaryStatus === 'error' ? (
+          <DirectoryState
+            code="ER"
+            title="Nao foi possivel carregar o historico."
+            description={summaryError}
+          />
+        ) : summaries.length === 0 ? (
+          <DirectoryState
+            code="00"
+            title="Nenhuma tabela importada."
+            description="Assim que os CSVs forem processados, os anos e arquivos aparecem aqui."
+          />
+        ) : (
+          <div className="cbhpm-summary-list">
+            {summaries.map((summary) => (
+              <button
+                className={`cbhpm-summary-card ${
+                  summary.editionYear === selectedYear ? 'active' : ''
+                }`}
+                key={`${summary.editionYear}-${summary.sourceFile}`}
+                onClick={() => selectImportSummary(summary)}
+                type="button"
+              >
+                <span>CBHPM {summary.editionYear}</span>
+                <strong>{summary.total.toLocaleString('pt-BR')} itens</strong>
+                <small>{summary.sourceFile || 'Arquivo nao informado'}</small>
+                <em>
+                  {summary.importedAt
+                    ? `Importado em ${formatDateTime(summary.importedAt)}`
+                    : 'Sem data de importacao'}
+                </em>
+              </button>
+            ))}
+          </div>
+        )}
+
+        <section className="cbhpm-porte-panel">
+          <div className="page-header">
+            <div>
+              <p className="eyebrow">Portes da edicao</p>
+              <h2>{porteYear ? `CBHPM ${porteYear}` : 'Selecione uma edicao'}</h2>
+            </div>
+          </div>
+
+          <input
+            className="search-input"
+            placeholder="Buscar porte: 1A, 2B, 10C..."
+            value={porteSearch}
+            onChange={(event) => setPorteSearch(event.target.value)}
+          />
+
+          {porteStatus === 'loading' ? (
+            <p className="empty-state compact">Carregando portes...</p>
+          ) : porteStatus === 'error' ? (
+            <p className="form-warning">{porteError}</p>
+          ) : porteSummaries.length === 0 ? (
+            <p className="empty-state compact">
+              Nenhum porte encontrado para esta edicao.
+            </p>
+          ) : (
+            <div className="cbhpm-porte-list">
+              {porteSummaries.map((summary) => (
+                <button
+                  className="cbhpm-porte-card"
+                  key={`${summary.editionYear}-${summary.porte}-${summary.valorPorteCents}`}
+                  onClick={() => selectPorteSummary(summary)}
+                  type="button"
+                >
+                  <span>{summary.porte}</span>
+                  <strong>{formatCurrencyFromCents(summary.valorPorteCents)}</strong>
+                  <small>{summary.procedureCount} procedimento(s)</small>
+                  <em>Fracao {formatFractionRange(summary)}</em>
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <DirectoryState
+          code="FX"
+          title="Rastreabilidade do arquivo preservada."
+          description="Cada procedimento guarda o ano da edicao e o nome do CSV usado na importacao."
+        />
+      </aside>
+
+      {focusedProcedure ? (
+        <div
+          className="detail-modal-backdrop"
+          onClick={() => setSelectedProcedureId(null)}
+          role="presentation"
+        >
+          <section
+            aria-labelledby="cbhpm-detail-title"
+            aria-modal="true"
+            className="detail-modal cbhpm-detail-modal"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+          >
+            <div className="page-header">
+              <div>
+                <p className="eyebrow">Procedimento em foco</p>
+                <h2 id="cbhpm-detail-title">{focusedProcedure.procedimento}</h2>
+              </div>
+              <div className="toolbar-inline">
+                <span className="inline-badge">
+                  CBHPM {focusedProcedure.editionYear}
+                </span>
+                <button
+                  className="ghost-button"
+                  onClick={() => setSelectedProcedureId(null)}
+                  type="button"
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+
+            <div className="record-grid">
+              <RecordLine label="Codigo" value={focusedProcedure.codigo} />
+              <RecordLine label="Porte" value={focusedProcedure.porte} />
+              <RecordLine
+                label="Fracao porte"
+                value={formatDecimalValue(focusedProcedure.fracaoPorte)}
+              />
+              <RecordLine
+                label="Valor base do porte"
+                value={formatCurrencyFromCents(focusedProcedure.valorPorteCents)}
+              />
+              <RecordLine
+                label="Honorario / total porte"
+                value={formatCurrencyFromCents(focusedProcedure.totalPorteCents)}
+              />
+              <RecordLine
+                label="Adicionais"
+                value={formatCurrencyFromCents(focusedProcedure.adicionaisCents)}
+              />
+              <RecordLine
+                label="Subtotal final"
+                value={formatCurrencyFromCents(
+                  focusedProcedure.subtotalCents ??
+                    focusedProcedure.totalPorteCents,
+                )}
+              />
+              <RecordLine
+                label="Filme"
+                value={formatCurrencyFromCents(focusedProcedure.totalFilmeCents)}
+              />
+              <RecordLine
+                label="UCO"
+                value={formatCurrencyFromCents(focusedProcedure.totalUcoCents)}
+              />
+              <RecordLine
+                label="Porte anestesico"
+                value={focusedProcedure.porteAnestesico}
+              />
+              <RecordLine
+                label="Total anestesico"
+                value={formatCurrencyFromCents(
+                  focusedProcedure.totalPorteAnestesicoCents,
+                )}
+              />
+              <RecordLine
+                label="Auxiliares"
+                value={formatCurrencyFromCents(
+                  focusedProcedure.totalAuxiliaresCents,
+                )}
+              />
+              <RecordLine label="Arquivo" value={focusedProcedure.sourceFile} />
+              <RecordLine
+                label="Importado em"
+                value={
+                  focusedProcedure.importedAt
+                    ? formatDateTime(focusedProcedure.importedAt)
+                    : ''
+                }
+              />
+            </div>
+          </section>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+type ExamOrdersPageProps = {
+  doctors: Doctor[];
+  patients: Patient[];
+  sessionToken: string;
+};
+
+function ExamOrdersPage({
+  doctors,
+  patients,
+  sessionToken,
+}: ExamOrdersPageProps) {
+  const [orderSearch, setOrderSearch] = useState('');
+  const [hasSearchedOrders, setHasSearchedOrders] = useState(false);
+  const [orderResults, setOrderResults] = useState<ExamOrder[]>([]);
+  const [orderResultTotal, setOrderResultTotal] = useState(0);
+  const [orderSearchStatus, setOrderSearchStatus] = useState<
+    'idle' | 'loading' | 'ready' | 'error'
+  >('idle');
+  const [orderSearchError, setOrderSearchError] = useState('');
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [patientSearch, setPatientSearch] = useState('');
+  const [patientOptions, setPatientOptions] = useState<Patient[]>([]);
+  const [patientSearchStatus, setPatientSearchStatus] = useState<
+    'idle' | 'loading' | 'ready' | 'error'
+  >('idle');
+  const [procedureSearch, setProcedureSearch] = useState('');
+  const [procedureOptions, setProcedureOptions] = useState<Procedure[]>([]);
+  const [knownProcedures, setKnownProcedures] = useState<Procedure[]>([]);
+  const [procedureSearchStatus, setProcedureSearchStatus] = useState<
+    'idle' | 'loading' | 'ready' | 'error'
+  >('idle');
+  const [form, setForm] = useState(initialExamOrderForm);
+  const [formError, setFormError] = useState('');
+  const [isSavingOrder, setIsSavingOrder] = useState(false);
+  const orderSearchTerm = orderSearch.trim();
+  const patientSearchTerm = patientSearch.trim();
+  const procedureSearchTerm = procedureSearch.trim();
+  const canSearchOrders = orderSearchTerm.length >= 2;
+  const canSearchPatient = patientSearchTerm.length >= 2;
+  const canSearchProcedure = procedureSearchTerm.length >= 2;
+  const focusedOrder =
+    orderResults.find((order) => order.id === selectedOrderId) ??
+    orderResults[0] ??
+    null;
+  const selectedPatient =
+    patientOptions.find((patient) => patient.id === form.patientId) ??
+    patients.find((patient) => patient.id === form.patientId) ??
+    null;
+  const selectedDoctor =
+    doctors.find((doctor) => doctor.id === form.requesterDoctorId) ?? null;
+  const selectedItems = form.items.map((item) => ({
+    ...item,
+    procedure:
+      knownProcedures.find((procedure) => procedure.id === item.procedureId) ??
+      null,
+  }));
+  const canSaveOrder = Boolean(form.patientId) && form.items.length > 0;
+
+  async function searchOrders(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!canSearchOrders) {
+      setOrderSearchStatus('idle');
+      setOrderSearchError('Digite ao menos 2 caracteres para pesquisar.');
+      return;
+    }
+
+    setOrderSearchStatus('loading');
+    setOrderSearchError('');
+
+    try {
+      const queryParams = new URLSearchParams({
+        page: '1',
+        limit: '25',
+        q: orderSearchTerm,
+      });
+      const response = await apiRequest<PaginatedResponse<ExamOrder>>(
+        `/exam-orders?${queryParams.toString()}`,
+        { token: sessionToken },
+      );
+      const nextOrders = response.data ?? [];
+      const nextTotal = response.meta?.total ?? response.total ?? nextOrders.length;
+
+      setOrderResults(nextOrders);
+      setOrderResultTotal(nextTotal);
+      setSelectedOrderId(nextOrders[0]?.id ?? null);
+      setHasSearchedOrders(true);
+      setOrderSearchStatus('ready');
+    } catch (error) {
+      setOrderResults([]);
+      setOrderResultTotal(0);
+      setSelectedOrderId(null);
+      setHasSearchedOrders(true);
+      setOrderSearchStatus('error');
+      setOrderSearchError(
+        error instanceof Error
+          ? error.message
+          : 'Nao foi possivel buscar pedidos.',
+      );
+    }
+  }
+
+  async function searchPatientsForOrder(
+    event: React.FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
+    if (!canSearchPatient) {
+      setPatientSearchStatus('idle');
+      setFormError('Digite ao menos 2 caracteres para localizar o paciente.');
+      return;
+    }
+
+    setPatientSearchStatus('loading');
+    setFormError('');
+
+    try {
+      const queryParams = new URLSearchParams({
+        page: '1',
+        limit: '12',
+        q: patientSearchTerm,
+      });
+      const response = await apiRequest<PaginatedResponse<Patient>>(
+        `/patients?${queryParams.toString()}`,
+        { token: sessionToken },
+      );
+
+      setPatientOptions(response.data ?? []);
+      setPatientSearchStatus('ready');
+    } catch (error) {
+      setPatientOptions([]);
+      setPatientSearchStatus('error');
+      setFormError(
+        error instanceof Error
+          ? error.message
+          : 'Nao foi possivel buscar pacientes.',
+      );
+    }
+  }
+
+  async function searchProceduresForOrder(
+    event: React.FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
+    if (!canSearchProcedure) {
+      setProcedureSearchStatus('idle');
+      setFormError('Digite ao menos 2 caracteres para localizar o exame.');
+      return;
+    }
+
+    setProcedureSearchStatus('loading');
+    setFormError('');
+
+    try {
+      const queryParams = new URLSearchParams({
+        page: '1',
+        limit: '12',
+        q: procedureSearchTerm,
+      });
+      const response = await apiRequest<PaginatedResponse<Procedure>>(
+        `/procedures?${queryParams.toString()}`,
+        { token: sessionToken },
+      );
+      const nextProcedures = response.data ?? [];
+
+      setProcedureOptions(nextProcedures);
+      setKnownProcedures((current) =>
+        mergeProcedures(current, nextProcedures),
+      );
+      setProcedureSearchStatus('ready');
+    } catch (error) {
+      setProcedureOptions([]);
+      setProcedureSearchStatus('error');
+      setFormError(
+        error instanceof Error
+          ? error.message
+          : 'Nao foi possivel buscar procedimentos.',
+      );
+    }
+  }
+
+  function selectPatient(patient: Patient) {
+    setPatientOptions((current) => mergePatients(current, [patient]));
+    setForm((current) => ({
+      ...current,
+      patientId: patient.id,
+    }));
+    setFormError('');
+  }
+
+  function addProcedureToOrder(procedure: Procedure) {
+    if (!procedure.active) {
+      setFormError('Procedimento inativo nao pode entrar no pedido.');
+      return;
+    }
+
+    if (form.items.some((item) => item.procedureId === procedure.id)) {
+      setFormError('Este procedimento ja esta no pedido.');
+      return;
+    }
+
+    setKnownProcedures((current) => mergeProcedures(current, [procedure]));
+    setForm((current) => ({
+      ...current,
+      items: [
+        ...current.items,
+        { procedureId: procedure.id, quantity: 1, notes: '' },
+      ],
+    }));
+    setFormError('');
+  }
+
+  function updateOrderItem(
+    procedureId: string,
+    nextItem: Partial<ExamOrderFormItem>,
+  ) {
+    setForm((current) => ({
+      ...current,
+      items: current.items.map((item) =>
+        item.procedureId === procedureId ? { ...item, ...nextItem } : item,
+      ),
+    }));
+  }
+
+  function removeOrderItem(procedureId: string) {
+    setForm((current) => ({
+      ...current,
+      items: current.items.filter((item) => item.procedureId !== procedureId),
+    }));
+  }
+
+  async function saveExamOrder() {
+    if (!canSaveOrder) {
+      setFormError('Selecione o paciente e ao menos um procedimento.');
+      return;
+    }
+
+    setIsSavingOrder(true);
+    setFormError('');
+
+    try {
+      const savedOrder = await apiRequest<ExamOrder>('/exam-orders', {
+        token: sessionToken,
+        body: createExamOrderPayload(form),
+      });
+
+      setOrderResults((current) => [savedOrder, ...current]);
+      setOrderResultTotal((current) => current + 1);
+      setSelectedOrderId(savedOrder.id);
+      setHasSearchedOrders(true);
+      setOrderSearchStatus('ready');
+      setForm(initialExamOrderForm);
+      setPatientSearch('');
+      setProcedureSearch('');
+      setProcedureOptions([]);
+    } catch (error) {
+      setFormError(
+        error instanceof Error
+          ? error.message
+          : 'Nao foi possivel salvar o pedido.',
+      );
+    } finally {
+      setIsSavingOrder(false);
+    }
+  }
+
+  function clearOrderSearch() {
+    setOrderSearch('');
+    setHasSearchedOrders(false);
+    setOrderResults([]);
+    setOrderResultTotal(0);
+    setOrderSearchStatus('idle');
+    setOrderSearchError('');
+    setSelectedOrderId(null);
+  }
+
+  return (
+    <section className="page-grid exam-orders-workspace">
+      <article className="panel">
+        <div className="page-header">
+          <div>
+            <p className="eyebrow">Pedidos Exames</p>
+            <h2>Buscar solicitações</h2>
+          </div>
+          <span className="inline-badge">fluxo assistencial</span>
+        </div>
+
+        <OperationalSearchCard
+          canSearch={canSearchOrders}
+          description="Pesquise por paciente, CPF, medico, procedimento, prioridade ou observacao. Nada e carregado automaticamente."
+          error={orderSearchError}
+          isLoading={orderSearchStatus === 'loading'}
+          onChange={setOrderSearch}
+          onClear={clearOrderSearch}
+          onSearch={searchOrders}
+          placeholder="Paciente, CPF, exame ou medico"
+          resultText={
+            hasSearchedOrders && orderSearchStatus === 'ready'
+              ? `${orderResults.length} de ${orderResultTotal} pedidos encontrados`
+              : undefined
+          }
+          title="Localize antes de abrir um pedido."
+          value={orderSearch}
+        />
+
+        <div className="table-shell">
+          <div className="table-head exam-orders-grid">
+            <span>Paciente</span>
+            <span>Solicitante</span>
+            <span>Itens</span>
+            <span>Status</span>
+            <span>Acoes</span>
+          </div>
+
+          {!hasSearchedOrders ? (
+            <DirectoryState
+              code="01"
+              title="Nenhum pedido carregado automaticamente."
+              description="Use a busca para localizar pedidos existentes ou monte uma nova solicitacao no painel ao lado."
+            />
+          ) : orderSearchStatus === 'loading' ? (
+            <p className="empty-state">Buscando pedidos no banco...</p>
+          ) : orderSearchStatus === 'error' ? (
+            <p className="empty-state">
+              {orderSearchError || 'Nao foi possivel buscar pedidos.'}
+            </p>
+          ) : orderResults.length === 0 ? (
+            <DirectoryState
+              code="00"
+              title="Nenhum pedido encontrado."
+              description="Confira o termo pesquisado ou crie uma nova solicitacao quando necessario."
+            />
+          ) : (
+            <>
+              <p className="result-caption">
+                {orderResults.length} de {orderResultTotal} pedidos encontrados
+              </p>
+              {orderResults.map((order) => (
+                <div className="table-row exam-orders-grid" key={order.id}>
+                  <span>
+                    {order.patient.name}
+                    <small>{order.patient.cpf}</small>
+                  </span>
+                  <span>
+                    {order.requesterDoctor?.user.name || 'Nao informado'}
+                    <small>
+                      {order.requesterDoctor
+                        ? `CRM ${order.requesterDoctor.crm}/${order.requesterDoctor.crmUf}`
+                        : 'Sem medico solicitante'}
+                    </small>
+                  </span>
+                  <span>
+                    {summarizeExamOrderItems(order)}
+                    <small>{formatDateTime(order.createdAt)}</small>
+                  </span>
+                  <span>{examOrderStatusLabel(order.status)}</span>
+                  <div className="patient-actions">
+                    <button
+                      className="mini-button"
+                      onClick={() => setSelectedOrderId(order.id)}
+                      type="button"
+                    >
+                      Ficha
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+
+        {focusedOrder ? (
+          <section className="patient-record-card">
+            <div className="page-header">
+              <div>
+                <p className="eyebrow">Pedido em foco</p>
+                <h2>{focusedOrder.patient.name}</h2>
+              </div>
+              <span className="inline-badge">
+                {examOrderStatusLabel(focusedOrder.status)}
+              </span>
+            </div>
+
+            <div className="record-grid">
+              <RecordLine label="Paciente" value={focusedOrder.patient.name} />
+              <RecordLine label="CPF" value={focusedOrder.patient.cpf} />
+              <RecordLine
+                label="Solicitante"
+                value={focusedOrder.requesterDoctor?.user.name}
+              />
+              <RecordLine label="Prioridade" value={focusedOrder.priority} />
+              <RecordLine
+                label="Criado em"
+                value={formatDateTime(focusedOrder.createdAt)}
+              />
+              <RecordLine
+                label="Itens"
+                value={`${focusedOrder.items.length} procedimento(s)`}
+              />
+            </div>
+
+            <div className="exam-item-list">
+              <span className="section-title">Procedimentos solicitados</span>
+              {focusedOrder.items.map((item) => (
+                <article className="exam-item-card" key={item.id}>
+                  <strong>{item.procedure.description}</strong>
+                  <small>
+                    {item.procedure.code} - {procedureTypeLabel(item.procedure.type)}
+                  </small>
+                  <small>
+                    Qtd. {item.quantity}
+                    {item.notes ? ` - ${item.notes}` : ''}
+                  </small>
+                </article>
+              ))}
+            </div>
+
+            {focusedOrder.clinicalIndication ? (
+              <p className="empty-state compact">
+                {focusedOrder.clinicalIndication}
+              </p>
+            ) : null}
+          </section>
+        ) : null}
+      </article>
+
+      <aside className="panel form-panel">
+        <div className="page-header">
+          <div>
+            <p className="eyebrow">Nova solicitação</p>
+            <h2>Montar pedido</h2>
+          </div>
+          <span className="inline-badge">
+            {form.items.length} item(ns)
+          </span>
+        </div>
+
+        <form className="operational-search-card" onSubmit={searchPatientsForOrder}>
+          <div>
+            <span className="section-title">Paciente</span>
+            <strong>Localize o paciente no banco.</strong>
+            <small>Busque por nome, CPF, RG, telefone ou email.</small>
+          </div>
+          <div className="operational-search-actions">
+            <input
+              className="search-input"
+              placeholder="Digite ao menos 2 caracteres"
+              value={patientSearch}
+              onChange={(event) => setPatientSearch(event.target.value)}
+            />
+            <button
+              className="ghost-button"
+              disabled={patientSearchStatus === 'loading' || !canSearchPatient}
+              type="submit"
+            >
+              {patientSearchStatus === 'loading' ? 'Buscando...' : 'Buscar'}
+            </button>
+            <button
+              className="ghost-button"
+              onClick={() => {
+                setPatientSearch('');
+                setPatientOptions([]);
+                setForm((current) => ({ ...current, patientId: '' }));
+              }}
+              type="button"
+            >
+              Limpar
+            </button>
+          </div>
+        </form>
+
+        {selectedPatient ? (
+          <div className="helper-block">
+            <span>Paciente selecionado</span>
+            <strong>{selectedPatient.name}</strong>
+            <small>{selectedPatient.cpf} - {selectedPatient.phone}</small>
+          </div>
+        ) : null}
+
+        {patientOptions.length > 0 ? (
+          <div className="selection-list">
+            {patientOptions.map((patient) => (
+              <button
+                className="selection-row"
+                key={patient.id}
+                onClick={() => selectPatient(patient)}
+                type="button"
+              >
+                <strong>{patient.name}</strong>
+                <small>{patient.cpf} - {patient.phone}</small>
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        <div className="field-grid two-columns">
+          <label className="field">
+            <span>Medico solicitante</span>
+            <select
+              value={form.requesterDoctorId}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  requesterDoctorId: event.target.value,
+                }))
+              }
+            >
+              <option value="">Nao informado</option>
+              {doctors.map((doctor) => (
+                <option key={doctor.id} value={doctor.id}>
+                  {doctor.user.name} - CRM {doctor.crm}/{doctor.crmUf}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            <span>Prioridade</span>
+            <select
+              value={form.priority}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  priority: event.target.value,
+                }))
+              }
+            >
+              <option value="Rotina">Rotina</option>
+              <option value="Prioritario">Prioritario</option>
+              <option value="Urgente">Urgente</option>
+            </select>
+          </label>
+        </div>
+
+        {selectedDoctor ? (
+          <p className="empty-state compact">
+            Solicitante: {selectedDoctor.user.name} - CRM {selectedDoctor.crm}/
+            {selectedDoctor.crmUf}
+          </p>
+        ) : null}
+
+        <form
+          className="operational-search-card"
+          onSubmit={searchProceduresForOrder}
+        >
+          <div>
+            <span className="section-title">Procedimentos</span>
+            <strong>Adicione exames ao pedido.</strong>
+            <small>Pesquise por codigo, descricao, tabela ou grupo.</small>
+          </div>
+          <div className="operational-search-actions">
+            <input
+              className="search-input"
+              placeholder="Ex: vitamina, hemograma, raio-x"
+              value={procedureSearch}
+              onChange={(event) => setProcedureSearch(event.target.value)}
+            />
+            <button
+              className="ghost-button"
+              disabled={
+                procedureSearchStatus === 'loading' || !canSearchProcedure
+              }
+              type="submit"
+            >
+              {procedureSearchStatus === 'loading' ? 'Buscando...' : 'Buscar'}
+            </button>
+            <button
+              className="ghost-button"
+              onClick={() => {
+                setProcedureSearch('');
+                setProcedureOptions([]);
+              }}
+              type="button"
+            >
+              Limpar
+            </button>
+          </div>
+        </form>
+
+        {procedureOptions.length > 0 ? (
+          <div className="selection-list">
+            {procedureOptions.map((procedure) => (
+              <button
+                className="selection-row"
+                disabled={!procedure.active}
+                key={procedure.id}
+                onClick={() => addProcedureToOrder(procedure)}
+                type="button"
+              >
+                <strong>{procedure.description}</strong>
+                <small>
+                  {procedure.code} - {procedureTypeLabel(procedure.type)}
+                </small>
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        <div className="exam-item-list">
+          <span className="section-title">Itens do pedido</span>
+          {selectedItems.length === 0 ? (
+            <DirectoryState
+              code="02"
+              title="Nenhum exame selecionado."
+              description="Busque a tabela de procedimentos e adicione os itens que farão parte da solicitação."
+            />
+          ) : (
+            selectedItems.map((item) => (
+              <article className="exam-item-card" key={item.procedureId}>
+                <strong>
+                  {item.procedure?.description || 'Procedimento selecionado'}
+                </strong>
+                <small>
+                  {item.procedure
+                    ? `${item.procedure.code} - ${procedureTypeLabel(
+                        item.procedure.type,
+                      )}`
+                    : item.procedureId}
+                </small>
+                <div className="field-grid two-columns">
+                  <label className="field">
+                    <span>Quantidade</span>
+                    <input
+                      min={1}
+                      type="number"
+                      value={item.quantity}
+                      onChange={(event) =>
+                        updateOrderItem(item.procedureId, {
+                          quantity: Number(event.target.value) || 1,
+                        })
+                      }
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Observacao do item</span>
+                    <input
+                      value={item.notes}
+                      onChange={(event) =>
+                        updateOrderItem(item.procedureId, {
+                          notes: event.target.value,
+                        })
+                      }
+                    />
+                  </label>
+                </div>
+                <button
+                  className="mini-button"
+                  onClick={() => removeOrderItem(item.procedureId)}
+                  type="button"
+                >
+                  Remover item
+                </button>
+              </article>
+            ))
+          )}
+        </div>
+
+        <div className="field-grid">
+          <label className="field">
+            <span>Indicação clínica</span>
+            <textarea
+              value={form.clinicalIndication}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  clinicalIndication: event.target.value,
+                }))
+              }
+            />
+          </label>
+          <label className="field">
+            <span>Observações gerais</span>
+            <textarea
+              value={form.notes}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  notes: event.target.value,
+                }))
+              }
+            />
+          </label>
+        </div>
+
+        {formError ? <p className="empty-state compact">{formError}</p> : null}
+
+        <button
+          className="primary-button"
+          disabled={isSavingOrder || !canSaveOrder}
+          onClick={saveExamOrder}
+          type="button"
+        >
+          {isSavingOrder
+            ? 'Salvando...'
+            : canSaveOrder
+              ? 'Salvar pedido de exames'
+              : 'Selecione paciente e exames'}
+        </button>
+      </aside>
     </section>
   );
 }
@@ -6343,12 +9111,241 @@ function createPatientForm(patient: Patient): PatientFormState {
   };
 }
 
+function createProcedurePayload(form: ProcedureFormState) {
+  return {
+    code: normalizeProcedureCode(form.code),
+    description: form.description.trim(),
+    type: form.type,
+    tableCode: form.tableCode.trim() || undefined,
+    groupName: form.groupName.trim() || undefined,
+    unit: form.unit.trim() || undefined,
+    referencePriceCents: parseCurrencyToCents(form.referencePrice),
+    requiresAuthorization: form.requiresAuthorization,
+    requiresReport: form.requiresReport,
+    billable: form.billable,
+    active: form.active,
+    notes: form.notes.trim() || undefined,
+  };
+}
+
+function createExamOrderPayload(form: ExamOrderFormState) {
+  return {
+    patientId: form.patientId,
+    requesterDoctorId: form.requesterDoctorId || undefined,
+    priority: form.priority || undefined,
+    clinicalIndication: form.clinicalIndication.trim() || undefined,
+    notes: form.notes.trim() || undefined,
+    items: form.items.map((item) => ({
+      procedureId: item.procedureId,
+      quantity: Math.max(1, item.quantity),
+      notes: item.notes.trim() || undefined,
+    })),
+  };
+}
+
+function createPricingTablePayload(form: PricingTableFormState) {
+  return {
+    name: form.name.trim(),
+    type: form.type,
+    year: form.year ? Number(form.year) : undefined,
+    code: form.code.trim() || undefined,
+    description: form.description.trim() || undefined,
+    active: form.active,
+  };
+}
+
+function createProcedurePricePayload(form: ProcedurePriceFormState) {
+  return {
+    procedureId: form.procedureId,
+    pricingTableId: form.pricingTableId,
+    priceCents: parseCurrencyToCents(form.price) ?? 0,
+    operationalCostCents: parseCurrencyToCents(form.operationalCost),
+    billingUnit: form.billingUnit.trim() || undefined,
+    effectiveFrom: form.effectiveFrom || undefined,
+    effectiveTo: form.effectiveTo || undefined,
+    active: form.active,
+    notes: form.notes.trim() || undefined,
+  };
+}
+
+function createProcedureForm(procedure: Procedure): ProcedureFormState {
+  return {
+    code: procedure.code,
+    description: procedure.description,
+    type: procedure.type,
+    tableCode: procedure.tableCode ?? '',
+    groupName: procedure.groupName ?? '',
+    unit: procedure.unit ?? '',
+    referencePrice: centsToCurrencyInput(procedure.referencePriceCents),
+    requiresAuthorization: procedure.requiresAuthorization,
+    requiresReport: procedure.requiresReport,
+    billable: procedure.billable,
+    active: procedure.active,
+    notes: procedure.notes ?? '',
+  };
+}
+
 function formatDateInput(value: string) {
   return new Date(value).toISOString().slice(0, 10);
 }
 
 function normalizeDigits(value: string) {
   return value.replace(/\D/g, '');
+}
+
+function normalizeProcedureCode(value: string) {
+  return value.trim().toUpperCase();
+}
+
+function parseCurrencyToCents(value: string) {
+  const cleanValue = value.trim().replace(/[^\d,.]/g, '');
+
+  if (!cleanValue) {
+    return undefined;
+  }
+
+  const normalizedValue = cleanValue.includes(',')
+    ? cleanValue.replace(/\./g, '').replace(',', '.')
+    : cleanValue;
+  const parsedValue = Number(normalizedValue);
+
+  return Number.isFinite(parsedValue)
+    ? Math.round(parsedValue * 100)
+    : undefined;
+}
+
+function centsToCurrencyInput(value?: number | null) {
+  if (typeof value !== 'number') {
+    return '';
+  }
+
+  return (value / 100).toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function formatCurrencyFromCents(value?: number | null) {
+  if (typeof value !== 'number') {
+    return 'Nao informado';
+  }
+
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(value / 100);
+}
+
+function formatDecimalValue(value?: string | null) {
+  const parsedValue = Number(value);
+
+  if (!Number.isFinite(parsedValue)) {
+    return 'Nao informado';
+  }
+
+  return parsedValue.toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 4,
+  });
+}
+
+function formatFractionRange(summary: CbhpmPorteSummary) {
+  if (!summary.fracaoMin && !summary.fracaoMax) {
+    return 'nao informada';
+  }
+
+  if (summary.fracaoMin === summary.fracaoMax) {
+    return formatDecimalValue(summary.fracaoMin);
+  }
+
+  return `${formatDecimalValue(summary.fracaoMin)} a ${formatDecimalValue(
+    summary.fracaoMax,
+  )}`;
+}
+
+function procedureTypeLabel(type: ProcedureType) {
+  switch (type) {
+    case 'LAB_EXAM':
+      return 'Exame laboratorial';
+    case 'IMAGE_EXAM':
+      return 'Exame de imagem';
+    case 'CONSULTATION':
+      return 'Consulta';
+    case 'SURGERY':
+      return 'Cirurgia';
+    case 'ROOM_FEE':
+      return 'Taxa de sala';
+    case 'PACKAGE':
+      return 'Pacote';
+    default:
+      return 'Procedimento';
+  }
+}
+
+function pricingTableTypeLabel(type: PricingTableType) {
+  switch (type) {
+    case 'CBHPM':
+      return 'CBHPM';
+    case 'AGREEMENT':
+      return 'Convenio';
+    case 'OPERATIONAL_FEE':
+      return 'Taxa operacional';
+    default:
+      return 'Propria';
+  }
+}
+
+function examOrderStatusLabel(status: ExamOrderStatus) {
+  switch (status) {
+    case 'AUTHORIZATION_PENDING':
+      return 'Aguardando autorizacao';
+    case 'AUTHORIZED':
+      return 'Autorizado';
+    case 'IN_PROGRESS':
+      return 'Em execucao';
+    case 'RESULT_READY':
+      return 'Resultado pronto';
+    case 'CANCELED':
+      return 'Cancelado';
+    default:
+      return 'Solicitado';
+  }
+}
+
+function summarizeExamOrderItems(order: ExamOrder) {
+  const firstItem = order.items[0];
+
+  if (!firstItem) {
+    return 'Sem itens';
+  }
+
+  if (order.items.length === 1) {
+    return firstItem.procedure.description;
+  }
+
+  return `${firstItem.procedure.description} +${order.items.length - 1}`;
+}
+
+function mergeProcedures(current: Procedure[], incoming: Procedure[]) {
+  const registry = new Map(current.map((procedure) => [procedure.id, procedure]));
+
+  incoming.forEach((procedure) => registry.set(procedure.id, procedure));
+
+  return Array.from(registry.values());
+}
+
+function mergePatients(current: Patient[], incoming: Patient[]) {
+  const registry = new Map(current.map((patient) => [patient.id, patient]));
+
+  incoming.forEach((patient) => registry.set(patient.id, patient));
+
+  return Array.from(registry.values());
+}
+
+function mergePricingTables(tables: PricingTable[]) {
+  const registry = new Map(tables.map((table) => [table.id, table]));
+
+  return Array.from(registry.values());
 }
 
 function isPatientActive(patient: Patient) {

@@ -18,7 +18,7 @@
   --warning: #d97706;
   --danger: #dc2626;
   --shadow: 0 22px 60px rgba(15, 23, 42, 0.12);
-  --workspace-max: 1760px;
+  --workspace-max: 1920px;
 }
 
 * {
@@ -66,7 +66,7 @@ textarea {
 
 .app-shell {
   min-height: 100vh;
-  padding: 14px;
+  padding: 10px clamp(10px, 0.8vw, 18px);
 }
 
 .workspace-shell {
@@ -665,7 +665,7 @@ textarea {
 
 .workspace-main-grid {
   display: grid;
-  grid-template-columns: 300px minmax(0, 1fr);
+  grid-template-columns: 292px minmax(0, 1fr);
   gap: 18px;
   align-items: start;
 }
@@ -1265,9 +1265,187 @@ textarea {
   align-items: stretch;
 }
 
+.procedures-workspace {
+  grid-template-columns: minmax(760px, 1.4fr) minmax(460px, 0.9fr);
+  align-items: stretch;
+}
+
+.exam-orders-workspace {
+  grid-template-columns: minmax(780px, 1.35fr) minmax(500px, 0.95fr);
+  align-items: start;
+}
+
+.pricing-workspace {
+  grid-template-columns: minmax(780px, 1.35fr) minmax(500px, 0.95fr);
+  align-items: start;
+}
+
+.cbhpm-workspace {
+  grid-template-columns: minmax(860px, 1.45fr) minmax(420px, 0.75fr);
+  align-items: start;
+}
+
 .patient-directory,
-.patient-editor {
+.patient-editor,
+.procedure-directory,
+.procedure-editor {
   align-content: start;
+}
+
+.cbhpm-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.cbhpm-year-filter {
+  max-width: 260px;
+}
+
+.cbhpm-import-panel {
+  gap: 16px;
+}
+
+.cbhpm-summary-list {
+  display: grid;
+  gap: 10px;
+  max-height: 520px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.cbhpm-summary-card {
+  width: 100%;
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+.cbhpm-summary-card:hover,
+.cbhpm-summary-card.active {
+  border-color: var(--env-color);
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.1);
+  transform: translateY(-1px);
+}
+
+.cbhpm-summary-card span,
+.cbhpm-summary-card em {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.cbhpm-summary-card strong {
+  font-size: 1rem;
+}
+
+.cbhpm-summary-card small {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.cbhpm-porte-panel {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.cbhpm-porte-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 10px;
+  max-height: 340px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.cbhpm-porte-card {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: var(--surface-strong);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.cbhpm-porte-card:hover {
+  border-color: var(--env-color);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.1);
+}
+
+.cbhpm-porte-card span {
+  color: var(--accent-strong);
+  font-family: 'Sora', 'IBM Plex Sans', sans-serif;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.cbhpm-porte-card small,
+.cbhpm-porte-card em {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-style: normal;
+}
+
+.detail-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(
+      circle at 50% 18%,
+      rgba(255, 255, 255, 0.3),
+      transparent 26rem
+    ),
+    rgba(15, 23, 42, 0.42);
+  backdrop-filter: blur(10px);
+  animation: environmentBackdropIn 180ms ease both;
+}
+
+.detail-modal {
+  width: min(920px, 100%);
+  max-height: min(760px, calc(100vh - 48px));
+  overflow: auto;
+  display: grid;
+  gap: 18px;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.98),
+      rgba(248, 250, 252, 0.94)
+    ),
+    var(--surface-strong);
+  box-shadow: 0 34px 90px rgba(15, 23, 42, 0.28);
+  animation: environmentModalIn 220ms ease both;
+}
+
+.cbhpm-detail-modal .record-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .operational-search-card,
@@ -1569,6 +1747,82 @@ textarea {
   padding-top: 4px;
 }
 
+.procedure-flags {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.procedure-flag {
+  min-height: 92px;
+  padding: 14px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface-muted);
+}
+
+.procedure-flag input {
+  margin-top: 4px;
+  accent-color: var(--accent);
+}
+
+.procedure-flag span {
+  display: grid;
+  gap: 4px;
+}
+
+.procedure-flag small {
+  color: var(--muted);
+  line-height: 1.38;
+}
+
+.selection-list,
+.exam-item-list {
+  display: grid;
+  gap: 10px;
+}
+
+.selection-row,
+.exam-item-card {
+  width: 100%;
+  padding: 14px;
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface-muted);
+  color: var(--text);
+  text-align: left;
+}
+
+.selection-row {
+  cursor: pointer;
+  transition:
+    background 180ms ease,
+    border-color 180ms ease,
+    transform 180ms ease;
+}
+
+.selection-row:hover:not(:disabled) {
+  border-color: var(--line-strong);
+  background: var(--accent-soft);
+  transform: translateY(-1px);
+}
+
+.selection-row:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.selection-row small,
+.exam-item-card small {
+  color: var(--muted);
+  line-height: 1.38;
+}
+
 .communication-hero {
   overflow: hidden;
 }
@@ -1720,6 +1974,22 @@ textarea {
 
 .patients-grid {
   grid-template-columns: 1.35fr 1.05fr 0.9fr 0.85fr 1.35fr;
+}
+
+.procedures-grid {
+  grid-template-columns: 0.82fr minmax(220px, 1.45fr) 0.95fr 1.1fr 0.95fr;
+}
+
+.exam-orders-grid {
+  grid-template-columns: 1.15fr 1.05fr 1.25fr 0.9fr 0.72fr;
+}
+
+.pricing-tables-grid {
+  grid-template-columns: 1.35fr 0.95fr 0.72fr 0.72fr 0.72fr;
+}
+
+.cbhpm-grid {
+  grid-template-columns: 0.8fr minmax(280px, 1.6fr) 0.48fr 0.55fr 0.86fr 0.52fr;
 }
 
 .appointments-grid {
@@ -2071,9 +2341,14 @@ textarea {
   .communication-hero-grid,
   .module-grid,
   .patients-workspace,
+  .procedures-workspace,
+  .exam-orders-workspace,
+  .pricing-workspace,
+  .cbhpm-workspace,
   .care-layout,
   .team-layout,
   .summary-strip,
+  .cbhpm-stat-grid,
   .overview-pulse,
   .module-tabs {
     grid-template-columns: 1fr;
@@ -2125,11 +2400,16 @@ textarea {
   .holiday-grid,
   .patient-tabs,
   .patient-preview-card,
+  .procedure-flags,
   .operational-search-actions,
   .patient-search-actions,
   .record-grid,
   .queue-meta,
   .patients-grid,
+  .procedures-grid,
+  .exam-orders-grid,
+  .pricing-tables-grid,
+  .cbhpm-grid,
   .appointments-grid,
   .users-grid,
   .doctors-grid,

@@ -10,6 +10,8 @@
     "build:front": "npm --prefix frontend run build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "front:dev": "npm --prefix frontend run dev",
+    "import:cbhpm": "node --env-file=.env scripts/import-cbhpm-csv.js",
+    "sync:cbhpm-procedures": "node --env-file=.env scripts/sync-cbhpm-procedures.js",
     "migrate:usernames": "node --env-file=.env scripts/migrate-usernames.js",
     "seed:admin": "node --env-file=.env scripts/seed-admin.js",
     "seed:communications": "node --env-file=.env scripts/seed-communications.js",

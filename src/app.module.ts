@@ -11,6 +11,10 @@ import { AppointmentsModule } from './appointments/appointments.module';
 import { DoctorsModule } from './doctors/doctors.module';
 import { SectorsModule } from './sectors/sectors.module';
 import { CommunicationsModule } from './communications/communications.module';
+import { ProceduresModule } from './procedures/procedures.module';
+import { ExamOrdersModule } from './exam-orders/exam-orders.module';
+import { PricingModule } from './pricing/pricing.module';
+import { CbhpmModule } from './cbhpm/cbhpm.module';
 import configuration from './config/configuration';
 
 @Module({
@@ -29,6 +33,10 @@ import configuration from './config/configuration';
     DoctorsModule,
     SectorsModule,
     CommunicationsModule,
+    ProceduresModule,
+    ExamOrdersModule,
+    PricingModule,
+    CbhpmModule,
   ],
   providers: [
     {
