@@ -4,6 +4,8 @@ import { AuditAction, Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { QueryAuditLogsDto } from './dto/query-audit-logs.dto';
 
+const sensitiveResources = ['patients', 'exam-orders', 'appointments', 'auth'];
+
 type AuditRecordInput = {
   action: AuditAction;
   actorId?: string;
@@ -43,11 +45,45 @@ export class AuditService {
   async findAll(query: QueryAuditLogsDto) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 25;
+    const search = query.search?.trim();
+    const createdAt: Prisma.DateTimeFilter | undefined =
+      query.from || query.to
+        ? {
+            ...(query.from ? { gte: new Date(query.from) } : {}),
+            ...(query.to ? { lte: new Date(query.to) } : {}),
+          }
+        : undefined;
     const where: Prisma.AuditLogWhereInput = {
       ...(query.action ? { action: query.action } : {}),
       ...(query.actorId ? { actorId: query.actorId } : {}),
       ...(query.actorRole ? { actorRole: query.actorRole } : {}),
-      ...(query.resource ? { resource: query.resource } : {}),
+      ...(query.sensitive
+        ? { resource: { in: sensitiveResources } }
+        : query.resource
+          ? { resource: query.resource }
+          : {}),
+      ...(createdAt ? { createdAt } : {}),
+      ...(search
+        ? {
+            OR: [
+              { route: { contains: search, mode: 'insensitive' } },
+              { resource: { contains: search, mode: 'insensitive' } },
+              { resourceId: { contains: search, mode: 'insensitive' } },
+              { method: { contains: search, mode: 'insensitive' } },
+              {
+                actor: {
+                  is: {
+                    OR: [
+                      { name: { contains: search, mode: 'insensitive' } },
+                      { username: { contains: search, mode: 'insensitive' } },
+                      { email: { contains: search, mode: 'insensitive' } },
+                    ],
+                  },
+                },
+              },
+            ],
+          }
+        : {}),
     };
 
     const [data, total] = await Promise.all([

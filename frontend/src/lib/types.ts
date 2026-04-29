@@ -25,6 +25,39 @@ export type AuditSummary = {
   retentionPolicy: string;
 };
 
+export type AuditAction = 'READ' | 'CREATE' | 'UPDATE' | 'DELETE';
+
+export type AuditLogMetadata = {
+  durationMs?: number;
+  lgpd?: {
+    purpose?: string;
+    sensitiveData?: boolean;
+  };
+  queryKeys?: string[];
+};
+
+export type AuditLog = {
+  id: string;
+  actorId?: string | null;
+  actorRole?: Role | null;
+  action: AuditAction;
+  resource: string;
+  resourceId?: string | null;
+  route: string;
+  method: string;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+  statusCode?: number | null;
+  metadata?: AuditLogMetadata | null;
+  createdAt: string;
+  actor?: {
+    id: string;
+    name: string;
+    username: string;
+    role: Role;
+  } | null;
+};
+
 export type PaginatedResponse<T> = {
   data: T[];
   total?: number;

@@ -1,6 +1,15 @@
 import { AuditAction, Role } from '@prisma/client';
-import { IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
-import { Type } from 'class-transformer';
+import {
+  IsBoolean,
+  IsDateString,
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsString,
+  Max,
+  Min,
+} from 'class-validator';
+import { Transform, Type } from 'class-transformer';
 
 export class QueryAuditLogsDto {
   @IsOptional()
@@ -18,6 +27,23 @@ export class QueryAuditLogsDto {
   @IsOptional()
   @IsString()
   resource?: string;
+
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @IsOptional()
+  @IsDateString()
+  from?: string;
+
+  @IsOptional()
+  @IsDateString()
+  to?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean()
+  sensitive?: boolean;
 
   @IsOptional()
   @Type(() => Number)

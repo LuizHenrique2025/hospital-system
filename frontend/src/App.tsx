@@ -21,6 +21,8 @@ import type {
   Agreement,
   AgreementPricingRule,
   Appointment,
+  AuditAction,
+  AuditLog,
   AuditSummary,
   CbhpmImportSummary,
   CbhpmPorteSummary,
@@ -285,6 +287,36 @@ const dashboardCacheKey = 'hospital-system.dashboard';
 const environmentStorageKey = 'hospital-system.environment';
 const compactPageSize = 12;
 const regularPageSize = 20;
+const auditPageSize = 12;
+
+const auditActionOptions: Array<{ label: string; value: AuditAction | '' }> = [
+  { label: 'Todas as acoes', value: '' },
+  { label: 'Leitura', value: 'READ' },
+  { label: 'Criacao', value: 'CREATE' },
+  { label: 'Alteracao', value: 'UPDATE' },
+  { label: 'Exclusao', value: 'DELETE' },
+];
+
+const auditPeriodOptions = [
+  { label: 'Ultimas 24h', value: '1' },
+  { label: 'Ultimos 7 dias', value: '7' },
+  { label: 'Ultimos 30 dias', value: '30' },
+  { label: 'Todo o historico', value: 'all' },
+];
+
+const auditResourceOptions = [
+  { label: 'Todos os modulos', value: '' },
+  { label: 'Pacientes', value: 'patients' },
+  { label: 'Atendimentos', value: 'appointments' },
+  { label: 'Pedidos de exames', value: 'exam-orders' },
+  { label: 'Usuarios', value: 'users' },
+  { label: 'Auditoria', value: 'audit' },
+  { label: 'CBHPM', value: 'cbhpm' },
+  { label: 'Convenios', value: 'agreements' },
+  { label: 'Procedimentos', value: 'procedures' },
+  { label: 'Faturamento', value: 'pricing' },
+  { label: 'Comunicacao', value: 'communications' },
+];
 
 const activeModules: ModuleItem[] = [
   { path: '/central', label: 'Principal', hint: 'Comunicacao interna' },
@@ -1655,7 +1687,11 @@ function App() {
           path="/configuracoes"
           element={
             session.profile.role === 'ADMIN' ? (
-              <SettingsPage auditSummary={auditSummary} users={users} />
+              <SettingsPage
+                auditSummary={auditSummary}
+                sessionToken={session.token}
+                users={users}
+              />
             ) : (
               <Navigate replace to="/central" />
             )
@@ -2250,12 +2286,31 @@ type UsersPageProps = {
 
 type SettingsPageProps = {
   auditSummary: AuditSummary;
+  sessionToken: string;
   users: UserProfile[];
 };
 
-function SettingsPage({ auditSummary, users }: SettingsPageProps) {
+function SettingsPage({
+  auditSummary,
+  sessionToken,
+  users,
+}: SettingsPageProps) {
   const userCount = users.length;
   const adminCount = users.filter((user) => user.role === 'ADMIN').length;
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [focusedAuditLog, setFocusedAuditLog] = useState<AuditLog | null>(null);
+  const [auditTotal, setAuditTotal] = useState(0);
+  const [auditPage, setAuditPage] = useState(1);
+  const [auditSearch, setAuditSearch] = useState('');
+  const [auditAction, setAuditAction] = useState<AuditAction | ''>('');
+  const [auditRole, setAuditRole] = useState<Role | ''>('');
+  const [auditResource, setAuditResource] = useState('');
+  const [auditPeriod, setAuditPeriod] = useState('7');
+  const [auditSensitiveOnly, setAuditSensitiveOnly] = useState(false);
+  const [isAuditLoading, setIsAuditLoading] = useState(false);
+  const [auditError, setAuditError] = useState<string | null>(null);
+  const deferredAuditSearch = useDeferredValue(auditSearch.trim());
+  const sensitiveLogCount = auditLogs.filter(isSensitiveAuditLog).length;
   const settingsBlocks = [
     {
       title: 'Acessos e permissoes',
@@ -2292,8 +2347,8 @@ function SettingsPage({ auditSummary, users }: SettingsPageProps) {
     {
       title: 'Auditoria LGPD/SBIS',
       description:
-        'Registra usuario, perfil, rota, acao, horario e finalidade operacional dos acessos autenticados.',
-      action: 'Ativo no backend',
+        'Consulte usuario, perfil, rota, acao, horario e finalidade operacional dos acessos autenticados.',
+      action: 'Painel ativo',
       icon: (
         <svg aria-hidden="true" viewBox="0 0 24 24">
           <path d="M9 11 12 14 22 4" />
@@ -2315,78 +2370,513 @@ function SettingsPage({ auditSummary, users }: SettingsPageProps) {
     },
   ];
 
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadAuditLogs() {
+      setIsAuditLoading(true);
+      setAuditError(null);
+
+      try {
+        const params = new URLSearchParams({
+          limit: String(auditPageSize),
+          page: String(auditPage),
+        });
+
+        if (auditAction) {
+          params.set('action', auditAction);
+        }
+
+        if (auditRole) {
+          params.set('actorRole', auditRole);
+        }
+
+        if (auditResource) {
+          params.set('resource', auditResource);
+        }
+
+        if (auditSensitiveOnly) {
+          params.set('sensitive', 'true');
+        }
+
+        if (deferredAuditSearch.length >= 2) {
+          params.set('search', deferredAuditSearch);
+        }
+
+        if (auditPeriod !== 'all') {
+          const from = new Date();
+          from.setDate(from.getDate() - Number(auditPeriod));
+          params.set('from', from.toISOString());
+        }
+
+        const response = await apiRequest<PaginatedResponse<AuditLog>>(
+          `/audit?${params.toString()}`,
+          { token: sessionToken },
+        );
+
+        if (ignore) {
+          return;
+        }
+
+        const nextLogs = response.data ?? [];
+        setAuditLogs(nextLogs);
+        setAuditTotal(
+          response.total ?? response.meta?.total ?? nextLogs.length,
+        );
+        setFocusedAuditLog(nextLogs[0] ?? null);
+      } catch (error) {
+        if (ignore) {
+          return;
+        }
+
+        setAuditLogs([]);
+        setAuditTotal(0);
+        setFocusedAuditLog(null);
+        setAuditError(
+          error instanceof Error
+            ? error.message
+            : 'Nao foi possivel carregar a auditoria.',
+        );
+      } finally {
+        if (!ignore) {
+          setIsAuditLoading(false);
+        }
+      }
+    }
+
+    void loadAuditLogs();
+
+    return () => {
+      ignore = true;
+    };
+  }, [
+    auditAction,
+    auditPage,
+    auditPeriod,
+    auditResource,
+    auditRole,
+    auditSensitiveOnly,
+    deferredAuditSearch,
+    sessionToken,
+  ]);
+
+  function resetAuditFilters() {
+    setAuditPage(1);
+    setAuditSearch('');
+    setAuditAction('');
+    setAuditRole('');
+    setAuditResource('');
+    setAuditPeriod('7');
+    setAuditSensitiveOnly(false);
+  }
+
+  function exportAuditCsv() {
+    const header = [
+      'Data',
+      'Usuario',
+      'Perfil',
+      'Acao',
+      'Modulo',
+      'Recurso ID',
+      'Status',
+      'Finalidade',
+      'Sensivel',
+      'Rota',
+    ];
+    const rows = auditLogs.map((log) => [
+      formatDateTime(log.createdAt),
+      auditActorName(log),
+      log.actorRole ? roleLabel(log.actorRole) : 'Sem perfil',
+      auditActionLabel(log.action),
+      auditResourceLabel(log.resource),
+      log.resourceId ?? '',
+      log.statusCode ?? '',
+      auditPurposeLabel(log.metadata?.lgpd?.purpose),
+      isSensitiveAuditLog(log) ? 'Sim' : 'Nao',
+      log.route,
+    ]);
+    const csv = [header, ...rows]
+      .map((row) => row.map(escapeCsvCell).join(';'))
+      .join('\n');
+    const blob = new Blob([`\uFEFF${csv}`], {
+      type: 'text/csv;charset=utf-8;',
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+
+    anchor.href = url;
+    anchor.download = `auditoria-lgpd-sbis-${new Date()
+      .toISOString()
+      .slice(0, 10)}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
-    <section className="page-grid settings-workspace">
-      <article className="panel settings-vision-panel">
-        <div>
-          <p className="eyebrow">Configuracoes</p>
-          <h2>Centro administrativo do sistema</h2>
-          <p>
-            Reuna aqui as regras que afetam acesso, seguranca, ambientes e
-            parametros globais. A tela segue o modelo de blocos com icones para
-            ficar mais rapida de ler e menos poluida.
-          </p>
-        </div>
+    <section className="settings-page-stack">
+      <div className="page-grid settings-workspace">
+        <article className="panel settings-vision-panel">
+          <div>
+            <p className="eyebrow">Configuracoes</p>
+            <h2>Centro administrativo do sistema</h2>
+            <p>
+              Reuna aqui as regras que afetam acesso, seguranca, ambientes e
+              parametros globais. A tela segue o modelo de blocos com icones
+              para ficar mais rapida de ler e menos poluida.
+            </p>
+          </div>
 
-        <div className="settings-icon-blocks">
-          {settingsBlocks.map((block) => (
-            <div className="settings-icon-block" key={block.title}>
-              <span className="settings-icon">{block.icon}</span>
-              <div>
-                <h3>{block.title}</h3>
-                <p>{block.description}</p>
-                {block.path ? (
-                  <NavLink className="settings-action" to={block.path}>
-                    {block.action}
-                  </NavLink>
-                ) : (
-                  <span className="settings-action disabled">
-                    {block.action}
-                  </span>
-                )}
+          <div className="settings-icon-blocks">
+            {settingsBlocks.map((block) => (
+              <div className="settings-icon-block" key={block.title}>
+                <span className="settings-icon">{block.icon}</span>
+                <div>
+                  <h3>{block.title}</h3>
+                  <p>{block.description}</p>
+                  {block.path ? (
+                    <NavLink className="settings-action" to={block.path}>
+                      {block.action}
+                    </NavLink>
+                  ) : (
+                    <span className="settings-action disabled">
+                      {block.action}
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
-      </article>
+            ))}
+          </div>
+        </article>
 
-      <aside className="panel settings-status-panel">
+        <aside className="panel settings-status-panel">
+          <div className="page-header">
+            <div>
+              <p className="eyebrow">Controle</p>
+              <h2>Resumo admin</h2>
+            </div>
+            <span className="inline-badge">ADMIN</span>
+          </div>
+
+          <div className="settings-metrics">
+            <article>
+              <span>Eventos auditados</span>
+              <strong>{auditSummary.total}</strong>
+            </article>
+            <article>
+              <span>Ultimas 24h</span>
+              <strong>{auditSummary.last24h}</strong>
+            </article>
+            <article>
+              <span>Acessos a pacientes</span>
+              <strong>{auditSummary.patientAccesses}</strong>
+            </article>
+            <article>
+              <span>Alteracoes registradas</span>
+              <strong>{auditSummary.writeOperations}</strong>
+            </article>
+          </div>
+
+          <div className="helper-block">
+            <strong>Acesso protegido</strong>
+            <span>
+              {auditSummary.retentionPolicy} Hoje existem {userCount} usuarios,
+              {` ${adminCount} `}administradores e {roleOptions.length} perfis
+              base configurados.
+            </span>
+          </div>
+        </aside>
+      </div>
+
+      <article className="panel audit-console-panel">
         <div className="page-header">
           <div>
-            <p className="eyebrow">Controle</p>
-            <h2>Resumo admin</h2>
+            <p className="eyebrow">Auditoria e seguranca</p>
+            <h2>Trilha LGPD/SBIS</h2>
+            <p>
+              Consulte acessos e alteracoes por usuario, perfil, acao, modulo e
+              periodo. Eventos sensiveis ficam destacados para investigacao
+              rapida.
+            </p>
           </div>
-          <span className="inline-badge">ADMIN</span>
+          <div className="audit-actions">
+            <span className="inline-badge">
+              {auditTotal.toLocaleString('pt-BR')} eventos
+            </span>
+            <button
+              className="ghost-button"
+              disabled={auditLogs.length === 0}
+              onClick={exportAuditCsv}
+              type="button"
+            >
+              Exportar CSV
+            </button>
+          </div>
         </div>
 
-        <div className="settings-metrics">
-          <article>
-            <span>Eventos auditados</span>
-            <strong>{auditSummary.total}</strong>
-          </article>
-          <article>
-            <span>Ultimas 24h</span>
-            <strong>{auditSummary.last24h}</strong>
-          </article>
-          <article>
-            <span>Acessos a pacientes</span>
-            <strong>{auditSummary.patientAccesses}</strong>
-          </article>
-          <article>
-            <span>Alteracoes registradas</span>
-            <strong>{auditSummary.writeOperations}</strong>
-          </article>
+        <div className="audit-filter-grid">
+          <label className="field">
+            <span>Busca</span>
+            <input
+              onChange={(event) => {
+                setAuditPage(1);
+                setAuditSearch(event.target.value);
+              }}
+              placeholder="Usuario, rota, modulo ou ID"
+              value={auditSearch}
+            />
+          </label>
+
+          <label className="field">
+            <span>Acao</span>
+            <select
+              onChange={(event) => {
+                setAuditPage(1);
+                setAuditAction(event.target.value as AuditAction | '');
+              }}
+              value={auditAction}
+            >
+              {auditActionOptions.map((option) => (
+                <option key={option.label} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="field">
+            <span>Perfil</span>
+            <select
+              onChange={(event) => {
+                setAuditPage(1);
+                setAuditRole(event.target.value as Role | '');
+              }}
+              value={auditRole}
+            >
+              <option value="">Todos os perfis</option>
+              {roleOptions.map((role) => (
+                <option key={role} value={role}>
+                  {roleLabel(role)}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="field">
+            <span>Modulo</span>
+            <select
+              disabled={auditSensitiveOnly}
+              onChange={(event) => {
+                setAuditPage(1);
+                setAuditResource(event.target.value);
+              }}
+              value={auditResource}
+            >
+              {auditResourceOptions.map((option) => (
+                <option key={option.label} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="field">
+            <span>Periodo</span>
+            <select
+              onChange={(event) => {
+                setAuditPage(1);
+                setAuditPeriod(event.target.value);
+              }}
+              value={auditPeriod}
+            >
+              {auditPeriodOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="audit-check-card">
+            <input
+              checked={auditSensitiveOnly}
+              onChange={(event) => {
+                setAuditPage(1);
+                setAuditSensitiveOnly(event.target.checked);
+
+                if (event.target.checked) {
+                  setAuditResource('');
+                }
+              }}
+              type="checkbox"
+            />
+            <span>
+              <strong>Somente dados sensiveis</strong>
+              <small>Pacientes, atendimentos, pedidos e autenticacao.</small>
+            </span>
+          </label>
         </div>
 
-        <div className="helper-block">
-          <strong>Acesso protegido</strong>
+        <div className="audit-toolbar">
           <span>
-            {auditSummary.retentionPolicy} Hoje existem {userCount} usuarios,
-            {` ${adminCount} `}administradores e {roleOptions.length} perfis
-            base configurados.
+            {sensitiveLogCount} sensiveis nesta pagina
+            {isAuditLoading ? ' - atualizando...' : ''}
           </span>
+          <button
+            className="ghost-button"
+            onClick={resetAuditFilters}
+            type="button"
+          >
+            Limpar filtros
+          </button>
         </div>
-      </aside>
+
+        {auditError ? <p className="form-error">{auditError}</p> : null}
+
+        <div className="audit-layout">
+          <div className="table-shell">
+            <div className="table-head audit-grid">
+              <span>Data</span>
+              <span>Usuario</span>
+              <span>Acao</span>
+              <span>Modulo</span>
+              <span>Finalidade</span>
+              <span>Status</span>
+            </div>
+
+            {auditLogs.length === 0 ? (
+              <div className="empty-state">
+                <strong>Nenhum evento encontrado.</strong>
+                <span>
+                  Ajuste os filtros ou aguarde novas acoes no sistema.
+                </span>
+              </div>
+            ) : (
+              auditLogs.map((log) => (
+                <button
+                  className={
+                    focusedAuditLog?.id === log.id
+                      ? `table-row audit-grid audit-row is-active ${
+                          isSensitiveAuditLog(log) ? 'is-sensitive' : ''
+                        }`
+                      : `table-row audit-grid audit-row ${
+                          isSensitiveAuditLog(log) ? 'is-sensitive' : ''
+                        }`
+                  }
+                  key={log.id}
+                  onClick={() => setFocusedAuditLog(log)}
+                  type="button"
+                >
+                  <span>
+                    {formatDateTime(log.createdAt)}
+                    <small>{log.method}</small>
+                  </span>
+                  <span>
+                    {auditActorName(log)}
+                    <small>
+                      {log.actorRole ? roleLabel(log.actorRole) : 'Sem perfil'}
+                    </small>
+                  </span>
+                  <span>
+                    <strong>{auditActionLabel(log.action)}</strong>
+                    <small>{log.resourceId ?? 'Sem ID vinculado'}</small>
+                  </span>
+                  <span>
+                    {auditResourceLabel(log.resource)}
+                    <small>{log.resource}</small>
+                  </span>
+                  <span>
+                    {auditPurposeLabel(log.metadata?.lgpd?.purpose)}
+                    <small>
+                      {isSensitiveAuditLog(log)
+                        ? 'Dado sensivel'
+                        : 'Operacional'}
+                    </small>
+                  </span>
+                  <span>
+                    <strong>{log.statusCode ?? '-'}</strong>
+                    <small>{auditStatusLabel(log.statusCode)}</small>
+                  </span>
+                </button>
+              ))
+            )}
+
+            <ResultPagination
+              currentPage={auditPage}
+              isLoading={isAuditLoading}
+              label="auditoria"
+              onPageChange={setAuditPage}
+              pageSize={auditPageSize}
+              totalItems={auditTotal}
+            />
+          </div>
+
+          <aside className="audit-detail-card">
+            {focusedAuditLog ? (
+              <>
+                <div>
+                  <p className="eyebrow">Evento em foco</p>
+                  <h3>{auditActionLabel(focusedAuditLog.action)}</h3>
+                  <p>{focusedAuditLog.route}</p>
+                </div>
+
+                <div className="record-grid">
+                  <DetailItem
+                    label="Usuario"
+                    value={auditActorName(focusedAuditLog)}
+                  />
+                  <DetailItem
+                    label="Perfil"
+                    value={
+                      focusedAuditLog.actorRole
+                        ? roleLabel(focusedAuditLog.actorRole)
+                        : 'Sem perfil'
+                    }
+                  />
+                  <DetailItem
+                    label="Modulo"
+                    value={auditResourceLabel(focusedAuditLog.resource)}
+                  />
+                  <DetailItem
+                    label="Finalidade"
+                    value={auditPurposeLabel(
+                      focusedAuditLog.metadata?.lgpd?.purpose,
+                    )}
+                  />
+                  <DetailItem
+                    label="IP"
+                    value={focusedAuditLog.ipAddress ?? 'Nao informado'}
+                  />
+                  <DetailItem
+                    label="Duracao"
+                    value={
+                      focusedAuditLog.metadata?.durationMs
+                        ? `${focusedAuditLog.metadata.durationMs} ms`
+                        : 'Nao medida'
+                    }
+                  />
+                </div>
+
+                <div className="helper-block">
+                  <strong>
+                    {isSensitiveAuditLog(focusedAuditLog)
+                      ? 'Evento sensivel'
+                      : 'Evento operacional'}
+                  </strong>
+                  <span>
+                    Registro preserva rastreabilidade para investigar acesso,
+                    alteracao e finalidade quando necessario.
+                  </span>
+                </div>
+              </>
+            ) : (
+              <div className="empty-state">
+                <strong>Nenhum evento selecionado.</strong>
+                <span>Selecione uma linha para ver os detalhes.</span>
+              </div>
+            )}
+          </aside>
+        </div>
+      </article>
     </section>
   );
 }
@@ -2401,6 +2891,7 @@ function UsersPage({
   const [search, setSearch] = useState('');
   const [hasSearchedUsers, setHasSearchedUsers] = useState(false);
   const [userPage, setUserPage] = useState(1);
+  const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
   const canSearchUsers = search.trim().length >= 2;
   const filteredUsers = useMemo(
@@ -2460,14 +2951,23 @@ function UsersPage({
         </article>
       </section>
 
-      <section className="page-grid module-grid">
+      <section className="page-grid module-grid modal-workspace">
         <article className="panel">
           <div className="page-header">
             <div>
               <p className="eyebrow">Usuarios</p>
               <h2>Buscar acessos</h2>
             </div>
-            <span className="inline-badge">{users.length} no cadastro</span>
+            <div className="toolbar-inline">
+              <button
+                className="primary-button"
+                onClick={() => setIsUserModalOpen(true)}
+                type="button"
+              >
+                Novo usuario
+              </button>
+              <span className="inline-badge">{users.length} no cadastro</span>
+            </div>
           </div>
 
           <OperationalSearchCard
@@ -2498,7 +2998,7 @@ function UsersPage({
               <DirectoryState
                 code="01"
                 title="Nenhum usuario carregado automaticamente."
-                description="Use a busca acima para localizar um login ou utilize o formulario ao lado para cadastrar um novo acesso."
+                description="Use a busca acima para localizar um login ou abra o cadastro em tela suspensa para criar um novo acesso."
               />
             ) : filteredUsers.length === 0 ? (
               <DirectoryState
@@ -2527,125 +3027,126 @@ function UsersPage({
           />
         </article>
 
-        <form className="panel form-panel" onSubmit={onSubmit}>
-          <div className="page-header">
-            <div>
-              <p className="eyebrow">Cadastro administrativo</p>
-              <h2>Novo usuario</h2>
+        <OperationalModal
+          eyebrow="Cadastro administrativo"
+          isOpen={isUserModalOpen}
+          onClose={() => setIsUserModalOpen(false)}
+          title="Novo usuario"
+          toneLabel="Acesso admin"
+        >
+          <form className="modal-form-panel" onSubmit={onSubmit}>
+            <div className="section-block">
+              <p className="section-title">Identificacao e login</p>
+              <div className="field-grid two-columns">
+                <label className="field">
+                  <span>Nome completo</span>
+                  <input
+                    value={form.name}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        name: event.target.value,
+                      }))
+                    }
+                    required
+                  />
+                </label>
+                <label className="field">
+                  <span>Login unico</span>
+                  <input
+                    autoComplete="off"
+                    placeholder="ex: recepcao01"
+                    value={form.username}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        username: normalizeLogin(event.target.value),
+                      }))
+                    }
+                    required
+                  />
+                </label>
+                <label className="field">
+                  <span>Email</span>
+                  <input
+                    type="email"
+                    value={form.email}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        email: event.target.value,
+                      }))
+                    }
+                    required
+                  />
+                </label>
+                <label className="field">
+                  <span>Senha inicial</span>
+                  <input
+                    minLength={6}
+                    type="password"
+                    value={form.password}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        password: event.target.value,
+                      }))
+                    }
+                    required
+                  />
+                </label>
+                <label className="field full-row">
+                  <span>Cargo / permissao</span>
+                  <select
+                    value={form.role}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        role: event.target.value as Role,
+                      }))
+                    }
+                  >
+                    {roleOptions.map((role) => (
+                      <option key={role} value={role}>
+                        {roleLabel(role)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
             </div>
-          </div>
 
-          <div className="section-block">
-            <p className="section-title">Identificacao e login</p>
-            <div className="field-grid two-columns">
-              <label className="field">
-                <span>Nome completo</span>
-                <input
-                  value={form.name}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      name: event.target.value,
-                    }))
-                  }
-                  required
-                />
-              </label>
-              <label className="field">
-                <span>Login unico</span>
-                <input
-                  autoComplete="off"
-                  placeholder="ex: recepcao01"
-                  value={form.username}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      username: normalizeLogin(event.target.value),
-                    }))
-                  }
-                  required
-                />
-              </label>
-              <label className="field">
-                <span>Email</span>
-                <input
-                  type="email"
-                  value={form.email}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      email: event.target.value,
-                    }))
-                  }
-                  required
-                />
-              </label>
-              <label className="field">
-                <span>Senha inicial</span>
-                <input
-                  minLength={6}
-                  type="password"
-                  value={form.password}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      password: event.target.value,
-                    }))
-                  }
-                  required
-                />
-              </label>
-              <label className="field full-row">
-                <span>Cargo / permissao</span>
-                <select
-                  value={form.role}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      role: event.target.value as Role,
-                    }))
-                  }
-                >
-                  {roleOptions.map((role) => (
-                    <option key={role} value={role}>
-                      {roleLabel(role)}
-                    </option>
-                  ))}
-                </select>
-              </label>
+            <PermissionCheckboxFieldset
+              legend={`Permissoes para ${roleLabel(form.role)}`}
+              name="role-permissions"
+              options={selectedRolePermissionOptions}
+              text="Previa do que este cargo consegue acessar. Em uma proxima etapa, estes itens podem virar permissoes granulares salvas no banco."
+            />
+
+            <PermissionCheckboxFieldset
+              legend="Parametros de seguranca"
+              name="user-parameters"
+              options={userParameterOptions}
+              text="Regras operacionais aplicadas ao cadastro de usuarios e preparadas para auditoria."
+            />
+
+            <div className="helper-block">
+              <strong>Permissao administrativa</strong>
+              <span>
+                Apenas ADMIN acessa esta tela. O cargo ADMIN fica com todos os
+                modulos liberados; os demais entram por permissao de setor.
+              </span>
             </div>
-          </div>
 
-          <PermissionCheckboxFieldset
-            legend={`Permissoes para ${roleLabel(form.role)}`}
-            name="role-permissions"
-            options={selectedRolePermissionOptions}
-            text="Previa do que este cargo consegue acessar. Em uma proxima etapa, estes itens podem virar permissoes granulares salvas no banco."
-          />
-
-          <PermissionCheckboxFieldset
-            legend="Parametros de seguranca"
-            name="user-parameters"
-            options={userParameterOptions}
-            text="Regras operacionais aplicadas ao cadastro de usuarios e preparadas para auditoria."
-          />
-
-          <div className="helper-block">
-            <strong>Permissao administrativa</strong>
-            <span>
-              Apenas ADMIN acessa esta tela. O cargo ADMIN fica com todos os
-              modulos liberados; os demais entram por permissao de setor.
-            </span>
-          </div>
-
-          <button
-            className="primary-button"
-            disabled={isSubmitting}
-            type="submit"
-          >
-            {isSubmitting ? 'Salvando...' : 'Cadastrar usuario'}
-          </button>
-        </form>
+            <button
+              className="primary-button"
+              disabled={isSubmitting}
+              type="submit"
+            >
+              {isSubmitting ? 'Salvando...' : 'Cadastrar usuario'}
+            </button>
+          </form>
+        </OperationalModal>
       </section>
     </>
   );
@@ -2776,6 +3277,85 @@ function ResultPagination({
         </button>
       </div>
     </nav>
+  );
+}
+
+function DetailItem({
+  label,
+  value,
+}: {
+  label: string;
+  value: number | string;
+}) {
+  return (
+    <div className="record-line">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+type OperationalModalProps = {
+  children: React.ReactNode;
+  eyebrow?: string;
+  isOpen: boolean;
+  onClose: () => void;
+  size?: 'standard' | 'wide';
+  title: string;
+  toneLabel?: string;
+};
+
+function OperationalModal({
+  children,
+  eyebrow,
+  isOpen,
+  onClose,
+  size = 'wide',
+  title,
+  toneLabel,
+}: OperationalModalProps) {
+  if (!isOpen) {
+    return null;
+  }
+
+  const titleId = `modal-${title
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')}`;
+
+  return (
+    <div
+      className="detail-modal-backdrop"
+      onClick={onClose}
+      role="presentation"
+    >
+      <section
+        aria-labelledby={titleId}
+        aria-modal="true"
+        className={`detail-modal operational-modal ${size === 'standard' ? 'standard' : 'wide'}`}
+        onClick={(event) => event.stopPropagation()}
+        role="dialog"
+      >
+        <header className="detail-modal-header">
+          <div>
+            {eyebrow ? <p className="eyebrow">{eyebrow}</p> : null}
+            <h2 id={titleId}>{title}</h2>
+          </div>
+          <div className="toolbar-inline">
+            {toneLabel ? (
+              <span className="inline-badge">{toneLabel}</span>
+            ) : null}
+            <button className="ghost-button" onClick={onClose} type="button">
+              Fechar
+            </button>
+          </div>
+        </header>
+
+        {children}
+      </section>
+    </div>
   );
 }
 
@@ -3155,11 +3735,14 @@ function SidebarSearch({
   return (
     <label className="sidebar-search">
       <span>Pesquisar</span>
-      <input
-        placeholder={placeholder}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      />
+      <div className="sidebar-search-row">
+        <i className="search-lens" aria-hidden="true" />
+        <input
+          placeholder={placeholder}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+        />
+      </div>
       <small>{count} atalhos</small>
     </label>
   );
@@ -4277,7 +4860,7 @@ function AgreementsPage({ sessionToken }: AgreementsPageProps) {
   }
 
   return (
-    <section className="page-grid agreements-workspace">
+    <section className="page-grid agreements-workspace modal-workspace">
       <article className="panel">
         <div className="page-header">
           <div>
@@ -4362,7 +4945,23 @@ function AgreementsPage({ sessionToken }: AgreementsPageProps) {
         />
       </article>
 
-      <aside className="panel form-panel">
+      <OperationalModal
+        eyebrow="Ficha do convenio"
+        isOpen={Boolean(focusedAgreement)}
+        onClose={() => {
+          setSelectedAgreementId(null);
+          setPricingRules([]);
+          setRuleForm(initialAgreementPricingRuleForm);
+        }}
+        title={focusedAgreement?.name ?? 'Convenio'}
+        toneLabel={
+          focusedAgreement
+            ? focusedAgreement.active
+              ? 'Ativo'
+              : 'Inativo'
+            : undefined
+        }
+      >
         <div className="page-header">
           <div>
             <p className="eyebrow">Ficha do convênio</p>
@@ -4376,7 +4975,7 @@ function AgreementsPage({ sessionToken }: AgreementsPageProps) {
         </div>
 
         {focusedAgreement ? (
-          <>
+          <section className="patient-record-card modal-record-card">
             <div className="record-grid">
               <RecordLine label="Nome" value={focusedAgreement.name} />
               <RecordLine label="Codigo" value={focusedAgreement.code} />
@@ -4546,7 +5145,7 @@ function AgreementsPage({ sessionToken }: AgreementsPageProps) {
                 {isSavingRule ? 'Salvando...' : 'Vincular tabela'}
               </button>
             </form>
-          </>
+          </section>
         ) : (
           <DirectoryState
             code="01"
@@ -4554,7 +5153,7 @@ function AgreementsPage({ sessionToken }: AgreementsPageProps) {
             description="A ficha aparece aqui depois que uma operadora for escolhida."
           />
         )}
-      </aside>
+      </OperationalModal>
     </section>
   );
 }
@@ -4607,9 +5206,9 @@ function PatientsPage({
   const previewPatient = hasSearchedPatients
     ? (patientResults[0] ?? null)
     : null;
-  const focusedPatient =
-    patientResults.find((patient) => patient.id === selectedPatientId) ??
-    previewPatient;
+  const selectedPatient =
+    patientResults.find((patient) => patient.id === selectedPatientId) ?? null;
+  const focusedPatient = selectedPatient ?? previewPatient;
   const isEditorVisible = isEditorRequested || Boolean(editingPatientId);
   const editingPatient =
     patientResults.find((patient) => patient.id === editingPatientId) ??
@@ -4658,7 +5257,7 @@ function PatientsPage({
       setPatientResults(nextPatients);
       setPatientResultTotal(nextTotal);
       setPatientPage(page);
-      setSelectedPatientId(nextPatients[0]?.id ?? null);
+      setSelectedPatientId(null);
       setHasSearchedPatients(true);
       setPatientSearchStatus('ready');
     } catch (error) {
@@ -4682,6 +5281,7 @@ function PatientsPage({
 
   function openNewPatientEditor() {
     onResetPatient();
+    setSelectedPatientId(null);
     setIsEditorRequested(true);
     setActiveTab('identificacao');
   }
@@ -4705,13 +5305,14 @@ function PatientsPage({
   }
 
   function openPatientForEdit(patient: Patient) {
+    setSelectedPatientId(null);
     setIsEditorRequested(true);
     setActiveTab('identificacao');
     onEditPatient(patient);
   }
 
   return (
-    <section className="page-grid patients-workspace">
+    <section className="page-grid patients-workspace modal-workspace">
       <article className="panel patient-directory">
         <div className="page-header">
           <div>
@@ -4858,90 +5459,95 @@ function PatientsPage({
           totalItems={patientResultTotal}
         />
 
-        {focusedPatient ? (
-          <section className="patient-record-card">
-            <div className="page-header">
-              <div>
-                <p className="eyebrow">Ficha completa</p>
-                <h2>{focusedPatient.name}</h2>
+        <OperationalModal
+          eyebrow="Ficha completa"
+          isOpen={Boolean(selectedPatient)}
+          onClose={() => setSelectedPatientId(null)}
+          title={selectedPatient?.name ?? 'Paciente'}
+          toneLabel={
+            selectedPatient ? patientStatusLabel(selectedPatient.status) : ''
+          }
+        >
+          {selectedPatient ? (
+            <section className="patient-record-card modal-record-card">
+              <div className="modal-action-row">
+                <button
+                  className="ghost-button"
+                  onClick={() => openPatientForEdit(selectedPatient)}
+                  type="button"
+                >
+                  Editar ficha
+                </button>
               </div>
-              <button
-                className="ghost-button"
-                onClick={() => openPatientForEdit(focusedPatient)}
-                type="button"
-              >
-                Editar ficha
-              </button>
-            </div>
 
-            <div className="record-grid">
-              <RecordLine label="CPF" value={focusedPatient.cpf} />
-              <RecordLine label="RG" value={focusedPatient.rg} />
-              <RecordLine
-                label="Nascimento"
-                value={formatDate(focusedPatient.birthDate)}
-              />
-              <RecordLine
-                label="Status"
-                value={patientStatusLabel(focusedPatient.status)}
-              />
-              <RecordLine label="Telefone" value={focusedPatient.phone} />
-              <RecordLine label="Email" value={focusedPatient.email} />
-              <RecordLine label="Endereco" value={focusedPatient.address} />
-              <RecordLine
-                label="Cidade/UF"
-                value={[focusedPatient.city, focusedPatient.state]
-                  .filter(Boolean)
-                  .join(' / ')}
-              />
-              <RecordLine
-                label="Contato emergencia"
-                value={focusedPatient.emergencyContact}
-              />
-              <RecordLine
-                label="Telefone emergencia"
-                value={focusedPatient.emergencyPhone}
-              />
-              <RecordLine label="Alergias" value={focusedPatient.allergies} />
-              <RecordLine
-                label="Historico"
-                value={focusedPatient.medicalHistory}
-              />
-            </div>
+              <div className="record-grid">
+                <RecordLine label="CPF" value={selectedPatient.cpf} />
+                <RecordLine label="RG" value={selectedPatient.rg} />
+                <RecordLine
+                  label="Nascimento"
+                  value={formatDate(selectedPatient.birthDate)}
+                />
+                <RecordLine
+                  label="Status"
+                  value={patientStatusLabel(selectedPatient.status)}
+                />
+                <RecordLine label="Telefone" value={selectedPatient.phone} />
+                <RecordLine label="Email" value={selectedPatient.email} />
+                <RecordLine label="Endereco" value={selectedPatient.address} />
+                <RecordLine
+                  label="Cidade/UF"
+                  value={[selectedPatient.city, selectedPatient.state]
+                    .filter(Boolean)
+                    .join(' / ')}
+                />
+                <RecordLine
+                  label="Contato emergencia"
+                  value={selectedPatient.emergencyContact}
+                />
+                <RecordLine
+                  label="Telefone emergencia"
+                  value={selectedPatient.emergencyPhone}
+                />
+                <RecordLine
+                  label="Alergias"
+                  value={selectedPatient.allergies}
+                />
+                <RecordLine
+                  label="Historico"
+                  value={selectedPatient.medicalHistory}
+                />
+              </div>
 
-            {focusedPatient.blockReason ? (
-              <p className="empty-state compact">
-                {focusedPatient.blockReason}
-              </p>
-            ) : null}
+              {selectedPatient.blockReason ? (
+                <p className="empty-state compact">
+                  {selectedPatient.blockReason}
+                </p>
+              ) : null}
 
-            <div className="document-list">
-              <span className="section-title">Documentos anexados</span>
-              {focusedPatient.documents &&
-              focusedPatient.documents.length > 0 ? (
-                focusedPatient.documents.map((document) => (
-                  <small key={document}>{document}</small>
-                ))
-              ) : (
-                <small>Nenhum documento registrado ainda.</small>
-              )}
-            </div>
-          </section>
-        ) : null}
+              <div className="document-list">
+                <span className="section-title">Documentos anexados</span>
+                {selectedPatient.documents &&
+                selectedPatient.documents.length > 0 ? (
+                  selectedPatient.documents.map((document) => (
+                    <small key={document}>{document}</small>
+                  ))
+                ) : (
+                  <small>Nenhum documento registrado ainda.</small>
+                )}
+              </div>
+            </section>
+          ) : null}
+        </OperationalModal>
       </article>
 
-      {isEditorVisible ? (
-        <form className="panel patient-editor" onSubmit={onSubmit}>
-          <div className="page-header">
-            <div>
-              <p className="eyebrow">Cadastro assistido</p>
-              <h2>{editingPatient ? 'Editar paciente' : 'Novo paciente'}</h2>
-            </div>
-            <span className="inline-badge">
-              {editingPatient ? 'Ficha em edicao' : 'Cadastro em abas'}
-            </span>
-          </div>
-
+      <OperationalModal
+        eyebrow="Cadastro assistido"
+        isOpen={isEditorVisible}
+        onClose={closePatientEditor}
+        title={editingPatient ? 'Editar paciente' : 'Novo paciente'}
+        toneLabel={editingPatient ? 'Ficha em edicao' : 'Cadastro em abas'}
+      >
+        <form className="modal-form-panel patient-editor" onSubmit={onSubmit}>
           <div
             className="patient-tabs"
             role="tablist"
@@ -5304,31 +5910,7 @@ function PatientsPage({
             </button>
           </div>
         </form>
-      ) : (
-        <aside className="panel patient-editor patient-editor-empty">
-          <div className="page-header">
-            <div>
-              <p className="eyebrow">Cadastro assistido</p>
-              <h2>Nenhuma ficha aberta</h2>
-            </div>
-            <span className="inline-badge">Fluxo protegido</span>
-          </div>
-
-          <DirectoryState
-            code="02"
-            title="Cadastre apenas quando houver uma nova passagem."
-            description="Primeiro consulte a base para evitar duplicidade. Se nao encontrar o paciente, abra um cadastro limpo e preencha as abas por etapa."
-          />
-
-          <button
-            className="primary-button"
-            onClick={openNewPatientEditor}
-            type="button"
-          >
-            Abrir novo cadastro
-          </button>
-        </aside>
-      )}
+      </OperationalModal>
     </section>
   );
 }
@@ -5358,12 +5940,11 @@ function ProceduresPage({ sessionToken }: ProceduresPageProps) {
   const [isSavingProcedure, setIsSavingProcedure] = useState(false);
   const searchTerm = search.trim();
   const canSearchProcedure = searchTerm.length >= 2;
-  const focusedProcedure =
+  const selectedProcedure =
     procedureResults.find(
       (procedure) => procedure.id === selectedProcedureId,
-    ) ??
-    procedureResults[0] ??
-    null;
+    ) ?? null;
+  const focusedProcedure = selectedProcedure ?? procedureResults[0] ?? null;
   const editingProcedure =
     procedureResults.find((procedure) => procedure.id === editingProcedureId) ??
     null;
@@ -5399,7 +5980,7 @@ function ProceduresPage({ sessionToken }: ProceduresPageProps) {
       setProcedureResults(nextProcedures);
       setProcedureResultTotal(nextTotal);
       setProcedurePage(page);
-      setSelectedProcedureId(nextProcedures[0]?.id ?? null);
+      setSelectedProcedureId(null);
       setHasSearchedProcedures(true);
       setProcedureSearchStatus('ready');
     } catch (error) {
@@ -5424,6 +6005,7 @@ function ProceduresPage({ sessionToken }: ProceduresPageProps) {
   function openNewProcedureEditor() {
     setProcedureForm(initialProcedureForm);
     setEditingProcedureId(null);
+    setSelectedProcedureId(null);
     setIsEditorRequested(true);
   }
 
@@ -5448,6 +6030,7 @@ function ProceduresPage({ sessionToken }: ProceduresPageProps) {
   function openProcedureForEdit(procedure: Procedure) {
     setProcedureForm(createProcedureForm(procedure));
     setEditingProcedureId(procedure.id);
+    setSelectedProcedureId(null);
     setIsEditorRequested(true);
   }
 
@@ -5499,7 +6082,7 @@ function ProceduresPage({ sessionToken }: ProceduresPageProps) {
   }
 
   return (
-    <section className="page-grid procedures-workspace">
+    <section className="page-grid procedures-workspace modal-workspace">
       <article className="panel procedure-directory">
         <div className="page-header">
           <div>
@@ -5644,84 +6227,92 @@ function ProceduresPage({ sessionToken }: ProceduresPageProps) {
           totalItems={procedureResultTotal}
         />
 
-        {focusedProcedure ? (
-          <section className="patient-record-card">
-            <div className="page-header">
-              <div>
-                <p className="eyebrow">Ficha tecnica</p>
-                <h2>{focusedProcedure.description}</h2>
+        <OperationalModal
+          eyebrow="Ficha tecnica"
+          isOpen={Boolean(selectedProcedure)}
+          onClose={() => setSelectedProcedureId(null)}
+          title={selectedProcedure?.description ?? 'Procedimento'}
+          toneLabel={
+            selectedProcedure
+              ? procedureTypeLabel(selectedProcedure.type)
+              : undefined
+          }
+        >
+          {selectedProcedure ? (
+            <section className="patient-record-card modal-record-card">
+              <div className="modal-action-row">
+                <button
+                  className="ghost-button"
+                  onClick={() => openProcedureForEdit(selectedProcedure)}
+                  type="button"
+                >
+                  Editar procedimento
+                </button>
               </div>
-              <button
-                className="ghost-button"
-                onClick={() => openProcedureForEdit(focusedProcedure)}
-                type="button"
-              >
-                Editar procedimento
-              </button>
-            </div>
 
-            <div className="record-grid">
-              <RecordLine label="Codigo" value={focusedProcedure.code} />
-              <RecordLine
-                label="Tipo"
-                value={procedureTypeLabel(focusedProcedure.type)}
-              />
-              <RecordLine label="Tabela" value={focusedProcedure.tableCode} />
-              <RecordLine label="Grupo" value={focusedProcedure.groupName} />
-              <RecordLine label="Unidade" value={focusedProcedure.unit} />
-              <RecordLine
-                label="Valor referencia"
-                value={formatCurrencyFromCents(
-                  focusedProcedure.referencePriceCents,
-                )}
-              />
-              <RecordLine
-                label="Autorizacao"
-                value={
-                  focusedProcedure.requiresAuthorization
-                    ? 'Obrigatoria'
-                    : 'Nao obrigatoria'
-                }
-              />
-              <RecordLine
-                label="Laudo"
-                value={
-                  focusedProcedure.requiresReport
-                    ? 'Obrigatorio'
-                    : 'Nao obrigatorio'
-                }
-              />
-              <RecordLine
-                label="Faturavel"
-                value={focusedProcedure.billable ? 'Sim' : 'Nao'}
-              />
-              <RecordLine
-                label="Status"
-                value={focusedProcedure.active ? 'Ativo' : 'Inativo'}
-              />
-            </div>
+              <div className="record-grid">
+                <RecordLine label="Codigo" value={selectedProcedure.code} />
+                <RecordLine
+                  label="Tipo"
+                  value={procedureTypeLabel(selectedProcedure.type)}
+                />
+                <RecordLine
+                  label="Tabela"
+                  value={selectedProcedure.tableCode}
+                />
+                <RecordLine label="Grupo" value={selectedProcedure.groupName} />
+                <RecordLine label="Unidade" value={selectedProcedure.unit} />
+                <RecordLine
+                  label="Valor referencia"
+                  value={formatCurrencyFromCents(
+                    selectedProcedure.referencePriceCents,
+                  )}
+                />
+                <RecordLine
+                  label="Autorizacao"
+                  value={
+                    selectedProcedure.requiresAuthorization
+                      ? 'Obrigatoria'
+                      : 'Nao obrigatoria'
+                  }
+                />
+                <RecordLine
+                  label="Laudo"
+                  value={
+                    selectedProcedure.requiresReport
+                      ? 'Obrigatorio'
+                      : 'Nao obrigatorio'
+                  }
+                />
+                <RecordLine
+                  label="Faturavel"
+                  value={selectedProcedure.billable ? 'Sim' : 'Nao'}
+                />
+                <RecordLine
+                  label="Status"
+                  value={selectedProcedure.active ? 'Ativo' : 'Inativo'}
+                />
+              </div>
 
-            {focusedProcedure.notes ? (
-              <p className="empty-state compact">{focusedProcedure.notes}</p>
-            ) : null}
-          </section>
-        ) : null}
+              {selectedProcedure.notes ? (
+                <p className="empty-state compact">{selectedProcedure.notes}</p>
+              ) : null}
+            </section>
+          ) : null}
+        </OperationalModal>
       </article>
 
-      {isEditorVisible ? (
-        <form className="panel procedure-editor" onSubmit={saveProcedure}>
-          <div className="page-header">
-            <div>
-              <p className="eyebrow">Cadastro parametrizado</p>
-              <h2>
-                {editingProcedure ? 'Editar procedimento' : 'Novo procedimento'}
-              </h2>
-            </div>
-            <span className="inline-badge">
-              {editingProcedure ? 'Ficha em edicao' : 'Base de tabela'}
-            </span>
-          </div>
-
+      <OperationalModal
+        eyebrow="Cadastro parametrizado"
+        isOpen={isEditorVisible}
+        onClose={closeProcedureEditor}
+        title={editingProcedure ? 'Editar procedimento' : 'Novo procedimento'}
+        toneLabel={editingProcedure ? 'Ficha em edicao' : 'Base de tabela'}
+      >
+        <form
+          className="modal-form-panel procedure-editor"
+          onSubmit={saveProcedure}
+        >
           <div className="section-block">
             <p className="section-title">Identificacao</p>
             <div className="field-grid two-columns">
@@ -5935,31 +6526,7 @@ function ProceduresPage({ sessionToken }: ProceduresPageProps) {
             </button>
           </div>
         </form>
-      ) : (
-        <aside className="panel procedure-editor patient-editor-empty">
-          <div className="page-header">
-            <div>
-              <p className="eyebrow">Cadastro parametrizado</p>
-              <h2>Nenhum item aberto</h2>
-            </div>
-            <span className="inline-badge">Fluxo protegido</span>
-          </div>
-
-          <DirectoryState
-            code="02"
-            title="Cadastre apenas depois de consultar a tabela."
-            description="Primeiro procure pelo codigo ou descricao para evitar duplicidade. Se nao existir, abra um cadastro limpo."
-          />
-
-          <button
-            className="primary-button"
-            onClick={openNewProcedureEditor}
-            type="button"
-          >
-            Abrir novo procedimento
-          </button>
-        </aside>
-      )}
+      </OperationalModal>
     </section>
   );
 }
@@ -5991,6 +6558,8 @@ function PricingTablesPage({ sessionToken }: PricingTablesPageProps) {
   const [isSavingTable, setIsSavingTable] = useState(false);
   const [isSavingPrice, setIsSavingPrice] = useState(false);
   const [isCreatingCbhpmRange, setIsCreatingCbhpmRange] = useState(false);
+  const [isTableModalOpen, setIsTableModalOpen] = useState(false);
+  const [isPriceModalOpen, setIsPriceModalOpen] = useState(false);
   const tableSearchTerm = tableSearch.trim();
   const procedureSearchTerm = procedureSearch.trim();
   const canSearchTables = tableSearchTerm.length >= 2;
@@ -6043,20 +6612,15 @@ function PricingTablesPage({ sessionToken }: PricingTablesPageProps) {
       setPricingTables(nextTables);
       setPricingTableTotal(nextTotal);
       setPricingTablePage(page);
-      setSelectedTableId(nextTables[0]?.id ?? null);
+      setSelectedTableId(null);
       setPriceForm((current) => ({
         ...current,
-        pricingTableId: nextTables[0]?.id ?? '',
+        pricingTableId: '',
       }));
       setHasSearchedTables(true);
       setTableSearchStatus('ready');
-
-      if (nextTables[0]) {
-        await loadProcedurePrices(nextTables[0].id);
-      } else {
-        setProcedurePrices([]);
-        setPriceTotal(0);
-      }
+      setProcedurePrices([]);
+      setPriceTotal(0);
     } catch (error) {
       setPricingTables([]);
       setPricingTableTotal(0);
@@ -6100,6 +6664,7 @@ function PricingTablesPage({ sessionToken }: PricingTablesPageProps) {
         pricingTableId: createdTable.id,
       }));
       setTableForm(initialPricingTableForm);
+      setIsTableModalOpen(false);
       setHasSearchedTables(true);
       setTableSearchStatus('ready');
       await loadProcedurePrices(createdTable.id);
@@ -6133,17 +6698,15 @@ function PricingTablesPage({ sessionToken }: PricingTablesPageProps) {
       setPricingTableTotal((current) =>
         Math.max(current, mergePricingTables(createdTables).length),
       );
-      setSelectedTableId(createdTables[0]?.id ?? null);
+      setSelectedTableId(null);
       setPriceForm((current) => ({
         ...current,
-        pricingTableId: createdTables[0]?.id ?? '',
+        pricingTableId: '',
       }));
       setHasSearchedTables(true);
       setTableSearchStatus('ready');
-
-      if (createdTables[0]) {
-        await loadProcedurePrices(createdTables[0].id);
-      }
+      setProcedurePrices([]);
+      setPriceTotal(0);
     } catch (error) {
       setTableError(
         error instanceof Error
@@ -6247,6 +6810,8 @@ function PricingTablesPage({ sessionToken }: PricingTablesPageProps) {
       }));
       setProcedureSearch('');
       setProcedureOptions([]);
+      setIsPriceModalOpen(false);
+      await loadProcedurePrices(createdPrice.pricingTableId);
     } catch (error) {
       setTableError(
         error instanceof Error
@@ -6272,21 +6837,30 @@ function PricingTablesPage({ sessionToken }: PricingTablesPageProps) {
   }
 
   return (
-    <section className="page-grid pricing-workspace">
+    <section className="page-grid pricing-workspace modal-workspace">
       <article className="panel">
         <div className="page-header">
           <div>
             <p className="eyebrow">Tabelas Proc.</p>
             <h2>CBHPM e precificacao</h2>
           </div>
-          <button
-            className="primary-button"
-            disabled={isCreatingCbhpmRange}
-            onClick={createCbhpmRange}
-            type="button"
-          >
-            {isCreatingCbhpmRange ? 'Criando...' : 'Criar CBHPM 2004-2017'}
-          </button>
+          <div className="toolbar-inline">
+            <button
+              className="primary-button"
+              onClick={() => setIsTableModalOpen(true)}
+              type="button"
+            >
+              Nova tabela
+            </button>
+            <button
+              className="ghost-button"
+              disabled={isCreatingCbhpmRange}
+              onClick={createCbhpmRange}
+              type="button"
+            >
+              {isCreatingCbhpmRange ? 'Criando...' : 'Criar CBHPM 2004-2017'}
+            </button>
+          </div>
         </div>
 
         <OperationalSearchCard
@@ -6346,7 +6920,7 @@ function PricingTablesPage({ sessionToken }: PricingTablesPageProps) {
                     onClick={() => void selectPricingTable(table)}
                     type="button"
                   >
-                    Usar
+                    Ver
                   </button>
                 </div>
               </div>
@@ -6363,70 +6937,90 @@ function PricingTablesPage({ sessionToken }: PricingTablesPageProps) {
           totalItems={pricingTableTotal}
         />
 
-        {selectedTable ? (
-          <section className="patient-record-card">
-            <div className="page-header">
-              <div>
-                <p className="eyebrow">Tabela em foco</p>
-                <h2>{selectedTable.name}</h2>
+        <OperationalModal
+          eyebrow="Tabela em foco"
+          isOpen={Boolean(selectedTable)}
+          onClose={() => setSelectedTableId(null)}
+          title={selectedTable?.name ?? 'Tabela'}
+          toneLabel={
+            selectedTable
+              ? pricingTableTypeLabel(selectedTable.type)
+              : undefined
+          }
+        >
+          {selectedTable ? (
+            <section className="patient-record-card modal-record-card">
+              <div className="modal-action-row">
+                <button
+                  className="primary-button"
+                  onClick={() => {
+                    setPriceForm((current) => ({
+                      ...current,
+                      pricingTableId: selectedTable.id,
+                    }));
+                    setIsPriceModalOpen(true);
+                  }}
+                  type="button"
+                >
+                  Adicionar valor
+                </button>
               </div>
-              <span className="inline-badge">
-                {pricingTableTypeLabel(selectedTable.type)}
-              </span>
-            </div>
 
-            <div className="record-grid">
-              <RecordLine
-                label="Ano"
-                value={String(selectedTable.year || '')}
-              />
-              <RecordLine label="Codigo" value={selectedTable.code} />
-              <RecordLine
-                label="Status"
-                value={selectedTable.active ? 'Ativa' : 'Inativa'}
-              />
-              <RecordLine label="Valores" value={`${priceTotal} item(ns)`} />
-            </div>
+              <div className="record-grid">
+                <RecordLine
+                  label="Ano"
+                  value={String(selectedTable.year || '')}
+                />
+                <RecordLine label="Codigo" value={selectedTable.code} />
+                <RecordLine
+                  label="Status"
+                  value={selectedTable.active ? 'Ativa' : 'Inativa'}
+                />
+                <RecordLine label="Valores" value={`${priceTotal} item(ns)`} />
+              </div>
 
-            <div className="exam-item-list">
-              <span className="section-title">Valores cadastrados</span>
-              {procedurePrices.length === 0 ? (
-                <p className="empty-state compact">
-                  Nenhum procedimento precificado nesta tabela ainda.
-                </p>
-              ) : (
-                procedurePrices.map((price) => (
-                  <article className="exam-item-card" key={price.id}>
-                    <strong>{price.procedure.description}</strong>
-                    <small>
-                      {price.procedure.code} -{' '}
-                      {formatCurrencyFromCents(price.priceCents)}
-                    </small>
-                    <small>
-                      {price.billingUnit || 'Unidade'}
-                      {price.operationalCostCents
-                        ? ` - custo ${formatCurrencyFromCents(
-                            price.operationalCostCents,
-                          )}`
-                        : ''}
-                    </small>
-                  </article>
-                ))
-              )}
-            </div>
-          </section>
-        ) : null}
+              <div className="exam-item-list">
+                <span className="section-title">Valores cadastrados</span>
+                {procedurePrices.length === 0 ? (
+                  <p className="empty-state compact">
+                    Nenhum procedimento precificado nesta tabela ainda.
+                  </p>
+                ) : (
+                  procedurePrices.map((price) => (
+                    <article className="exam-item-card" key={price.id}>
+                      <strong>{price.procedure.description}</strong>
+                      <small>
+                        {price.procedure.code} -{' '}
+                        {formatCurrencyFromCents(price.priceCents)}
+                      </small>
+                      <small>
+                        {price.billingUnit || 'Unidade'}
+                        {price.operationalCostCents
+                          ? ` - custo ${formatCurrencyFromCents(
+                              price.operationalCostCents,
+                            )}`
+                          : ''}
+                      </small>
+                    </article>
+                  ))
+                )}
+              </div>
+            </section>
+          ) : null}
+        </OperationalModal>
       </article>
 
-      <aside className="panel form-panel">
-        <form className="section-block" onSubmit={createPricingTable}>
-          <div className="page-header">
-            <div>
-              <p className="eyebrow">Nova tabela</p>
-              <h2>Cadastro de regra</h2>
-            </div>
-          </div>
-
+      <OperationalModal
+        eyebrow="Nova tabela"
+        isOpen={isTableModalOpen}
+        onClose={() => setIsTableModalOpen(false)}
+        title="Cadastro de regra"
+        toneLabel="Precificacao"
+      >
+        <form
+          className="modal-form-panel section-block"
+          onSubmit={createPricingTable}
+        >
           <div className="field-grid two-columns">
             <label className="field full-row">
               <span>Nome da tabela</span>
@@ -6523,207 +7117,217 @@ function PricingTablesPage({ sessionToken }: PricingTablesPageProps) {
             {isSavingTable ? 'Salvando...' : 'Salvar tabela'}
           </button>
         </form>
+      </OperationalModal>
 
-        <form
-          className="operational-search-card"
-          onSubmit={searchProceduresForPricing}
-        >
-          <div>
-            <span className="section-title">Precificar procedimento</span>
-            <strong>Localize o item da base operacional.</strong>
-            <small>Use codigo, descricao, grupo ou tabela.</small>
-          </div>
-          <div className="operational-search-actions">
-            <input
-              className="search-input"
-              placeholder="Ex: consulta, cirurgia, vitamina"
-              value={procedureSearch}
-              onChange={(event) => setProcedureSearch(event.target.value)}
-            />
-            <button
-              className="ghost-button"
-              disabled={
-                procedureSearchStatus === 'loading' || !canSearchProcedure
-              }
-              type="submit"
-            >
-              {procedureSearchStatus === 'loading' ? 'Buscando...' : 'Buscar'}
-            </button>
-            <button
-              className="ghost-button"
-              onClick={() => {
-                setProcedureSearch('');
-                setProcedureOptions([]);
-              }}
-              type="button"
-            >
-              Limpar
-            </button>
-          </div>
-        </form>
-
-        {procedureOptions.length > 0 ? (
-          <div className="selection-list">
-            {procedureOptions.map((procedure) => (
+      <OperationalModal
+        eyebrow="Precificacao"
+        isOpen={isPriceModalOpen}
+        onClose={() => setIsPriceModalOpen(false)}
+        title="Adicionar valor na tabela"
+        toneLabel={selectedTable?.name ?? 'Tabela'}
+      >
+        <div className="modal-form-panel">
+          <form
+            className="operational-search-card"
+            onSubmit={searchProceduresForPricing}
+          >
+            <div>
+              <span className="section-title">Precificar procedimento</span>
+              <strong>Localize o item da base operacional.</strong>
+              <small>Use codigo, descricao, grupo ou tabela.</small>
+            </div>
+            <div className="operational-search-actions">
+              <input
+                className="search-input"
+                placeholder="Ex: consulta, cirurgia, vitamina"
+                value={procedureSearch}
+                onChange={(event) => setProcedureSearch(event.target.value)}
+              />
               <button
-                className="selection-row"
-                key={procedure.id}
-                onClick={() =>
-                  setPriceForm((current) => ({
-                    ...current,
-                    procedureId: procedure.id,
-                  }))
+                className="ghost-button"
+                disabled={
+                  procedureSearchStatus === 'loading' || !canSearchProcedure
                 }
+                type="submit"
+              >
+                {procedureSearchStatus === 'loading' ? 'Buscando...' : 'Buscar'}
+              </button>
+              <button
+                className="ghost-button"
+                onClick={() => {
+                  setProcedureSearch('');
+                  setProcedureOptions([]);
+                }}
                 type="button"
               >
-                <strong>{procedure.description}</strong>
-                <small>
-                  {procedure.code} - {procedureTypeLabel(procedure.type)}
-                </small>
+                Limpar
               </button>
-            ))}
-          </div>
-        ) : null}
+            </div>
+          </form>
 
-        <form className="section-block" onSubmit={createProcedurePrice}>
-          <div className="field-grid two-columns">
-            <label className="field full-row">
-              <span>Tabela selecionada</span>
-              <select
-                value={priceForm.pricingTableId}
-                onChange={(event) =>
-                  setPriceForm((current) => ({
-                    ...current,
-                    pricingTableId: event.target.value,
-                  }))
-                }
-                required
-              >
-                <option value="">Selecione</option>
-                {pricingTables.map((table) => (
-                  <option key={table.id} value={table.id}>
-                    {table.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="field full-row">
-              <span>Procedimento selecionado</span>
-              <input
-                readOnly
-                value={
-                  selectedProcedure
-                    ? `${selectedProcedure.code} - ${selectedProcedure.description}`
-                    : 'Busque e selecione um procedimento'
-                }
-              />
-            </label>
-            <label className="field">
-              <span>Valor final</span>
-              <input
-                inputMode="decimal"
-                placeholder="0,00"
-                value={priceForm.price}
-                onChange={(event) =>
-                  setPriceForm((current) => ({
-                    ...current,
-                    price: event.target.value,
-                  }))
-                }
-                required
-              />
-            </label>
-            <label className="field">
-              <span>Custo operacional</span>
-              <input
-                inputMode="decimal"
-                placeholder="0,00"
-                value={priceForm.operationalCost}
-                onChange={(event) =>
-                  setPriceForm((current) => ({
-                    ...current,
-                    operationalCost: event.target.value,
-                  }))
-                }
-              />
-            </label>
-            <label className="field">
-              <span>Unidade de cobranca</span>
-              <input
-                placeholder="Unidade, CH, UCO, taxa..."
-                value={priceForm.billingUnit}
-                onChange={(event) =>
-                  setPriceForm((current) => ({
-                    ...current,
-                    billingUnit: event.target.value,
-                  }))
-                }
-              />
-            </label>
-            <label className="field">
-              <span>Status</span>
-              <select
-                value={priceForm.active ? 'ATIVO' : 'INATIVO'}
-                onChange={(event) =>
-                  setPriceForm((current) => ({
-                    ...current,
-                    active: event.target.value === 'ATIVO',
-                  }))
-                }
-              >
-                <option value="ATIVO">Ativo</option>
-                <option value="INATIVO">Inativo</option>
-              </select>
-            </label>
-            <label className="field">
-              <span>Vigencia inicial</span>
-              <input
-                type="date"
-                value={priceForm.effectiveFrom}
-                onChange={(event) =>
-                  setPriceForm((current) => ({
-                    ...current,
-                    effectiveFrom: event.target.value,
-                  }))
-                }
-              />
-            </label>
-            <label className="field">
-              <span>Vigencia final</span>
-              <input
-                type="date"
-                value={priceForm.effectiveTo}
-                onChange={(event) =>
-                  setPriceForm((current) => ({
-                    ...current,
-                    effectiveTo: event.target.value,
-                  }))
-                }
-              />
-            </label>
-            <label className="field full-row">
-              <span>Observacoes</span>
-              <textarea
-                value={priceForm.notes}
-                onChange={(event) =>
-                  setPriceForm((current) => ({
-                    ...current,
-                    notes: event.target.value,
-                  }))
-                }
-              />
-            </label>
-          </div>
+          {procedureOptions.length > 0 ? (
+            <div className="selection-list">
+              {procedureOptions.map((procedure) => (
+                <button
+                  className="selection-row"
+                  key={procedure.id}
+                  onClick={() =>
+                    setPriceForm((current) => ({
+                      ...current,
+                      procedureId: procedure.id,
+                    }))
+                  }
+                  type="button"
+                >
+                  <strong>{procedure.description}</strong>
+                  <small>
+                    {procedure.code} - {procedureTypeLabel(procedure.type)}
+                  </small>
+                </button>
+              ))}
+            </div>
+          ) : null}
 
-          <button
-            className="primary-button"
-            disabled={isSavingPrice || !canSavePrice}
-            type="submit"
-          >
-            {isSavingPrice ? 'Salvando...' : 'Salvar valor na tabela'}
-          </button>
-        </form>
-      </aside>
+          <form className="section-block" onSubmit={createProcedurePrice}>
+            <div className="field-grid two-columns">
+              <label className="field full-row">
+                <span>Tabela selecionada</span>
+                <select
+                  value={priceForm.pricingTableId}
+                  onChange={(event) =>
+                    setPriceForm((current) => ({
+                      ...current,
+                      pricingTableId: event.target.value,
+                    }))
+                  }
+                  required
+                >
+                  <option value="">Selecione</option>
+                  {pricingTables.map((table) => (
+                    <option key={table.id} value={table.id}>
+                      {table.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field full-row">
+                <span>Procedimento selecionado</span>
+                <input
+                  readOnly
+                  value={
+                    selectedProcedure
+                      ? `${selectedProcedure.code} - ${selectedProcedure.description}`
+                      : 'Busque e selecione um procedimento'
+                  }
+                />
+              </label>
+              <label className="field">
+                <span>Valor final</span>
+                <input
+                  inputMode="decimal"
+                  placeholder="0,00"
+                  value={priceForm.price}
+                  onChange={(event) =>
+                    setPriceForm((current) => ({
+                      ...current,
+                      price: event.target.value,
+                    }))
+                  }
+                  required
+                />
+              </label>
+              <label className="field">
+                <span>Custo operacional</span>
+                <input
+                  inputMode="decimal"
+                  placeholder="0,00"
+                  value={priceForm.operationalCost}
+                  onChange={(event) =>
+                    setPriceForm((current) => ({
+                      ...current,
+                      operationalCost: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label className="field">
+                <span>Unidade de cobranca</span>
+                <input
+                  placeholder="Unidade, CH, UCO, taxa..."
+                  value={priceForm.billingUnit}
+                  onChange={(event) =>
+                    setPriceForm((current) => ({
+                      ...current,
+                      billingUnit: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label className="field">
+                <span>Status</span>
+                <select
+                  value={priceForm.active ? 'ATIVO' : 'INATIVO'}
+                  onChange={(event) =>
+                    setPriceForm((current) => ({
+                      ...current,
+                      active: event.target.value === 'ATIVO',
+                    }))
+                  }
+                >
+                  <option value="ATIVO">Ativo</option>
+                  <option value="INATIVO">Inativo</option>
+                </select>
+              </label>
+              <label className="field">
+                <span>Vigencia inicial</span>
+                <input
+                  type="date"
+                  value={priceForm.effectiveFrom}
+                  onChange={(event) =>
+                    setPriceForm((current) => ({
+                      ...current,
+                      effectiveFrom: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label className="field">
+                <span>Vigencia final</span>
+                <input
+                  type="date"
+                  value={priceForm.effectiveTo}
+                  onChange={(event) =>
+                    setPriceForm((current) => ({
+                      ...current,
+                      effectiveTo: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+              <label className="field full-row">
+                <span>Observacoes</span>
+                <textarea
+                  value={priceForm.notes}
+                  onChange={(event) =>
+                    setPriceForm((current) => ({
+                      ...current,
+                      notes: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+            </div>
+
+            <button
+              className="primary-button"
+              disabled={isSavingPrice || !canSavePrice}
+              type="submit"
+            >
+              {isSavingPrice ? 'Salvando...' : 'Salvar valor na tabela'}
+            </button>
+          </form>
+        </div>
+      </OperationalModal>
     </section>
   );
 }
@@ -7324,6 +7928,7 @@ function ExamOrdersPage({
   >('idle');
   const [orderSearchError, setOrderSearchError] = useState('');
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
   const [patientSearch, setPatientSearch] = useState('');
   const [patientOptions, setPatientOptions] = useState<Patient[]>([]);
   const [patientSearchStatus, setPatientSearchStatus] = useState<
@@ -7344,10 +7949,8 @@ function ExamOrdersPage({
   const canSearchOrders = orderSearchTerm.length >= 2;
   const canSearchPatient = patientSearchTerm.length >= 2;
   const canSearchProcedure = procedureSearchTerm.length >= 2;
-  const focusedOrder =
-    orderResults.find((order) => order.id === selectedOrderId) ??
-    orderResults[0] ??
-    null;
+  const selectedOrder =
+    orderResults.find((order) => order.id === selectedOrderId) ?? null;
   const selectedPatient =
     patientOptions.find((patient) => patient.id === form.patientId) ??
     patients.find((patient) => patient.id === form.patientId) ??
@@ -7389,7 +7992,7 @@ function ExamOrdersPage({
       setOrderResults(nextOrders);
       setOrderResultTotal(nextTotal);
       setOrderPage(page);
-      setSelectedOrderId(nextOrders[0]?.id ?? null);
+      setSelectedOrderId(null);
       setHasSearchedOrders(true);
       setOrderSearchStatus('ready');
     } catch (error) {
@@ -7557,6 +8160,7 @@ function ExamOrdersPage({
       setOrderResults((current) => [savedOrder, ...current]);
       setOrderResultTotal((current) => current + 1);
       setSelectedOrderId(savedOrder.id);
+      setIsOrderModalOpen(false);
       setHasSearchedOrders(true);
       setOrderSearchStatus('ready');
       setForm(initialExamOrderForm);
@@ -7586,14 +8190,23 @@ function ExamOrdersPage({
   }
 
   return (
-    <section className="page-grid exam-orders-workspace">
+    <section className="page-grid exam-orders-workspace modal-workspace">
       <article className="panel">
         <div className="page-header">
           <div>
             <p className="eyebrow">Pedidos Exames</p>
             <h2>Buscar solicitações</h2>
           </div>
-          <span className="inline-badge">fluxo assistencial</span>
+          <div className="toolbar-inline">
+            <button
+              className="primary-button"
+              onClick={() => setIsOrderModalOpen(true)}
+              type="button"
+            >
+              Novo pedido
+            </button>
+            <span className="inline-badge">fluxo assistencial</span>
+          </div>
         </div>
 
         <OperationalSearchCard
@@ -7689,339 +8302,356 @@ function ExamOrdersPage({
           totalItems={orderResultTotal}
         />
 
-        {focusedOrder ? (
-          <section className="patient-record-card">
-            <div className="page-header">
-              <div>
-                <p className="eyebrow">Pedido em foco</p>
-                <h2>{focusedOrder.patient.name}</h2>
+        <OperationalModal
+          eyebrow="Pedido em foco"
+          isOpen={Boolean(selectedOrder)}
+          onClose={() => setSelectedOrderId(null)}
+          title={selectedOrder?.patient.name ?? 'Pedido de exames'}
+          toneLabel={
+            selectedOrder
+              ? examOrderStatusLabel(selectedOrder.status)
+              : undefined
+          }
+        >
+          {selectedOrder ? (
+            <section className="patient-record-card modal-record-card">
+              <div className="record-grid">
+                <RecordLine
+                  label="Paciente"
+                  value={selectedOrder.patient.name}
+                />
+                <RecordLine label="CPF" value={selectedOrder.patient.cpf} />
+                <RecordLine
+                  label="Solicitante"
+                  value={selectedOrder.requesterDoctor?.user.name}
+                />
+                <RecordLine label="Prioridade" value={selectedOrder.priority} />
+                <RecordLine
+                  label="Criado em"
+                  value={formatDateTime(selectedOrder.createdAt)}
+                />
+                <RecordLine
+                  label="Itens"
+                  value={`${selectedOrder.items.length} procedimento(s)`}
+                />
               </div>
-              <span className="inline-badge">
-                {examOrderStatusLabel(focusedOrder.status)}
-              </span>
-            </div>
 
-            <div className="record-grid">
-              <RecordLine label="Paciente" value={focusedOrder.patient.name} />
-              <RecordLine label="CPF" value={focusedOrder.patient.cpf} />
-              <RecordLine
-                label="Solicitante"
-                value={focusedOrder.requesterDoctor?.user.name}
-              />
-              <RecordLine label="Prioridade" value={focusedOrder.priority} />
-              <RecordLine
-                label="Criado em"
-                value={formatDateTime(focusedOrder.createdAt)}
-              />
-              <RecordLine
-                label="Itens"
-                value={`${focusedOrder.items.length} procedimento(s)`}
-              />
-            </div>
+              <div className="exam-item-list">
+                <span className="section-title">Procedimentos solicitados</span>
+                {selectedOrder.items.map((item) => (
+                  <article className="exam-item-card" key={item.id}>
+                    <strong>{item.procedure.description}</strong>
+                    <small>
+                      {item.procedure.code} -{' '}
+                      {procedureTypeLabel(item.procedure.type)}
+                    </small>
+                    <small>
+                      Qtd. {item.quantity}
+                      {item.notes ? ` - ${item.notes}` : ''}
+                    </small>
+                  </article>
+                ))}
+              </div>
 
-            <div className="exam-item-list">
-              <span className="section-title">Procedimentos solicitados</span>
-              {focusedOrder.items.map((item) => (
-                <article className="exam-item-card" key={item.id}>
-                  <strong>{item.procedure.description}</strong>
-                  <small>
-                    {item.procedure.code} -{' '}
-                    {procedureTypeLabel(item.procedure.type)}
-                  </small>
-                  <small>
-                    Qtd. {item.quantity}
-                    {item.notes ? ` - ${item.notes}` : ''}
-                  </small>
-                </article>
-              ))}
-            </div>
-
-            {focusedOrder.clinicalIndication ? (
-              <p className="empty-state compact">
-                {focusedOrder.clinicalIndication}
-              </p>
-            ) : null}
-          </section>
-        ) : null}
+              {selectedOrder.clinicalIndication ? (
+                <p className="empty-state compact">
+                  {selectedOrder.clinicalIndication}
+                </p>
+              ) : null}
+            </section>
+          ) : null}
+        </OperationalModal>
       </article>
 
-      <aside className="panel form-panel">
-        <div className="page-header">
-          <div>
-            <p className="eyebrow">Nova solicitação</p>
-            <h2>Montar pedido</h2>
+      <OperationalModal
+        eyebrow="Nova solicitacao"
+        isOpen={isOrderModalOpen}
+        onClose={() => setIsOrderModalOpen(false)}
+        title="Montar pedido"
+        toneLabel={`${form.items.length} item(ns)`}
+      >
+        <div className="modal-form-panel">
+          <div className="page-header">
+            <div>
+              <p className="eyebrow">Nova solicitação</p>
+              <h2>Montar pedido</h2>
+            </div>
+            <span className="inline-badge">{form.items.length} item(ns)</span>
           </div>
-          <span className="inline-badge">{form.items.length} item(ns)</span>
-        </div>
 
-        <form
-          className="operational-search-card"
-          onSubmit={searchPatientsForOrder}
-        >
-          <div>
-            <span className="section-title">Paciente</span>
-            <strong>Localize o paciente no banco.</strong>
-            <small>Busque por nome, CPF, RG, telefone ou email.</small>
-          </div>
-          <div className="operational-search-actions">
-            <input
-              className="search-input"
-              placeholder="Digite ao menos 2 caracteres"
-              value={patientSearch}
-              onChange={(event) => setPatientSearch(event.target.value)}
-            />
-            <button
-              className="ghost-button"
-              disabled={patientSearchStatus === 'loading' || !canSearchPatient}
-              type="submit"
-            >
-              {patientSearchStatus === 'loading' ? 'Buscando...' : 'Buscar'}
-            </button>
-            <button
-              className="ghost-button"
-              onClick={() => {
-                setPatientSearch('');
-                setPatientOptions([]);
-                setForm((current) => ({ ...current, patientId: '' }));
-              }}
-              type="button"
-            >
-              Limpar
-            </button>
-          </div>
-        </form>
-
-        {selectedPatient ? (
-          <div className="helper-block">
-            <span>Paciente selecionado</span>
-            <strong>{selectedPatient.name}</strong>
-            <small>
-              {selectedPatient.cpf} - {selectedPatient.phone}
-            </small>
-          </div>
-        ) : null}
-
-        {patientOptions.length > 0 ? (
-          <div className="selection-list">
-            {patientOptions.map((patient) => (
+          <form
+            className="operational-search-card"
+            onSubmit={searchPatientsForOrder}
+          >
+            <div>
+              <span className="section-title">Paciente</span>
+              <strong>Localize o paciente no banco.</strong>
+              <small>Busque por nome, CPF, RG, telefone ou email.</small>
+            </div>
+            <div className="operational-search-actions">
+              <input
+                className="search-input"
+                placeholder="Digite ao menos 2 caracteres"
+                value={patientSearch}
+                onChange={(event) => setPatientSearch(event.target.value)}
+              />
               <button
-                className="selection-row"
-                key={patient.id}
-                onClick={() => selectPatient(patient)}
+                className="ghost-button"
+                disabled={
+                  patientSearchStatus === 'loading' || !canSearchPatient
+                }
+                type="submit"
+              >
+                {patientSearchStatus === 'loading' ? 'Buscando...' : 'Buscar'}
+              </button>
+              <button
+                className="ghost-button"
+                onClick={() => {
+                  setPatientSearch('');
+                  setPatientOptions([]);
+                  setForm((current) => ({ ...current, patientId: '' }));
+                }}
                 type="button"
               >
-                <strong>{patient.name}</strong>
-                <small>
-                  {patient.cpf} - {patient.phone}
-                </small>
+                Limpar
               </button>
-            ))}
-          </div>
-        ) : null}
+            </div>
+          </form>
 
-        <div className="field-grid two-columns">
-          <label className="field">
-            <span>Medico solicitante</span>
-            <select
-              value={form.requesterDoctorId}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  requesterDoctorId: event.target.value,
-                }))
-              }
-            >
-              <option value="">Nao informado</option>
-              {doctors.map((doctor) => (
-                <option key={doctor.id} value={doctor.id}>
-                  {doctor.user.name} - CRM {doctor.crm}/{doctor.crmUf}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            <span>Prioridade</span>
-            <select
-              value={form.priority}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  priority: event.target.value,
-                }))
-              }
-            >
-              <option value="Rotina">Rotina</option>
-              <option value="Prioritario">Prioritario</option>
-              <option value="Urgente">Urgente</option>
-            </select>
-          </label>
-        </div>
+          {selectedPatient ? (
+            <div className="helper-block">
+              <span>Paciente selecionado</span>
+              <strong>{selectedPatient.name}</strong>
+              <small>
+                {selectedPatient.cpf} - {selectedPatient.phone}
+              </small>
+            </div>
+          ) : null}
 
-        {selectedDoctor ? (
-          <p className="empty-state compact">
-            Solicitante: {selectedDoctor.user.name} - CRM {selectedDoctor.crm}/
-            {selectedDoctor.crmUf}
-          </p>
-        ) : null}
-
-        <form
-          className="operational-search-card"
-          onSubmit={searchProceduresForOrder}
-        >
-          <div>
-            <span className="section-title">Procedimentos</span>
-            <strong>Adicione exames ao pedido.</strong>
-            <small>Pesquise por codigo, descricao, tabela ou grupo.</small>
-          </div>
-          <div className="operational-search-actions">
-            <input
-              className="search-input"
-              placeholder="Ex: vitamina, hemograma, raio-x"
-              value={procedureSearch}
-              onChange={(event) => setProcedureSearch(event.target.value)}
-            />
-            <button
-              className="ghost-button"
-              disabled={
-                procedureSearchStatus === 'loading' || !canSearchProcedure
-              }
-              type="submit"
-            >
-              {procedureSearchStatus === 'loading' ? 'Buscando...' : 'Buscar'}
-            </button>
-            <button
-              className="ghost-button"
-              onClick={() => {
-                setProcedureSearch('');
-                setProcedureOptions([]);
-              }}
-              type="button"
-            >
-              Limpar
-            </button>
-          </div>
-        </form>
-
-        {procedureOptions.length > 0 ? (
-          <div className="selection-list">
-            {procedureOptions.map((procedure) => (
-              <button
-                className="selection-row"
-                disabled={!procedure.active}
-                key={procedure.id}
-                onClick={() => addProcedureToOrder(procedure)}
-                type="button"
-              >
-                <strong>{procedure.description}</strong>
-                <small>
-                  {procedure.code} - {procedureTypeLabel(procedure.type)}
-                </small>
-              </button>
-            ))}
-          </div>
-        ) : null}
-
-        <div className="exam-item-list">
-          <span className="section-title">Itens do pedido</span>
-          {selectedItems.length === 0 ? (
-            <DirectoryState
-              code="02"
-              title="Nenhum exame selecionado."
-              description="Busque a tabela de procedimentos e adicione os itens que farão parte da solicitação."
-            />
-          ) : (
-            selectedItems.map((item) => (
-              <article className="exam-item-card" key={item.procedureId}>
-                <strong>
-                  {item.procedure?.description || 'Procedimento selecionado'}
-                </strong>
-                <small>
-                  {item.procedure
-                    ? `${item.procedure.code} - ${procedureTypeLabel(
-                        item.procedure.type,
-                      )}`
-                    : item.procedureId}
-                </small>
-                <div className="field-grid two-columns">
-                  <label className="field">
-                    <span>Quantidade</span>
-                    <input
-                      min={1}
-                      type="number"
-                      value={item.quantity}
-                      onChange={(event) =>
-                        updateOrderItem(item.procedureId, {
-                          quantity: Number(event.target.value) || 1,
-                        })
-                      }
-                    />
-                  </label>
-                  <label className="field">
-                    <span>Observacao do item</span>
-                    <input
-                      value={item.notes}
-                      onChange={(event) =>
-                        updateOrderItem(item.procedureId, {
-                          notes: event.target.value,
-                        })
-                      }
-                    />
-                  </label>
-                </div>
+          {patientOptions.length > 0 ? (
+            <div className="selection-list">
+              {patientOptions.map((patient) => (
                 <button
-                  className="mini-button"
-                  onClick={() => removeOrderItem(item.procedureId)}
+                  className="selection-row"
+                  key={patient.id}
+                  onClick={() => selectPatient(patient)}
                   type="button"
                 >
-                  Remover item
+                  <strong>{patient.name}</strong>
+                  <small>
+                    {patient.cpf} - {patient.phone}
+                  </small>
                 </button>
-              </article>
-            ))
-          )}
+              ))}
+            </div>
+          ) : null}
+
+          <div className="field-grid two-columns">
+            <label className="field">
+              <span>Medico solicitante</span>
+              <select
+                value={form.requesterDoctorId}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    requesterDoctorId: event.target.value,
+                  }))
+                }
+              >
+                <option value="">Nao informado</option>
+                {doctors.map((doctor) => (
+                  <option key={doctor.id} value={doctor.id}>
+                    {doctor.user.name} - CRM {doctor.crm}/{doctor.crmUf}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>Prioridade</span>
+              <select
+                value={form.priority}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    priority: event.target.value,
+                  }))
+                }
+              >
+                <option value="Rotina">Rotina</option>
+                <option value="Prioritario">Prioritario</option>
+                <option value="Urgente">Urgente</option>
+              </select>
+            </label>
+          </div>
+
+          {selectedDoctor ? (
+            <p className="empty-state compact">
+              Solicitante: {selectedDoctor.user.name} - CRM {selectedDoctor.crm}
+              /{selectedDoctor.crmUf}
+            </p>
+          ) : null}
+
+          <form
+            className="operational-search-card"
+            onSubmit={searchProceduresForOrder}
+          >
+            <div>
+              <span className="section-title">Procedimentos</span>
+              <strong>Adicione exames ao pedido.</strong>
+              <small>Pesquise por codigo, descricao, tabela ou grupo.</small>
+            </div>
+            <div className="operational-search-actions">
+              <input
+                className="search-input"
+                placeholder="Ex: vitamina, hemograma, raio-x"
+                value={procedureSearch}
+                onChange={(event) => setProcedureSearch(event.target.value)}
+              />
+              <button
+                className="ghost-button"
+                disabled={
+                  procedureSearchStatus === 'loading' || !canSearchProcedure
+                }
+                type="submit"
+              >
+                {procedureSearchStatus === 'loading' ? 'Buscando...' : 'Buscar'}
+              </button>
+              <button
+                className="ghost-button"
+                onClick={() => {
+                  setProcedureSearch('');
+                  setProcedureOptions([]);
+                }}
+                type="button"
+              >
+                Limpar
+              </button>
+            </div>
+          </form>
+
+          {procedureOptions.length > 0 ? (
+            <div className="selection-list">
+              {procedureOptions.map((procedure) => (
+                <button
+                  className="selection-row"
+                  disabled={!procedure.active}
+                  key={procedure.id}
+                  onClick={() => addProcedureToOrder(procedure)}
+                  type="button"
+                >
+                  <strong>{procedure.description}</strong>
+                  <small>
+                    {procedure.code} - {procedureTypeLabel(procedure.type)}
+                  </small>
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          <div className="exam-item-list">
+            <span className="section-title">Itens do pedido</span>
+            {selectedItems.length === 0 ? (
+              <DirectoryState
+                code="02"
+                title="Nenhum exame selecionado."
+                description="Busque a tabela de procedimentos e adicione os itens que farão parte da solicitação."
+              />
+            ) : (
+              selectedItems.map((item) => (
+                <article className="exam-item-card" key={item.procedureId}>
+                  <strong>
+                    {item.procedure?.description || 'Procedimento selecionado'}
+                  </strong>
+                  <small>
+                    {item.procedure
+                      ? `${item.procedure.code} - ${procedureTypeLabel(
+                          item.procedure.type,
+                        )}`
+                      : item.procedureId}
+                  </small>
+                  <div className="field-grid two-columns">
+                    <label className="field">
+                      <span>Quantidade</span>
+                      <input
+                        min={1}
+                        type="number"
+                        value={item.quantity}
+                        onChange={(event) =>
+                          updateOrderItem(item.procedureId, {
+                            quantity: Number(event.target.value) || 1,
+                          })
+                        }
+                      />
+                    </label>
+                    <label className="field">
+                      <span>Observacao do item</span>
+                      <input
+                        value={item.notes}
+                        onChange={(event) =>
+                          updateOrderItem(item.procedureId, {
+                            notes: event.target.value,
+                          })
+                        }
+                      />
+                    </label>
+                  </div>
+                  <button
+                    className="mini-button"
+                    onClick={() => removeOrderItem(item.procedureId)}
+                    type="button"
+                  >
+                    Remover item
+                  </button>
+                </article>
+              ))
+            )}
+          </div>
+
+          <div className="field-grid">
+            <label className="field">
+              <span>Indicação clínica</span>
+              <textarea
+                value={form.clinicalIndication}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    clinicalIndication: event.target.value,
+                  }))
+                }
+              />
+            </label>
+            <label className="field">
+              <span>Observações gerais</span>
+              <textarea
+                value={form.notes}
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    notes: event.target.value,
+                  }))
+                }
+              />
+            </label>
+          </div>
+
+          {formError ? (
+            <p className="empty-state compact">{formError}</p>
+          ) : null}
+
+          <button
+            className="primary-button"
+            disabled={isSavingOrder || !canSaveOrder}
+            onClick={saveExamOrder}
+            type="button"
+          >
+            {isSavingOrder
+              ? 'Salvando...'
+              : canSaveOrder
+                ? 'Salvar pedido de exames'
+                : 'Selecione paciente e exames'}
+          </button>
         </div>
-
-        <div className="field-grid">
-          <label className="field">
-            <span>Indicação clínica</span>
-            <textarea
-              value={form.clinicalIndication}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  clinicalIndication: event.target.value,
-                }))
-              }
-            />
-          </label>
-          <label className="field">
-            <span>Observações gerais</span>
-            <textarea
-              value={form.notes}
-              onChange={(event) =>
-                setForm((current) => ({
-                  ...current,
-                  notes: event.target.value,
-                }))
-              }
-            />
-          </label>
-        </div>
-
-        {formError ? <p className="empty-state compact">{formError}</p> : null}
-
-        <button
-          className="primary-button"
-          disabled={isSavingOrder || !canSaveOrder}
-          onClick={saveExamOrder}
-          type="button"
-        >
-          {isSavingOrder
-            ? 'Salvando...'
-            : canSaveOrder
-              ? 'Salvar pedido de exames'
-              : 'Selecione paciente e exames'}
-        </button>
-      </aside>
+      </OperationalModal>
     </section>
   );
 }
@@ -8053,6 +8683,7 @@ function SchedulingPage({
 }: SchedulingPageProps) {
   const [search, setSearch] = useState('');
   const [hasSearchedAppointments, setHasSearchedAppointments] = useState(false);
+  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [patientPickerSearch, setPatientPickerSearch] = useState('');
   const [doctorPickerSearch, setDoctorPickerSearch] = useState('');
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
@@ -8126,14 +8757,25 @@ function SchedulingPage({
   }
 
   return (
-    <section className="page-grid module-grid">
+    <section className="page-grid module-grid modal-workspace">
       <article className="panel">
         <div className="page-header">
           <div>
             <p className="eyebrow">Agendamento</p>
             <h2>Buscar agenda</h2>
           </div>
-          <span className="inline-badge">{appointments.length} registros</span>
+          <div className="toolbar-inline">
+            <button
+              className="primary-button"
+              onClick={() => setIsScheduleModalOpen(true)}
+              type="button"
+            >
+              Novo agendamento
+            </button>
+            <span className="inline-badge">
+              {appointments.length} registros
+            </span>
+          </div>
         </div>
 
         <OperationalSearchCard
@@ -8192,173 +8834,183 @@ function SchedulingPage({
         </div>
       </article>
 
-      <form className="panel form-panel" onSubmit={onSubmit}>
-        <div className="page-header">
-          <div>
-            <p className="eyebrow">Novo agendamento</p>
-            <h2>Montagem da consulta</h2>
+      <OperationalModal
+        eyebrow="Novo agendamento"
+        isOpen={isScheduleModalOpen}
+        onClose={() => setIsScheduleModalOpen(false)}
+        title="Montagem da consulta"
+        toneLabel="Agenda"
+      >
+        <form className="modal-form-panel" onSubmit={onSubmit}>
+          <div className="page-header">
+            <div>
+              <p className="eyebrow">Novo agendamento</p>
+              <h2>Montagem da consulta</h2>
+            </div>
+            <button className="ghost-button" onClick={onOpenTeam} type="button">
+              Abrir equipe
+            </button>
           </div>
-          <button className="ghost-button" onClick={onOpenTeam} type="button">
-            Abrir equipe
+
+          <div className="context-band">
+            <div className="context-card">
+              <span>Paciente pronto</span>
+              <strong>
+                {selectedPatient?.name || 'Selecione em pacientes'}
+              </strong>
+            </div>
+            <div className="context-card">
+              <span>Medico pronto</span>
+              <strong>
+                {selectedDoctor?.user.name || 'Selecione em equipe'}
+              </strong>
+            </div>
+          </div>
+
+          <div className="field-grid two-columns">
+            <label className="field">
+              <span>Buscar paciente</span>
+              <input
+                placeholder="Nome, CPF ou telefone"
+                value={patientPickerSearch}
+                onChange={(event) => setPatientPickerSearch(event.target.value)}
+              />
+            </label>
+            <label className="field">
+              <span>Paciente</span>
+              <select
+                value={appointmentForm.patientId}
+                onChange={(event) =>
+                  setAppointmentForm((current) => ({
+                    ...current,
+                    patientId: event.target.value,
+                  }))
+                }
+                required
+              >
+                <option value="">
+                  {patientPickerSearch.trim().length >= 2
+                    ? 'Selecione'
+                    : 'Pesquise o paciente primeiro'}
+                </option>
+                {visiblePatientOptions.map((patient) => (
+                  <option key={patient.id} value={patient.id}>
+                    {patient.name} - {patient.cpf}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>Buscar medico</span>
+              <input
+                placeholder="Nome, CRM ou especialidade"
+                value={doctorPickerSearch}
+                onChange={(event) => setDoctorPickerSearch(event.target.value)}
+              />
+            </label>
+            <label className="field">
+              <span>Medico</span>
+              <select
+                value={appointmentForm.doctorId}
+                onChange={(event) =>
+                  setAppointmentForm((current) => ({
+                    ...current,
+                    doctorId: event.target.value,
+                  }))
+                }
+                required
+              >
+                <option value="">
+                  {doctorPickerSearch.trim().length >= 2
+                    ? 'Selecione'
+                    : 'Pesquise o medico primeiro'}
+                </option>
+                {visibleDoctorOptions.map((doctor) => (
+                  <option key={doctor.id} value={doctor.id}>
+                    {doctor.user.name} - CRM {doctor.crm}/{doctor.crmUf}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>Data e hora</span>
+              <input
+                type="datetime-local"
+                value={appointmentForm.appointmentDate}
+                onChange={(event) =>
+                  setAppointmentForm((current) => ({
+                    ...current,
+                    appointmentDate: event.target.value,
+                  }))
+                }
+                required
+              />
+            </label>
+            <label className="field">
+              <span>Tipo</span>
+              <select
+                value={appointmentForm.type}
+                onChange={(event) =>
+                  setAppointmentForm((current) => ({
+                    ...current,
+                    type: event.target.value,
+                  }))
+                }
+              >
+                {appointmentTypes.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>Status</span>
+              <select
+                value={appointmentForm.status}
+                onChange={(event) =>
+                  setAppointmentForm((current) => ({
+                    ...current,
+                    status: event.target.value,
+                  }))
+                }
+              >
+                {appointmentStatuses.map((status) => (
+                  <option key={status} value={status}>
+                    {status}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field full-row">
+              <span>Observacoes</span>
+              <textarea
+                value={appointmentForm.notes}
+                onChange={(event) =>
+                  setAppointmentForm((current) => ({
+                    ...current,
+                    notes: event.target.value,
+                  }))
+                }
+              />
+            </label>
+          </div>
+
+          <button
+            className="primary-button"
+            disabled={isSubmitting || !canCreateAppointment}
+            type="submit"
+          >
+            {isSubmitting ? 'Salvando...' : 'Registrar consulta'}
           </button>
-        </div>
 
-        <div className="context-band">
-          <div className="context-card">
-            <span>Paciente pronto</span>
-            <strong>{selectedPatient?.name || 'Selecione em pacientes'}</strong>
-          </div>
-          <div className="context-card">
-            <span>Medico pronto</span>
-            <strong>
-              {selectedDoctor?.user.name || 'Selecione em equipe'}
-            </strong>
-          </div>
-        </div>
-
-        <div className="field-grid two-columns">
-          <label className="field">
-            <span>Buscar paciente</span>
-            <input
-              placeholder="Nome, CPF ou telefone"
-              value={patientPickerSearch}
-              onChange={(event) => setPatientPickerSearch(event.target.value)}
-            />
-          </label>
-          <label className="field">
-            <span>Paciente</span>
-            <select
-              value={appointmentForm.patientId}
-              onChange={(event) =>
-                setAppointmentForm((current) => ({
-                  ...current,
-                  patientId: event.target.value,
-                }))
-              }
-              required
-            >
-              <option value="">
-                {patientPickerSearch.trim().length >= 2
-                  ? 'Selecione'
-                  : 'Pesquise o paciente primeiro'}
-              </option>
-              {visiblePatientOptions.map((patient) => (
-                <option key={patient.id} value={patient.id}>
-                  {patient.name} - {patient.cpf}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            <span>Buscar medico</span>
-            <input
-              placeholder="Nome, CRM ou especialidade"
-              value={doctorPickerSearch}
-              onChange={(event) => setDoctorPickerSearch(event.target.value)}
-            />
-          </label>
-          <label className="field">
-            <span>Medico</span>
-            <select
-              value={appointmentForm.doctorId}
-              onChange={(event) =>
-                setAppointmentForm((current) => ({
-                  ...current,
-                  doctorId: event.target.value,
-                }))
-              }
-              required
-            >
-              <option value="">
-                {doctorPickerSearch.trim().length >= 2
-                  ? 'Selecione'
-                  : 'Pesquise o medico primeiro'}
-              </option>
-              {visibleDoctorOptions.map((doctor) => (
-                <option key={doctor.id} value={doctor.id}>
-                  {doctor.user.name} - CRM {doctor.crm}/{doctor.crmUf}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            <span>Data e hora</span>
-            <input
-              type="datetime-local"
-              value={appointmentForm.appointmentDate}
-              onChange={(event) =>
-                setAppointmentForm((current) => ({
-                  ...current,
-                  appointmentDate: event.target.value,
-                }))
-              }
-              required
-            />
-          </label>
-          <label className="field">
-            <span>Tipo</span>
-            <select
-              value={appointmentForm.type}
-              onChange={(event) =>
-                setAppointmentForm((current) => ({
-                  ...current,
-                  type: event.target.value,
-                }))
-              }
-            >
-              {appointmentTypes.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            <span>Status</span>
-            <select
-              value={appointmentForm.status}
-              onChange={(event) =>
-                setAppointmentForm((current) => ({
-                  ...current,
-                  status: event.target.value,
-                }))
-              }
-            >
-              {appointmentStatuses.map((status) => (
-                <option key={status} value={status}>
-                  {status}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field full-row">
-            <span>Observacoes</span>
-            <textarea
-              value={appointmentForm.notes}
-              onChange={(event) =>
-                setAppointmentForm((current) => ({
-                  ...current,
-                  notes: event.target.value,
-                }))
-              }
-            />
-          </label>
-        </div>
-
-        <button
-          className="primary-button"
-          disabled={isSubmitting || !canCreateAppointment}
-          type="submit"
-        >
-          {isSubmitting ? 'Salvando...' : 'Registrar consulta'}
-        </button>
-
-        {!canCreateAppointment ? (
-          <p className="empty-state compact">
-            Cadastre ao menos um paciente ativo e um medico antes de seguir.
-          </p>
-        ) : null}
-      </form>
+          {!canCreateAppointment ? (
+            <p className="empty-state compact">
+              Cadastre ao menos um paciente ativo e um medico antes de seguir.
+            </p>
+          ) : null}
+        </form>
+      </OperationalModal>
     </section>
   );
 }
@@ -9463,6 +10115,9 @@ function TeamPage({
 }: TeamPageProps) {
   const [search, setSearch] = useState('');
   const [hasSearchedTeam, setHasSearchedTeam] = useState(false);
+  const [teamModal, setTeamModal] = useState<
+    'doctor' | 'nurse' | 'sector' | null
+  >(null);
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
   const canSearchTeam = search.trim().length >= 2;
   const filteredDoctors = useMemo(
@@ -9526,7 +10181,7 @@ function TeamPage({
         </article>
       </section>
 
-      <section className="page-grid team-layout">
+      <section className="page-grid team-layout modal-workspace">
         <div className="stack-column">
           <article className="panel">
             <div className="page-header">
@@ -9534,7 +10189,30 @@ function TeamPage({
                 <p className="eyebrow">Equipe assistencial</p>
                 <h2>Busca e preparacao de agenda</h2>
               </div>
-              <span className="inline-badge">{doctors.length} medicos</span>
+              <div className="toolbar-inline">
+                <button
+                  className="primary-button"
+                  onClick={() => setTeamModal('doctor')}
+                  type="button"
+                >
+                  Novo medico
+                </button>
+                <button
+                  className="ghost-button"
+                  onClick={() => setTeamModal('nurse')}
+                  type="button"
+                >
+                  Enfermagem
+                </button>
+                <button
+                  className="ghost-button"
+                  onClick={() => setTeamModal('sector')}
+                  type="button"
+                >
+                  Novo setor
+                </button>
+                <span className="inline-badge">{doctors.length} medicos</span>
+              </div>
             </div>
 
             <OperationalSearchCard
@@ -9690,8 +10368,14 @@ function TeamPage({
           </article>
         </div>
 
-        <div className="stack-column">
-          <form className="panel form-panel" onSubmit={onSubmit}>
+        <OperationalModal
+          eyebrow="Cadastro profissional"
+          isOpen={teamModal === 'doctor'}
+          onClose={() => setTeamModal(null)}
+          title="Novo medico"
+          toneLabel="CRM e documentos"
+        >
+          <form className="modal-form-panel" onSubmit={onSubmit}>
             <div className="page-header">
               <div>
                 <p className="eyebrow">Cadastro profissional</p>
@@ -9928,8 +10612,16 @@ function TeamPage({
               {isSubmitting ? 'Salvando...' : 'Cadastrar medico'}
             </button>
           </form>
+        </OperationalModal>
 
-          <form className="panel form-panel" onSubmit={onNurseSubmit}>
+        <OperationalModal
+          eyebrow="Cadastro profissional"
+          isOpen={teamModal === 'nurse'}
+          onClose={() => setTeamModal(null)}
+          title="Novo enfermeiro"
+          toneLabel="COREN e escala"
+        >
+          <form className="modal-form-panel" onSubmit={onNurseSubmit}>
             <div className="page-header">
               <div>
                 <p className="eyebrow">Cadastro profissional</p>
@@ -10153,8 +10845,17 @@ function TeamPage({
               {isSubmitting ? 'Salvando...' : 'Cadastrar enfermeiro'}
             </button>
           </form>
+        </OperationalModal>
 
-          <form className="panel form-panel" onSubmit={onSectorSubmit}>
+        <OperationalModal
+          eyebrow="Estrutura"
+          isOpen={teamModal === 'sector'}
+          onClose={() => setTeamModal(null)}
+          size="standard"
+          title="Novo setor"
+          toneLabel="Setor operacional"
+        >
+          <form className="modal-form-panel" onSubmit={onSectorSubmit}>
             <div className="page-header">
               <div>
                 <p className="eyebrow">Estrutura</p>
@@ -10226,7 +10927,7 @@ function TeamPage({
               {isSubmitting ? 'Salvando...' : 'Cadastrar setor'}
             </button>
           </form>
-        </div>
+        </OperationalModal>
       </section>
     </>
   );
@@ -10399,6 +11100,71 @@ function roleLabel(role: Role) {
     default:
       return 'Atendente';
   }
+}
+
+function auditActionLabel(action: AuditAction) {
+  switch (action) {
+    case 'CREATE':
+      return 'Criacao';
+    case 'UPDATE':
+      return 'Alteracao';
+    case 'DELETE':
+      return 'Exclusao';
+    default:
+      return 'Leitura';
+  }
+}
+
+function auditActorName(log: AuditLog) {
+  return log.actor?.name ?? log.actor?.username ?? 'Usuario nao identificado';
+}
+
+function auditPurposeLabel(purpose?: string) {
+  switch (purpose) {
+    case 'assistencial':
+      return 'Assistencial';
+    case 'faturamento':
+      return 'Faturamento';
+    case 'administrativo':
+      return 'Administrativo';
+    default:
+      return 'Operacional';
+  }
+}
+
+function auditResourceLabel(resource: string) {
+  const option = auditResourceOptions.find((item) => item.value === resource);
+
+  return option?.label ?? humanizeEnum(resource.replaceAll('-', '_'));
+}
+
+function auditStatusLabel(statusCode?: number | null) {
+  if (!statusCode) {
+    return 'Sem retorno';
+  }
+
+  if (statusCode >= 500) {
+    return 'Erro servidor';
+  }
+
+  if (statusCode >= 400) {
+    return 'Bloqueado/erro';
+  }
+
+  return 'Concluido';
+}
+
+function isSensitiveAuditLog(log: AuditLog) {
+  return (
+    log.metadata?.lgpd?.sensitiveData === true ||
+    ['patients', 'exam-orders', 'appointments', 'auth'].includes(log.resource)
+  );
+}
+
+function escapeCsvCell(value: unknown) {
+  const text = String(value ?? '').replaceAll('"', '""');
+
+  return `"${text}"`;
 }
 
 function matchUser(user: UserProfile, query: string) {
