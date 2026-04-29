@@ -21,6 +21,7 @@ import type {
   Agreement,
   AgreementPricingRule,
   Appointment,
+  AuditSummary,
   CbhpmImportSummary,
   CbhpmPorteSummary,
   CbhpmProcedure,
@@ -52,6 +53,7 @@ type Session = {
 };
 
 type DashboardCache = {
+  auditSummary: AuditSummary;
   communicationDashboard: CommunicationDashboard;
   users: UserProfile[];
   patients: Patient[];
@@ -67,6 +69,14 @@ const emptyCommunicationDashboard: CommunicationDashboard = {
   notices: [],
   commemorativeDates: [],
   emails: [],
+};
+
+const emptyAuditSummary: AuditSummary = {
+  total: 0,
+  last24h: 0,
+  patientAccesses: 0,
+  writeOperations: 0,
+  retentionPolicy: 'Auditoria operacional em preparacao.',
 };
 
 type Notice = {
@@ -749,7 +759,8 @@ const userParameterOptions: PermissionPreviewOption[] = [
   {
     value: 'audit_ready',
     label: 'Pronto para auditoria futura',
-    description: 'Base preparada para registrar permissoes granulares por acao.',
+    description:
+      'Base preparada para registrar permissoes granulares por acao.',
     checked: false,
   },
 ];
@@ -952,6 +963,9 @@ function App() {
     useState<CommunicationDashboard>(
       cachedDashboard?.communicationDashboard ?? emptyCommunicationDashboard,
     );
+  const [auditSummary, setAuditSummary] = useState<AuditSummary>(
+    cachedDashboard?.auditSummary ?? emptyAuditSummary,
+  );
 
   const loadDashboard = useCallback(
     async (token = session?.token) => {
@@ -974,6 +988,7 @@ function App() {
           sectorResponse,
           appointmentResponse,
           communicationResponse,
+          auditSummaryResponse,
         ] = await Promise.all([
           profile.role === 'ADMIN'
             ? apiRequest<PaginatedResponse<UserProfile>>(
@@ -991,6 +1006,9 @@ function App() {
           apiRequest<CommunicationDashboard>('/communications/dashboard', {
             token,
           }),
+          profile.role === 'ADMIN'
+            ? apiRequest<AuditSummary>('/audit/summary', { token })
+            : Promise.resolve(emptyAuditSummary),
         ]);
 
         const nextUsers = userResponse.data ?? [];
@@ -1011,6 +1029,7 @@ function App() {
           setSectors(sectorResponse);
           setAppointments(appointmentResponse);
           setCommunicationDashboard(communicationResponse);
+          setAuditSummary(auditSummaryResponse);
         });
 
         localStorage.setItem(storageKey, JSON.stringify(nextSession));
@@ -1025,6 +1044,7 @@ function App() {
             sectors: sectorResponse,
             appointments: appointmentResponse,
             communicationDashboard: communicationResponse,
+            auditSummary: auditSummaryResponse,
           }),
         );
 
@@ -1033,6 +1053,7 @@ function App() {
         localStorage.removeItem(storageKey);
         localStorage.removeItem(dashboardCacheKey);
         setSession(null);
+        setAuditSummary(emptyAuditSummary);
         setNotice({
           kind: 'error',
           text:
@@ -1145,6 +1166,7 @@ function App() {
     setSectors([]);
     setAppointments([]);
     setCommunicationDashboard(emptyCommunicationDashboard);
+    setAuditSummary(emptyAuditSummary);
     setPatientTotal(0);
     setPatientForm(initialPatientForm);
     setEditingPatientId(null);
@@ -1633,7 +1655,7 @@ function App() {
           path="/configuracoes"
           element={
             session.profile.role === 'ADMIN' ? (
-              <SettingsPage users={users} />
+              <SettingsPage auditSummary={auditSummary} users={users} />
             ) : (
               <Navigate replace to="/central" />
             )
@@ -2227,10 +2249,11 @@ type UsersPageProps = {
 };
 
 type SettingsPageProps = {
+  auditSummary: AuditSummary;
   users: UserProfile[];
 };
 
-function SettingsPage({ users }: SettingsPageProps) {
+function SettingsPage({ auditSummary, users }: SettingsPageProps) {
   const userCount = users.length;
   const adminCount = users.filter((user) => user.role === 'ADMIN').length;
   const settingsBlocks = [
@@ -2263,6 +2286,18 @@ function SettingsPage({ users }: SettingsPageProps) {
           <path d="M10 10h4" />
           <path d="M10 14h4" />
           <path d="M10 18h4" />
+        </svg>
+      ),
+    },
+    {
+      title: 'Auditoria LGPD/SBIS',
+      description:
+        'Registra usuario, perfil, rota, acao, horario e finalidade operacional dos acessos autenticados.',
+      action: 'Ativo no backend',
+      icon: (
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M9 11 12 14 22 4" />
+          <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
         </svg>
       ),
     },
@@ -2305,7 +2340,9 @@ function SettingsPage({ users }: SettingsPageProps) {
                     {block.action}
                   </NavLink>
                 ) : (
-                  <span className="settings-action disabled">{block.action}</span>
+                  <span className="settings-action disabled">
+                    {block.action}
+                  </span>
                 )}
               </div>
             </div>
@@ -2324,24 +2361,29 @@ function SettingsPage({ users }: SettingsPageProps) {
 
         <div className="settings-metrics">
           <article>
-            <span>Usuarios cadastrados</span>
-            <strong>{userCount}</strong>
+            <span>Eventos auditados</span>
+            <strong>{auditSummary.total}</strong>
           </article>
           <article>
-            <span>Administradores</span>
-            <strong>{adminCount}</strong>
+            <span>Ultimas 24h</span>
+            <strong>{auditSummary.last24h}</strong>
           </article>
           <article>
-            <span>Perfis base</span>
-            <strong>{roleOptions.length}</strong>
+            <span>Acessos a pacientes</span>
+            <strong>{auditSummary.patientAccesses}</strong>
+          </article>
+          <article>
+            <span>Alteracoes registradas</span>
+            <strong>{auditSummary.writeOperations}</strong>
           </article>
         </div>
 
         <div className="helper-block">
           <strong>Acesso protegido</strong>
           <span>
-            Esta area aparece somente para administradores. Demais cargos
-            continuam vendo apenas os modulos liberados para o setor.
+            {auditSummary.retentionPolicy} Hoje existem {userCount} usuarios,
+            {` ${adminCount} `}administradores e {roleOptions.length} perfis
+            base configurados.
           </span>
         </div>
       </aside>
@@ -2819,7 +2861,9 @@ function WorkspaceLayout({
                 onClick={onOpenEnvironmentPicker}
                 type="button"
               >
-                <span className="sidebar-avatar">{activeEnvironment.symbol}</span>
+                <span className="sidebar-avatar">
+                  {activeEnvironment.symbol}
+                </span>
                 <span className="sidebar-environment-copy">
                   <span>Ambiente atual</span>
                   <strong>{activeEnvironment.label}</strong>
@@ -2830,7 +2874,10 @@ function WorkspaceLayout({
                 </span>
               </button>
 
-              <nav className="sidebar-quick-actions" aria-label="Atalhos rapidos">
+              <nav
+                className="sidebar-quick-actions"
+                aria-label="Atalhos rapidos"
+              >
                 <NavLink className="sidebar-quick-link" to="/central">
                   <span className="sidebar-quick-icon">IN</span>
                   <span>
@@ -3069,9 +3116,7 @@ function SidebarUserMenu({
       </summary>
 
       <div
-        className={`sidebar-user-popover ${
-          role === 'ADMIN' ? '' : 'compact'
-        }`}
+        className={`sidebar-user-popover ${role === 'ADMIN' ? '' : 'compact'}`}
       >
         {role === 'ADMIN' ? (
           <NavLink to="/configuracoes">Configuracoes</NavLink>
@@ -3279,7 +3324,8 @@ function OverviewPage({
   const [mailboxNotice, setMailboxNotice] = useState<Notice | null>(null);
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const muralCount =
-    communicationDashboard.notices.length + communicationDashboard.updates.length;
+    communicationDashboard.notices.length +
+    communicationDashboard.updates.length;
   const unreadCount = messages.filter((email) => email.unread).length;
   const selectedMessage =
     messages.find((message) => message.id === selectedMessageId) ?? null;
@@ -3461,7 +3507,9 @@ function OverviewPage({
 
           <div className="notice-list internal-board-list">
             {muralCount === 0 ? (
-              <p className="empty-state">Nenhum comunicado publicado no mural.</p>
+              <p className="empty-state">
+                Nenhum comunicado publicado no mural.
+              </p>
             ) : (
               <>
                 {communicationDashboard.notices.map((notice) => (
@@ -4047,8 +4095,10 @@ function AgreementsPage({ sessionToken }: AgreementsPageProps) {
   const searchTerm = search.trim();
   const canSearchAgreement = searchTerm.length >= 2;
   const focusedAgreement =
-    agreements.find((agreement) => agreement.id === selectedAgreementId) ?? null;
-  const canSaveRule = Boolean(focusedAgreement) && Boolean(ruleForm.pricingTableId);
+    agreements.find((agreement) => agreement.id === selectedAgreementId) ??
+    null;
+  const canSaveRule =
+    Boolean(focusedAgreement) && Boolean(ruleForm.pricingTableId);
 
   async function searchAgreements(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -4207,11 +4257,16 @@ function AgreementsPage({ sessionToken }: AgreementsPageProps) {
     }
 
     try {
-      await apiRequest(`/agreements/${focusedAgreement.id}/pricing-rules/${ruleId}`, {
-        method: 'DELETE',
-        token: sessionToken,
-      });
-      setPricingRules((current) => current.filter((rule) => rule.id !== ruleId));
+      await apiRequest(
+        `/agreements/${focusedAgreement.id}/pricing-rules/${ruleId}`,
+        {
+          method: 'DELETE',
+          token: sessionToken,
+        },
+      );
+      setPricingRules((current) =>
+        current.filter((rule) => rule.id !== ruleId),
+      );
     } catch (error) {
       setSearchError(
         error instanceof Error
@@ -4329,7 +4384,10 @@ function AgreementsPage({ sessionToken }: AgreementsPageProps) {
                 label="Status"
                 value={focusedAgreement.active ? 'Ativo' : 'Inativo'}
               />
-              <RecordLine label="Regras" value={`${pricingRules.length} tabela(s)`} />
+              <RecordLine
+                label="Regras"
+                value={`${pricingRules.length} tabela(s)`}
+              />
               <RecordLine label="Observacao" value={focusedAgreement.notes} />
             </div>
 
@@ -5301,7 +5359,9 @@ function ProceduresPage({ sessionToken }: ProceduresPageProps) {
   const searchTerm = search.trim();
   const canSearchProcedure = searchTerm.length >= 2;
   const focusedProcedure =
-    procedureResults.find((procedure) => procedure.id === selectedProcedureId) ??
+    procedureResults.find(
+      (procedure) => procedure.id === selectedProcedureId,
+    ) ??
     procedureResults[0] ??
     null;
   const editingProcedure =
@@ -5482,7 +5542,8 @@ function ProceduresPage({ sessionToken }: ProceduresPageProps) {
               <span className="section-title">Procedimento em foco</span>
               <strong>{focusedProcedure.description}</strong>
               <small>
-                {focusedProcedure.code} - {procedureTypeLabel(focusedProcedure.type)}
+                {focusedProcedure.code} -{' '}
+                {procedureTypeLabel(focusedProcedure.type)}
               </small>
             </div>
             <div className="patient-preview-meta">
@@ -5515,8 +5576,7 @@ function ProceduresPage({ sessionToken }: ProceduresPageProps) {
             <p className="empty-state">Buscando procedimentos no banco...</p>
           ) : procedureSearchStatus === 'error' ? (
             <p className="empty-state">
-              {procedureSearchError ||
-                'Nao foi possivel buscar procedimentos.'}
+              {procedureSearchError || 'Nao foi possivel buscar procedimentos.'}
             </p>
           ) : procedureResults.length === 0 ? (
             <DirectoryState
@@ -5538,7 +5598,9 @@ function ProceduresPage({ sessionToken }: ProceduresPageProps) {
                   </span>
                   <span>
                     {procedure.description}
-                    <small>{procedure.groupName || 'Grupo nao informado'}</small>
+                    <small>
+                      {procedure.groupName || 'Grupo nao informado'}
+                    </small>
                   </span>
                   <span>{procedureTypeLabel(procedure.type)}</span>
                   <span>
@@ -5936,8 +5998,9 @@ function PricingTablesPage({ sessionToken }: PricingTablesPageProps) {
   const selectedTable =
     pricingTables.find((table) => table.id === selectedTableId) ?? null;
   const selectedProcedure =
-    procedureOptions.find((procedure) => procedure.id === priceForm.procedureId) ??
-    null;
+    procedureOptions.find(
+      (procedure) => procedure.id === priceForm.procedureId,
+    ) ?? null;
   const canSaveTable = tableForm.name.trim().length > 2;
   const canSavePrice =
     Boolean(priceForm.pricingTableId) &&
@@ -5956,7 +6019,10 @@ function PricingTablesPage({ sessionToken }: PricingTablesPageProps) {
     await loadPricingTables(tableSearchTerm, 1);
   }
 
-  async function loadPricingTables(term = tableSearchTerm, page = pricingTablePage) {
+  async function loadPricingTables(
+    term = tableSearchTerm,
+    page = pricingTablePage,
+  ) {
     setTableSearchStatus('loading');
     setTableError('');
 
@@ -5971,7 +6037,8 @@ function PricingTablesPage({ sessionToken }: PricingTablesPageProps) {
         { token: sessionToken },
       );
       const nextTables = response.data ?? [];
-      const nextTotal = response.meta?.total ?? response.total ?? nextTables.length;
+      const nextTotal =
+        response.meta?.total ?? response.total ?? nextTables.length;
 
       setPricingTables(nextTables);
       setPricingTableTotal(nextTotal);
@@ -6023,7 +6090,9 @@ function PricingTablesPage({ sessionToken }: PricingTablesPageProps) {
         body: createPricingTablePayload(tableForm),
       });
 
-      setPricingTables((current) => mergePricingTables([createdTable, ...current]));
+      setPricingTables((current) =>
+        mergePricingTables([createdTable, ...current]),
+      );
       setPricingTableTotal((current) => current + 1);
       setSelectedTableId(createdTable.id);
       setPriceForm((current) => ({
@@ -6117,7 +6186,9 @@ function PricingTablesPage({ sessionToken }: PricingTablesPageProps) {
     event.preventDefault();
 
     if (!canSearchProcedure) {
-      setTableError('Digite ao menos 2 caracteres para localizar procedimento.');
+      setTableError(
+        'Digite ao menos 2 caracteres para localizar procedimento.',
+      );
       return;
     }
 
@@ -6305,7 +6376,10 @@ function PricingTablesPage({ sessionToken }: PricingTablesPageProps) {
             </div>
 
             <div className="record-grid">
-              <RecordLine label="Ano" value={String(selectedTable.year || '')} />
+              <RecordLine
+                label="Ano"
+                value={String(selectedTable.year || '')}
+              />
               <RecordLine label="Codigo" value={selectedTable.code} />
               <RecordLine
                 label="Status"
@@ -6685,7 +6759,10 @@ function CbhpmPage({ sessionToken }: CbhpmPageProps) {
   const [porteError, setPorteError] = useState('');
   const searchTerm = search.trim();
   const canSearch = searchTerm.length >= 2 || Boolean(selectedYear);
-  const importedTotal = summaries.reduce((total, summary) => total + summary.total, 0);
+  const importedTotal = summaries.reduce(
+    (total, summary) => total + summary.total,
+    0,
+  );
   const availableYears = Array.from(
     new Set(summaries.map((summary) => summary.editionYear)),
   ).sort((left, right) => right - left);
@@ -6897,7 +6974,9 @@ function CbhpmPage({ sessionToken }: CbhpmPageProps) {
           <article className="summary-card">
             <span>Edicoes</span>
             <strong>{availableYears.length}</strong>
-            <small>{availableYears.join(', ') || 'Aguardando importacao'}</small>
+            <small>
+              {availableYears.join(', ') || 'Aguardando importacao'}
+            </small>
           </article>
           <article className="summary-card">
             <span>Ano em foco</span>
@@ -7016,7 +7095,6 @@ function CbhpmPage({ sessionToken }: CbhpmPageProps) {
           pageSize={regularPageSize}
           totalItems={procedureTotal}
         />
-
       </article>
 
       <aside className="panel form-panel cbhpm-import-panel">
@@ -7069,7 +7147,9 @@ function CbhpmPage({ sessionToken }: CbhpmPageProps) {
           <div className="page-header">
             <div>
               <p className="eyebrow">Portes da edicao</p>
-              <h2>{porteYear ? `CBHPM ${porteYear}` : 'Selecione uma edicao'}</h2>
+              <h2>
+                {porteYear ? `CBHPM ${porteYear}` : 'Selecione uma edicao'}
+              </h2>
             </div>
           </div>
 
@@ -7098,7 +7178,9 @@ function CbhpmPage({ sessionToken }: CbhpmPageProps) {
                   type="button"
                 >
                   <span>{summary.porte}</span>
-                  <strong>{formatCurrencyFromCents(summary.valorPorteCents)}</strong>
+                  <strong>
+                    {formatCurrencyFromCents(summary.valorPorteCents)}
+                  </strong>
                   <small>{summary.procedureCount} procedimento(s)</small>
                   <em>Fracao {formatFractionRange(summary)}</em>
                 </button>
@@ -7155,15 +7237,21 @@ function CbhpmPage({ sessionToken }: CbhpmPageProps) {
               />
               <RecordLine
                 label="Valor base do porte"
-                value={formatCurrencyFromCents(focusedProcedure.valorPorteCents)}
+                value={formatCurrencyFromCents(
+                  focusedProcedure.valorPorteCents,
+                )}
               />
               <RecordLine
                 label="Honorario / total porte"
-                value={formatCurrencyFromCents(focusedProcedure.totalPorteCents)}
+                value={formatCurrencyFromCents(
+                  focusedProcedure.totalPorteCents,
+                )}
               />
               <RecordLine
                 label="Adicionais"
-                value={formatCurrencyFromCents(focusedProcedure.adicionaisCents)}
+                value={formatCurrencyFromCents(
+                  focusedProcedure.adicionaisCents,
+                )}
               />
               <RecordLine
                 label="Subtotal final"
@@ -7174,7 +7262,9 @@ function CbhpmPage({ sessionToken }: CbhpmPageProps) {
               />
               <RecordLine
                 label="Filme"
-                value={formatCurrencyFromCents(focusedProcedure.totalFilmeCents)}
+                value={formatCurrencyFromCents(
+                  focusedProcedure.totalFilmeCents,
+                )}
               />
               <RecordLine
                 label="UCO"
@@ -7293,7 +7383,8 @@ function ExamOrdersPage({
         { token: sessionToken },
       );
       const nextOrders = response.data ?? [];
-      const nextTotal = response.meta?.total ?? response.total ?? nextOrders.length;
+      const nextTotal =
+        response.meta?.total ?? response.total ?? nextOrders.length;
 
       setOrderResults(nextOrders);
       setOrderResultTotal(nextTotal);
@@ -7385,9 +7476,7 @@ function ExamOrdersPage({
       const nextProcedures = response.data ?? [];
 
       setProcedureOptions(nextProcedures);
-      setKnownProcedures((current) =>
-        mergeProcedures(current, nextProcedures),
-      );
+      setKnownProcedures((current) => mergeProcedures(current, nextProcedures));
       setProcedureSearchStatus('ready');
     } catch (error) {
       setProcedureOptions([]);
@@ -7636,7 +7725,8 @@ function ExamOrdersPage({
                 <article className="exam-item-card" key={item.id}>
                   <strong>{item.procedure.description}</strong>
                   <small>
-                    {item.procedure.code} - {procedureTypeLabel(item.procedure.type)}
+                    {item.procedure.code} -{' '}
+                    {procedureTypeLabel(item.procedure.type)}
                   </small>
                   <small>
                     Qtd. {item.quantity}
@@ -7661,12 +7751,13 @@ function ExamOrdersPage({
             <p className="eyebrow">Nova solicitação</p>
             <h2>Montar pedido</h2>
           </div>
-          <span className="inline-badge">
-            {form.items.length} item(ns)
-          </span>
+          <span className="inline-badge">{form.items.length} item(ns)</span>
         </div>
 
-        <form className="operational-search-card" onSubmit={searchPatientsForOrder}>
+        <form
+          className="operational-search-card"
+          onSubmit={searchPatientsForOrder}
+        >
           <div>
             <span className="section-title">Paciente</span>
             <strong>Localize o paciente no banco.</strong>
@@ -7704,7 +7795,9 @@ function ExamOrdersPage({
           <div className="helper-block">
             <span>Paciente selecionado</span>
             <strong>{selectedPatient.name}</strong>
-            <small>{selectedPatient.cpf} - {selectedPatient.phone}</small>
+            <small>
+              {selectedPatient.cpf} - {selectedPatient.phone}
+            </small>
           </div>
         ) : null}
 
@@ -7718,7 +7811,9 @@ function ExamOrdersPage({
                 type="button"
               >
                 <strong>{patient.name}</strong>
-                <small>{patient.cpf} - {patient.phone}</small>
+                <small>
+                  {patient.cpf} - {patient.phone}
+                </small>
               </button>
             ))}
           </div>
@@ -10193,25 +10288,29 @@ function getRolePermissionOptions(role: Role): PermissionPreviewOption[] {
     {
       value: 'administrative_access',
       label: 'Acesso administrativo completo',
-      description: 'Libera usuarios, cadastros estruturais e todos os ambientes.',
+      description:
+        'Libera usuarios, cadastros estruturais e todos os ambientes.',
       checked: role === 'ADMIN',
     },
     {
       value: 'front_desk_access',
       label: 'Recepcao, pacientes e agenda',
-      description: 'Permite localizar paciente, cadastrar passagem e operar agenda.',
+      description:
+        'Permite localizar paciente, cadastrar passagem e operar agenda.',
       checked: hasRoleAccess(role, ['ATENDENTE']),
     },
     {
       value: 'medical_access',
       label: 'Consultorio e rotina medica',
-      description: 'Libera atendimento medico, pedidos, laudos e evolucao clinica.',
+      description:
+        'Libera atendimento medico, pedidos, laudos e evolucao clinica.',
       checked: hasRoleAccess(role, ['MEDICO']),
     },
     {
       value: 'nursing_access',
       label: 'Enfermagem e triagem',
-      description: 'Permite sinais vitais, classificacao e apoio ao atendimento.',
+      description:
+        'Permite sinais vitais, classificacao e apoio ao atendimento.',
       checked: hasRoleAccess(role, ['ENFERMEIRO']),
     },
     {
@@ -10739,7 +10838,9 @@ function summarizeExamOrderItems(order: ExamOrder) {
 }
 
 function mergeProcedures(current: Procedure[], incoming: Procedure[]) {
-  const registry = new Map(current.map((procedure) => [procedure.id, procedure]));
+  const registry = new Map(
+    current.map((procedure) => [procedure.id, procedure]),
+  );
 
   incoming.forEach((procedure) => registry.set(procedure.id, procedure));
 

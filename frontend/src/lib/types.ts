@@ -17,6 +17,14 @@ export type UserProfile = {
   updatedAt?: string;
 };
 
+export type AuditSummary = {
+  total: number;
+  last24h: number;
+  patientAccesses: number;
+  writeOperations: number;
+  retentionPolicy: string;
+};
+
 export type PaginatedResponse<T> = {
   data: T[];
   total?: number;

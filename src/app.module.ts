@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { APP_GUARD, Reflector } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR, Reflector } from '@nestjs/core';
 import { PrismaModule } from './prisma/prisma.module';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
@@ -16,6 +16,8 @@ import { ExamOrdersModule } from './exam-orders/exam-orders.module';
 import { PricingModule } from './pricing/pricing.module';
 import { CbhpmModule } from './cbhpm/cbhpm.module';
 import { AgreementsModule } from './agreements/agreements.module';
+import { AuditInterceptor } from './audit/audit.interceptor';
+import { AuditModule } from './audit/audit.module';
 import configuration from './config/configuration';
 
 @Module({
@@ -39,11 +41,16 @@ import configuration from './config/configuration';
     PricingModule,
     CbhpmModule,
     AgreementsModule,
+    AuditModule,
   ],
   providers: [
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AuditInterceptor,
     },
     Reflector,
   ],

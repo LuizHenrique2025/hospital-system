@@ -95,6 +95,13 @@ enum PricingTableType {
   MATERIAL_MEDICATION
 }
 
+enum AuditAction {
+  READ
+  CREATE
+  UPDATE
+  DELETE
+}
+
 model User {
   id        String   @id @default(uuid())
   name      String
@@ -109,6 +116,7 @@ model User {
   nurse                    Nurse?
   sentInternalMessages     InternalMessage[] @relation("SentInternalMessages")
   receivedInternalMessages InternalMessage[] @relation("ReceivedInternalMessages")
+  auditLogs                AuditLog[]
 }
 
 model Patient {
@@ -448,4 +456,27 @@ model ExamOrderItem {
 
   @@unique([examOrderId, procedureId])
   @@map("exam_order_items")
+}
+
+model AuditLog {
+  id         String      @id @default(uuid())
+  actorId    String?
+  actorRole  Role?
+  action     AuditAction
+  resource   String
+  resourceId String?
+  route      String
+  method     String
+  ipAddress  String?
+  userAgent  String?
+  statusCode Int?
+  metadata   Json?
+  createdAt  DateTime    @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([actorId, createdAt])
+  @@index([action, createdAt])
+  @@index([resource, resourceId])
+  @@map("audit_logs")
 }
