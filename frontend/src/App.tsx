@@ -251,6 +251,8 @@ type CareRecordFormState = {
   prescription: string;
 };
 
+type CareModalVariant = 'default' | 'consultorio';
+
 type EnvironmentId =
   | 'administrativo'
   | 'hospitalar'
@@ -2587,6 +2589,8 @@ function SettingsPage({
         </aside>
       </div>
 
+      <CbhpmInformationPanel sessionToken={sessionToken} />
+
       <article className="panel audit-console-panel">
         <div className="page-header">
           <div>
@@ -2878,6 +2882,235 @@ function SettingsPage({
         </div>
       </article>
     </section>
+  );
+}
+
+type CbhpmInformationPanelProps = {
+  sessionToken: string;
+};
+
+function CbhpmInformationPanel({ sessionToken }: CbhpmInformationPanelProps) {
+  const [summaries, setSummaries] = useState<CbhpmImportSummary[]>([]);
+  const [summaryStatus, setSummaryStatus] = useState<
+    'loading' | 'ready' | 'error'
+  >('loading');
+  const [summaryError, setSummaryError] = useState('');
+  const [selectedYear, setSelectedYear] = useState<number | ''>('');
+  const [porteSearch, setPorteSearch] = useState('');
+  const [porteSummaries, setPorteSummaries] = useState<CbhpmPorteSummary[]>([]);
+  const [porteStatus, setPorteStatus] = useState<
+    'idle' | 'loading' | 'ready' | 'error'
+  >('idle');
+  const [porteError, setPorteError] = useState('');
+  const availableYears = Array.from(
+    new Set(summaries.map((summary) => summary.editionYear)),
+  ).sort((left, right) => right - left);
+  const porteYear = selectedYear || availableYears[0] || '';
+
+  const loadPorteSummaries = useCallback(
+    async (year: number | '', term = '') => {
+      if (!year) {
+        setPorteSummaries([]);
+        setPorteStatus('idle');
+        return;
+      }
+
+      setPorteStatus('loading');
+      setPorteError('');
+
+      try {
+        const queryParams = new URLSearchParams({
+          editionYear: String(year),
+          limit: '80',
+        });
+
+        if (term) {
+          queryParams.set('q', term);
+        }
+
+        const response = await apiRequest<CbhpmPorteSummary[]>(
+          `/cbhpm/portes?${queryParams.toString()}`,
+          { token: sessionToken },
+        );
+
+        setPorteSummaries(response);
+        setPorteStatus('ready');
+      } catch (error) {
+        setPorteSummaries([]);
+        setPorteStatus('error');
+        setPorteError(
+          error instanceof Error
+            ? error.message
+            : 'Nao foi possivel carregar os portes CBHPM.',
+        );
+      }
+    },
+    [sessionToken],
+  );
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadImportSummaries() {
+      setSummaryStatus('loading');
+      setSummaryError('');
+
+      try {
+        const response = await apiRequest<CbhpmImportSummary[]>(
+          '/cbhpm/imports/summary',
+          { token: sessionToken },
+        );
+        const latestYear = response.reduce(
+          (latest, summary) => Math.max(latest, summary.editionYear),
+          0,
+        );
+
+        if (!isMounted) {
+          return;
+        }
+
+        setSummaries(response);
+        setSelectedYear(latestYear || '');
+        setSummaryStatus('ready');
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
+        setSummaries([]);
+        setSummaryStatus('error');
+        setSummaryError(
+          error instanceof Error
+            ? error.message
+            : 'Nao foi possivel carregar as importacoes CBHPM.',
+        );
+      }
+    }
+
+    void loadImportSummaries();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [sessionToken]);
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      void loadPorteSummaries(porteYear, porteSearch.trim());
+    }, 180);
+
+    return () => window.clearTimeout(handle);
+  }, [loadPorteSummaries, porteSearch, porteYear]);
+
+  return (
+    <article className="panel cbhpm-information-panel">
+      <div className="page-header">
+        <div>
+          <p className="eyebrow">Informacoes CBHPM</p>
+          <h2>Arquivos importados e portes</h2>
+          <p>
+            Area informativa para conferir quais edicoes foram importadas,
+            origem dos CSVs e valores de porte por ano.
+          </p>
+        </div>
+        <span className="inline-badge">
+          {summaries.length.toLocaleString('pt-BR')} edicoes
+        </span>
+      </div>
+
+      <div className="page-grid cbhpm-information-layout">
+        <section className="cbhpm-information-card">
+          <div className="page-header compact-header">
+            <div>
+              <p className="eyebrow">Arquivos importados</p>
+              <h3>Historico por edicao</h3>
+            </div>
+          </div>
+
+          {summaryStatus === 'loading' ? (
+            <p className="empty-state compact">Carregando importacoes...</p>
+          ) : summaryStatus === 'error' ? (
+            <DirectoryState
+              code="ER"
+              title="Nao foi possivel carregar o historico."
+              description={summaryError}
+            />
+          ) : summaries.length === 0 ? (
+            <DirectoryState
+              code="00"
+              title="Nenhuma tabela importada."
+              description="Assim que os CSVs forem processados, os anos e arquivos aparecem aqui."
+            />
+          ) : (
+            <div className="cbhpm-summary-list">
+              {summaries.map((summary) => (
+                <button
+                  className={`cbhpm-summary-card ${
+                    summary.editionYear === selectedYear ? 'active' : ''
+                  }`}
+                  key={`${summary.editionYear}-${summary.sourceFile}`}
+                  onClick={() => setSelectedYear(summary.editionYear)}
+                  type="button"
+                >
+                  <span>CBHPM {summary.editionYear}</span>
+                  <strong>{summary.total.toLocaleString('pt-BR')} itens</strong>
+                  <small>{summary.sourceFile || 'Arquivo nao informado'}</small>
+                  <em>
+                    {summary.importedAt
+                      ? `Importado em ${formatDateTime(summary.importedAt)}`
+                      : 'Sem data de importacao'}
+                  </em>
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="cbhpm-information-card">
+          <div className="page-header compact-header">
+            <div>
+              <p className="eyebrow">Portes da edicao</p>
+              <h3>
+                {porteYear ? `CBHPM ${porteYear}` : 'Selecione uma edicao'}
+              </h3>
+            </div>
+          </div>
+
+          <input
+            className="search-input"
+            placeholder="Buscar porte: 1A, 2B, 10C..."
+            value={porteSearch}
+            onChange={(event) => setPorteSearch(event.target.value)}
+          />
+
+          {porteStatus === 'loading' ? (
+            <p className="empty-state compact">Carregando portes...</p>
+          ) : porteStatus === 'error' ? (
+            <p className="form-warning">{porteError}</p>
+          ) : porteSummaries.length === 0 ? (
+            <p className="empty-state compact">
+              Nenhum porte encontrado para esta edicao.
+            </p>
+          ) : (
+            <div className="cbhpm-porte-list">
+              {porteSummaries.map((summary) => (
+                <article
+                  className="cbhpm-porte-card"
+                  key={`${summary.editionYear}-${summary.porte}-${summary.valorPorteCents}`}
+                >
+                  <span>{summary.porte}</span>
+                  <strong>
+                    {formatCurrencyFromCents(summary.valorPorteCents)}
+                  </strong>
+                  <small>{summary.procedureCount} procedimento(s)</small>
+                  <em>Fracao {formatFractionRange(summary)}</em>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+    </article>
   );
 }
 
@@ -3300,7 +3533,7 @@ type OperationalModalProps = {
   eyebrow?: string;
   isOpen: boolean;
   onClose: () => void;
-  size?: 'standard' | 'wide';
+  size?: 'standard' | 'wide' | 'clinical';
   title: string;
   toneLabel?: string;
 };
@@ -3334,7 +3567,7 @@ function OperationalModal({
       <section
         aria-labelledby={titleId}
         aria-modal="true"
-        className={`detail-modal operational-modal ${size === 'standard' ? 'standard' : 'wide'}`}
+        className={`detail-modal operational-modal ${size}`}
         onClick={(event) => event.stopPropagation()}
         role="dialog"
       >
@@ -7338,10 +7571,6 @@ type CbhpmPageProps = {
 
 function CbhpmPage({ sessionToken }: CbhpmPageProps) {
   const [summaries, setSummaries] = useState<CbhpmImportSummary[]>([]);
-  const [summaryStatus, setSummaryStatus] = useState<
-    'loading' | 'ready' | 'error'
-  >('loading');
-  const [summaryError, setSummaryError] = useState('');
   const [search, setSearch] = useState('');
   const [selectedYear, setSelectedYear] = useState<number | ''>('');
   const [hasSearched, setHasSearched] = useState(false);
@@ -7355,12 +7584,6 @@ function CbhpmPage({ sessionToken }: CbhpmPageProps) {
   const [selectedProcedureId, setSelectedProcedureId] = useState<string | null>(
     null,
   );
-  const [porteSearch, setPorteSearch] = useState('');
-  const [porteSummaries, setPorteSummaries] = useState<CbhpmPorteSummary[]>([]);
-  const [porteStatus, setPorteStatus] = useState<
-    'idle' | 'loading' | 'ready' | 'error'
-  >('idle');
-  const [porteError, setPorteError] = useState('');
   const searchTerm = search.trim();
   const canSearch = searchTerm.length >= 2 || Boolean(selectedYear);
   const importedTotal = summaries.reduce(
@@ -7370,7 +7593,6 @@ function CbhpmPage({ sessionToken }: CbhpmPageProps) {
   const availableYears = Array.from(
     new Set(summaries.map((summary) => summary.editionYear)),
   ).sort((left, right) => right - left);
-  const porteYear = selectedYear || availableYears[0] || '';
   const selectedSummary =
     summaries.find((summary) => summary.editionYear === selectedYear) ?? null;
   const focusedProcedure = selectedProcedureId
@@ -7378,54 +7600,10 @@ function CbhpmPage({ sessionToken }: CbhpmPageProps) {
       null)
     : null;
 
-  const loadPorteSummaries = useCallback(
-    async (year: number | '', term = '') => {
-      if (!year) {
-        setPorteSummaries([]);
-        setPorteStatus('idle');
-        return;
-      }
-
-      setPorteStatus('loading');
-      setPorteError('');
-
-      try {
-        const queryParams = new URLSearchParams({
-          editionYear: String(year),
-          limit: '80',
-        });
-
-        if (term) {
-          queryParams.set('q', term);
-        }
-
-        const response = await apiRequest<CbhpmPorteSummary[]>(
-          `/cbhpm/portes?${queryParams.toString()}`,
-          { token: sessionToken },
-        );
-
-        setPorteSummaries(response);
-        setPorteStatus('ready');
-      } catch (error) {
-        setPorteSummaries([]);
-        setPorteStatus('error');
-        setPorteError(
-          error instanceof Error
-            ? error.message
-            : 'Nao foi possivel carregar os portes CBHPM.',
-        );
-      }
-    },
-    [sessionToken],
-  );
-
   useEffect(() => {
     let isMounted = true;
 
     async function loadImportSummaries() {
-      setSummaryStatus('loading');
-      setSummaryError('');
-
       try {
         const response = await apiRequest<CbhpmImportSummary[]>(
           '/cbhpm/imports/summary',
@@ -7442,19 +7620,12 @@ function CbhpmPage({ sessionToken }: CbhpmPageProps) {
 
         setSummaries(response);
         setSelectedYear((current) => current || latestYear || '');
-        setSummaryStatus('ready');
-      } catch (error) {
+      } catch {
         if (!isMounted) {
           return;
         }
 
         setSummaries([]);
-        setSummaryStatus('error');
-        setSummaryError(
-          error instanceof Error
-            ? error.message
-            : 'Nao foi possivel carregar as importacoes CBHPM.',
-        );
       }
     }
 
@@ -7464,14 +7635,6 @@ function CbhpmPage({ sessionToken }: CbhpmPageProps) {
       isMounted = false;
     };
   }, [sessionToken]);
-
-  useEffect(() => {
-    const handle = window.setTimeout(() => {
-      void loadPorteSummaries(porteYear, porteSearch.trim());
-    }, 180);
-
-    return () => window.clearTimeout(handle);
-  }, [loadPorteSummaries, porteSearch, porteYear]);
 
   async function searchCbhpm(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -7535,20 +7698,6 @@ function CbhpmPage({ sessionToken }: CbhpmPageProps) {
     }
   }
 
-  function selectImportSummary(summary: CbhpmImportSummary) {
-    setSelectedYear(summary.editionYear);
-    void loadCbhpmProcedures(searchTerm, summary.editionYear, 1);
-  }
-
-  function selectPorteSummary(summary: CbhpmPorteSummary) {
-    const nextSearch = summary.porte ?? '';
-
-    setSelectedYear(summary.editionYear);
-    setSearch(nextSearch);
-    setSelectedProcedureId(null);
-    void loadCbhpmProcedures(nextSearch, summary.editionYear, 1);
-  }
-
   function clearSearch() {
     setSearch('');
     setSelectedYear('');
@@ -7562,7 +7711,7 @@ function CbhpmPage({ sessionToken }: CbhpmPageProps) {
   }
 
   return (
-    <section className="page-grid cbhpm-workspace">
+    <section className="page-grid cbhpm-workspace modal-workspace">
       <article className="panel">
         <div className="page-header">
           <div>
@@ -7700,105 +7849,6 @@ function CbhpmPage({ sessionToken }: CbhpmPageProps) {
           totalItems={procedureTotal}
         />
       </article>
-
-      <aside className="panel form-panel cbhpm-import-panel">
-        <div className="page-header">
-          <div>
-            <p className="eyebrow">Arquivos importados</p>
-            <h2>Historico por edicao</h2>
-          </div>
-        </div>
-
-        {summaryStatus === 'loading' ? (
-          <p className="empty-state compact">Carregando importacoes...</p>
-        ) : summaryStatus === 'error' ? (
-          <DirectoryState
-            code="ER"
-            title="Nao foi possivel carregar o historico."
-            description={summaryError}
-          />
-        ) : summaries.length === 0 ? (
-          <DirectoryState
-            code="00"
-            title="Nenhuma tabela importada."
-            description="Assim que os CSVs forem processados, os anos e arquivos aparecem aqui."
-          />
-        ) : (
-          <div className="cbhpm-summary-list">
-            {summaries.map((summary) => (
-              <button
-                className={`cbhpm-summary-card ${
-                  summary.editionYear === selectedYear ? 'active' : ''
-                }`}
-                key={`${summary.editionYear}-${summary.sourceFile}`}
-                onClick={() => selectImportSummary(summary)}
-                type="button"
-              >
-                <span>CBHPM {summary.editionYear}</span>
-                <strong>{summary.total.toLocaleString('pt-BR')} itens</strong>
-                <small>{summary.sourceFile || 'Arquivo nao informado'}</small>
-                <em>
-                  {summary.importedAt
-                    ? `Importado em ${formatDateTime(summary.importedAt)}`
-                    : 'Sem data de importacao'}
-                </em>
-              </button>
-            ))}
-          </div>
-        )}
-
-        <section className="cbhpm-porte-panel">
-          <div className="page-header">
-            <div>
-              <p className="eyebrow">Portes da edicao</p>
-              <h2>
-                {porteYear ? `CBHPM ${porteYear}` : 'Selecione uma edicao'}
-              </h2>
-            </div>
-          </div>
-
-          <input
-            className="search-input"
-            placeholder="Buscar porte: 1A, 2B, 10C..."
-            value={porteSearch}
-            onChange={(event) => setPorteSearch(event.target.value)}
-          />
-
-          {porteStatus === 'loading' ? (
-            <p className="empty-state compact">Carregando portes...</p>
-          ) : porteStatus === 'error' ? (
-            <p className="form-warning">{porteError}</p>
-          ) : porteSummaries.length === 0 ? (
-            <p className="empty-state compact">
-              Nenhum porte encontrado para esta edicao.
-            </p>
-          ) : (
-            <div className="cbhpm-porte-list">
-              {porteSummaries.map((summary) => (
-                <button
-                  className="cbhpm-porte-card"
-                  key={`${summary.editionYear}-${summary.porte}-${summary.valorPorteCents}`}
-                  onClick={() => selectPorteSummary(summary)}
-                  type="button"
-                >
-                  <span>{summary.porte}</span>
-                  <strong>
-                    {formatCurrencyFromCents(summary.valorPorteCents)}
-                  </strong>
-                  <small>{summary.procedureCount} procedimento(s)</small>
-                  <em>Fracao {formatFractionRange(summary)}</em>
-                </button>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <DirectoryState
-          code="FX"
-          title="Rastreabilidade do arquivo preservada."
-          description="Cada procedimento guarda o ano da edicao e o nome do CSV usado na importacao."
-        />
-      </aside>
 
       {focusedProcedure ? (
         <div
@@ -9061,7 +9111,7 @@ function EmergencyCarePage({
 
   return (
     <>
-      <section className="context-band">
+      <section className="context-band care-context-band">
         <article className="context-card">
           <span>Setor PA</span>
           <strong>{paSector?.name ?? 'Pronto Atendimento'}</strong>
@@ -9149,7 +9199,7 @@ function DoctorOfficePage({
 
   return (
     <>
-      <section className="context-band">
+      <section className="context-band care-context-band">
         <article className="context-card">
           <span>Agenda</span>
           <strong>{currentDoctor ? 'Minha agenda' : 'Todos os medicos'}</strong>
@@ -9173,12 +9223,15 @@ function DoctorOfficePage({
         emptyMessage="Nenhuma consulta de consultorio encontrada para este filtro."
         eyebrow="Consultorio"
         focusEyebrow="Paciente em consulta"
+        initiallyShowQueue
         isSubmitting={isSubmitting}
+        modalVariant="consultorio"
         onSaveCareRecord={onSaveCareRecord}
         patients={patients}
+        queueActionLabel="Abrir consultorio"
         statusEyebrow="Evolucao medica"
         statusTitle="Conduta, prescricao e fechamento"
-        title="Agenda medica e evolucao"
+        title="Fila medica do consultorio"
       />
     </>
   );
@@ -9520,12 +9573,15 @@ type CarePageProps = {
   emptyMessage?: string;
   eyebrow?: string;
   focusEyebrow?: string;
+  initiallyShowQueue?: boolean;
   isSubmitting: boolean;
+  modalVariant?: CareModalVariant;
   onSaveCareRecord: (
     appointmentId: string,
     payload: CareRecordPayload,
   ) => Promise<void>;
   patients: Patient[];
+  queueActionLabel?: string;
   statusEyebrow?: string;
   statusTitle?: string;
   title?: string;
@@ -9537,18 +9593,22 @@ function CarePage({
   emptyMessage = 'Nenhum atendimento visivel na fila.',
   eyebrow = 'Atendimento',
   focusEyebrow = 'Paciente em foco',
+  initiallyShowQueue = false,
   isSubmitting,
+  modalVariant = 'default',
   onSaveCareRecord,
   patients,
+  queueActionLabel = 'Abrir ficha',
   statusEyebrow = 'Leitura operacional',
   statusTitle = 'Status e proxima acao',
   title = 'Fila operacional',
 }: CarePageProps) {
   const [search, setSearch] = useState('');
-  const [hasSearchedQueue, setHasSearchedQueue] = useState(false);
+  const [hasSearchedQueue, setHasSearchedQueue] = useState(initiallyShowQueue);
   const [selectedAppointmentId, setSelectedAppointmentId] = useState<
     null | string
   >(null);
+  const [isCareModalOpen, setIsCareModalOpen] = useState(false);
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
   const canSearchQueue = search.trim().length >= 2;
   const filteredQueue = useMemo(
@@ -9567,12 +9627,11 @@ function CarePage({
         : [],
     [appointments, deferredSearch, hasSearchedQueue],
   );
-  const activeAppointment =
-    filteredQueue.find(
-      (appointment) => appointment.id === selectedAppointmentId,
-    ) ??
-    filteredQueue[0] ??
-    null;
+  const activeAppointment = selectedAppointmentId
+    ? (filteredQueue.find(
+        (appointment) => appointment.id === selectedAppointmentId,
+      ) ?? null)
+    : null;
   const waitingCount = appointments.filter((appointment) =>
     ['AGENDADA', 'CONFIRMADA'].includes(appointment.status),
   ).length;
@@ -9586,6 +9645,18 @@ function CarePage({
     (appointment) => appointment.status === 'NAO_COMPARECEU',
   ).length;
 
+  useEffect(() => {
+    if (
+      selectedAppointmentId &&
+      !filteredQueue.some(
+        (appointment) => appointment.id === selectedAppointmentId,
+      )
+    ) {
+      setSelectedAppointmentId(null);
+      setIsCareModalOpen(false);
+    }
+  }, [filteredQueue, selectedAppointmentId]);
+
   function searchQueue(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -9598,6 +9669,16 @@ function CarePage({
     setSearch('');
     setHasSearchedQueue(false);
     setSelectedAppointmentId(null);
+    setIsCareModalOpen(false);
+  }
+
+  function openAppointmentModal(appointment: Appointment) {
+    setSelectedAppointmentId(appointment.id);
+    setIsCareModalOpen(true);
+  }
+
+  function closeAppointmentModal() {
+    setIsCareModalOpen(false);
   }
 
   return (
@@ -9625,7 +9706,7 @@ function CarePage({
         </article>
       </section>
 
-      <section className="page-grid care-layout">
+      <section className="page-grid modal-workspace care-list-workspace">
         <article className="panel">
           <div className="page-header">
             <div>
@@ -9639,7 +9720,11 @@ function CarePage({
 
           <OperationalSearchCard
             canSearch={canSearchQueue}
-            description="Pesquise por paciente, medico, status ou tipo para abrir apenas a fila relacionada ao atendimento desejado."
+            description={
+              modalVariant === 'consultorio'
+                ? 'Atendimentos abertos pela recepcao aparecem nesta fila do medico. Use a busca para localizar paciente, status ou tipo.'
+                : 'Pesquise por paciente, medico, status ou tipo para abrir apenas a fila relacionada ao atendimento desejado.'
+            }
             onChange={setSearch}
             onClear={clearQueueSearch}
             onSearch={searchQueue}
@@ -9669,7 +9754,7 @@ function CarePage({
                     activeAppointment?.id === appointment.id ? 'is-active' : ''
                   }`}
                   key={appointment.id}
-                  onClick={() => setSelectedAppointmentId(appointment.id)}
+                  onClick={() => openAppointmentModal(appointment)}
                   type="button"
                 >
                   <div className="card-topline">
@@ -9688,6 +9773,7 @@ function CarePage({
                     <span>{formatDateTime(appointment.appointmentDate)}</span>
                     <span>{humanizeEnum(appointment.type)}</span>
                     <span>{appointment.patient.phone || 'Sem telefone'}</span>
+                    <span>{queueActionLabel}</span>
                   </div>
                 </button>
               ))
@@ -9871,6 +9957,176 @@ function CarePage({
           </article>
         </div>
       </section>
+
+      <OperationalModal
+        eyebrow={focusEyebrow}
+        isOpen={Boolean(activeAppointment) && isCareModalOpen}
+        onClose={closeAppointmentModal}
+        size={modalVariant === 'consultorio' ? 'clinical' : 'wide'}
+        title={activeAppointment?.patient.name ?? 'Atendimento'}
+        toneLabel={
+          activeAppointment ? humanizeEnum(activeAppointment.status) : undefined
+        }
+      >
+        {activeAppointment && modalVariant === 'consultorio' ? (
+          <ConsultorioRecordPanel
+            appointment={activeAppointment}
+            canManageCare={canManageCare}
+            completedCount={completedCount}
+            isSubmitting={isSubmitting}
+            key={`${activeAppointment.id}-${
+              activeAppointment.updatedAt ?? activeAppointment.status
+            }-consultorio`}
+            missingCount={missingCount}
+            onSaveCareRecord={onSaveCareRecord}
+            waitingCount={waitingCount}
+          />
+        ) : activeAppointment ? (
+          <div className="care-modal-layout">
+            <section className="modal-record-card">
+              <div className="context-band care-context-band">
+                <article className="context-card">
+                  <span>Horario</span>
+                  <strong>
+                    {formatTime(activeAppointment.appointmentDate)}
+                  </strong>
+                  <small>{formatDate(activeAppointment.appointmentDate)}</small>
+                </article>
+                <article className="context-card">
+                  <span>Idade</span>
+                  <strong>
+                    {calculateAge(activeAppointment.patient.birthDate)} anos
+                  </strong>
+                  <small>
+                    {formatDate(activeAppointment.patient.birthDate)}
+                  </small>
+                </article>
+                <article className="context-card">
+                  <span>Atendimento</span>
+                  <strong>{humanizeEnum(activeAppointment.type)}</strong>
+                  <small>{careStatusSummary(activeAppointment.status)}</small>
+                </article>
+              </div>
+
+              <div className="field-grid two-columns">
+                <div className="helper-block">
+                  <span>CPF</span>
+                  <strong>{activeAppointment.patient.cpf}</strong>
+                </div>
+                <div className="helper-block">
+                  <span>Contato</span>
+                  <strong>
+                    {activeAppointment.patient.phone || 'Nao informado'}
+                  </strong>
+                </div>
+                <div className="helper-block">
+                  <span>Tipo sanguineo</span>
+                  <strong>
+                    {activeAppointment.patient.bloodType || 'Nao informado'}
+                  </strong>
+                </div>
+                <div className="helper-block">
+                  <span>Cidade</span>
+                  <strong>
+                    {activeAppointment.patient.city
+                      ? `${activeAppointment.patient.city}${
+                          activeAppointment.patient.state
+                            ? ` / ${activeAppointment.patient.state}`
+                            : ''
+                        }`
+                      : 'Nao informada'}
+                  </strong>
+                </div>
+                <div className="helper-block full-row">
+                  <span>Alergias</span>
+                  <strong>
+                    {activeAppointment.patient.allergies ||
+                      'Nenhuma alergia informada'}
+                  </strong>
+                </div>
+                <div className="helper-block full-row">
+                  <span>Historico clinico</span>
+                  <strong>
+                    {activeAppointment.patient.medicalHistory ||
+                      'Historico ainda nao preenchido'}
+                  </strong>
+                </div>
+                <div className="helper-block full-row">
+                  <span>Profissional responsavel</span>
+                  <strong>
+                    {activeAppointment.doctor.user.name} - CRM{' '}
+                    {activeAppointment.doctor.crm}/
+                    {activeAppointment.doctor.crmUf}
+                  </strong>
+                  <span>
+                    {activeAppointment.doctor.specialties.length > 0
+                      ? activeAppointment.doctor.specialties.join(', ')
+                      : 'Especialidade nao informada'}
+                  </span>
+                </div>
+              </div>
+            </section>
+
+            <CareRecordPanel
+              appointment={activeAppointment}
+              canManageCare={canManageCare}
+              isSubmitting={isSubmitting}
+              key={`${activeAppointment.id}-${
+                activeAppointment.updatedAt ?? activeAppointment.status
+              }`}
+              onSaveCareRecord={onSaveCareRecord}
+            />
+
+            <section className="panel care-status-panel">
+              <div className="page-header">
+                <div>
+                  <p className="eyebrow">{statusEyebrow}</p>
+                  <h2>{statusTitle}</h2>
+                </div>
+              </div>
+
+              <div className="list-shell">
+                <div className="list-row">
+                  <div>
+                    <strong>Aguardando atendimento</strong>
+                    <span>agendadas ou confirmadas</span>
+                  </div>
+                  <div>
+                    <span>{waitingCount}</span>
+                  </div>
+                </div>
+                <div className="list-row">
+                  <div>
+                    <strong>Realizadas</strong>
+                    <span>consulta fechada</span>
+                  </div>
+                  <div>
+                    <span>{completedCount}</span>
+                  </div>
+                </div>
+                <div className="list-row">
+                  <div>
+                    <strong>Ausencias</strong>
+                    <span>nao compareceu</span>
+                  </div>
+                  <div>
+                    <span>{missingCount}</span>
+                  </div>
+                </div>
+                <div className="list-row">
+                  <div>
+                    <strong>Leitura atual</strong>
+                    <span>{careStatusSummary(activeAppointment.status)}</span>
+                  </div>
+                  <div>
+                    <span>{humanizeEnum(activeAppointment.type)}</span>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+        ) : null}
+      </OperationalModal>
     </>
   );
 }
@@ -10077,6 +10333,443 @@ function CareRecordPanel({
         )}
       </form>
     </article>
+  );
+}
+
+type ConsultorioRecordPanelProps = {
+  appointment: Appointment;
+  canManageCare: boolean;
+  completedCount: number;
+  isSubmitting: boolean;
+  missingCount: number;
+  onSaveCareRecord: (
+    appointmentId: string,
+    payload: CareRecordPayload,
+  ) => Promise<void>;
+  waitingCount: number;
+};
+
+type ConsultorioSection =
+  | 'rosto'
+  | 'exame'
+  | 'prescricao'
+  | 'exames'
+  | 'finalizacao';
+
+function ConsultorioRecordPanel({
+  appointment,
+  canManageCare,
+  completedCount,
+  isSubmitting,
+  missingCount,
+  onSaveCareRecord,
+  waitingCount,
+}: ConsultorioRecordPanelProps) {
+  const [activeSection, setActiveSection] =
+    useState<ConsultorioSection>('rosto');
+  const [form, setForm] = useState<CareRecordFormState>(() =>
+    createCareRecordForm(appointment),
+  );
+  const patient = appointment.patient;
+  const patientInitials = patient.name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('');
+  const medicationLines = form.prescription
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const consultorioSections: Array<{
+    id: ConsultorioSection;
+    label: string;
+    description: string;
+  }> = [
+    {
+      id: 'rosto',
+      label: 'Folha de rosto',
+      description: 'Anamnese e contexto inicial',
+    },
+    {
+      id: 'exame',
+      label: 'Exame fisico',
+      description: 'Sinais e diagnostico',
+    },
+    {
+      id: 'prescricao',
+      label: 'Prescricao',
+      description: 'Medicacao e conduta',
+    },
+    {
+      id: 'exames',
+      label: 'Exames',
+      description: 'Pedidos e laudos',
+    },
+    {
+      id: 'finalizacao',
+      label: 'Finalizacao',
+      description: 'Status e fechamento',
+    },
+  ];
+
+  async function saveConsultation(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!canManageCare) {
+      return;
+    }
+
+    await onSaveCareRecord(appointment.id, normalizeCareRecord(form));
+  }
+
+  async function saveWithStatus(nextStatus: string) {
+    if (!canManageCare) {
+      return;
+    }
+
+    const nextForm = {
+      ...form,
+      status: nextStatus,
+    };
+
+    setForm(nextForm);
+    await onSaveCareRecord(appointment.id, normalizeCareRecord(nextForm));
+  }
+
+  return (
+    <form className="consultorio-modal-shell" onSubmit={saveConsultation}>
+      <aside className="consultorio-patient-rail">
+        <div className="consultorio-avatar">{patientInitials || 'PA'}</div>
+        <div>
+          <p className="eyebrow">Paciente</p>
+          <h3>{patient.name}</h3>
+          <span>{patient.email || 'Email nao informado'}</span>
+          <span>{patient.phone || 'Telefone nao informado'}</span>
+        </div>
+
+        <div className="consultorio-rail-grid">
+          <DetailItem
+            label="Nascimento"
+            value={`${formatDate(patient.birthDate)} - ${calculateAge(
+              patient.birthDate,
+            )} anos`}
+          />
+          <DetailItem label="CPF" value={patient.cpf} />
+          <DetailItem label="Genero" value={humanizeEnum(patient.gender)} />
+          <DetailItem
+            label="Cidade"
+            value={
+              patient.city
+                ? `${patient.city}${patient.state ? ` / ${patient.state}` : ''}`
+                : 'Nao informada'
+            }
+          />
+        </div>
+
+        <div className="consultorio-warning-card">
+          <strong>Alergias e alertas</strong>
+          <span>
+            {patient.allergies ||
+              'Nenhuma alergia registrada no cadastro do paciente.'}
+          </span>
+        </div>
+
+        <nav className="consultorio-section-nav" aria-label="Secoes clinicas">
+          {consultorioSections.map((section) => (
+            <button
+              className={activeSection === section.id ? 'is-active' : undefined}
+              key={section.id}
+              onClick={() => setActiveSection(section.id)}
+              type="button"
+            >
+              <strong>{section.label}</strong>
+              <span>{section.description}</span>
+            </button>
+          ))}
+        </nav>
+      </aside>
+
+      <section className="consultorio-main-panel">
+        <div className="consultorio-hero-card">
+          <div>
+            <p className="eyebrow">Atendimento do consultorio</p>
+            <h3>{appointment.doctor.user.name}</h3>
+            <span>
+              CRM {appointment.doctor.crm}/{appointment.doctor.crmUf} -{' '}
+              {appointment.doctor.specialties.length > 0
+                ? appointment.doctor.specialties.join(', ')
+                : 'Especialidade nao informada'}
+            </span>
+          </div>
+          <div className="consultorio-clock">
+            <strong>{formatTime(appointment.appointmentDate)}</strong>
+            <span>{formatDate(appointment.appointmentDate)}</span>
+          </div>
+          <span className="inline-badge">{humanizeEnum(form.status)}</span>
+        </div>
+
+        <div className="consultorio-metric-grid">
+          <article>
+            <span>Aguardando</span>
+            <strong>{waitingCount}</strong>
+          </article>
+          <article>
+            <span>Realizadas</span>
+            <strong>{completedCount}</strong>
+          </article>
+          <article>
+            <span>Ausencias</span>
+            <strong>{missingCount}</strong>
+          </article>
+          <article>
+            <span>Tipo</span>
+            <strong>{humanizeEnum(appointment.type)}</strong>
+          </article>
+        </div>
+
+        {activeSection === 'rosto' ? (
+          <section className="clinical-section">
+            <div className="clinical-section-header">
+              <div>
+                <p className="eyebrow">Folha de rosto</p>
+                <h3>Queixa principal e anamnese</h3>
+              </div>
+              <span className="inline-badge">historico clinico</span>
+            </div>
+
+            <label className="field">
+              <span>Anamnese / observacoes da recepcao e do medico</span>
+              <textarea
+                className="clinical-large-textarea"
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    notes: event.target.value,
+                  }))
+                }
+                placeholder="Ex: Queixa principal, HDA, sintomas associados, antecedentes, orientacoes iniciais."
+                value={form.notes}
+              />
+            </label>
+
+            <div className="clinical-two-column">
+              <div className="clinical-list-card">
+                <strong>Historico do paciente</strong>
+                <span>
+                  {patient.medicalHistory ||
+                    'Historico clinico ainda nao preenchido.'}
+                </span>
+              </div>
+              <div className="clinical-list-card">
+                <strong>Lista de problemas</strong>
+                <span>
+                  {form.diagnosis ||
+                    'Nenhum problema registrado neste atendimento.'}
+                </span>
+              </div>
+            </div>
+          </section>
+        ) : null}
+
+        {activeSection === 'exame' ? (
+          <section className="clinical-section">
+            <div className="clinical-section-header">
+              <div>
+                <p className="eyebrow">Exame fisico</p>
+                <h3>Exame, hipotese e diagnostico</h3>
+              </div>
+              <span className="inline-badge">avaliacao medica</span>
+            </div>
+
+            <div className="clinical-vitals-grid">
+              {['Pressao', 'FC', 'FR', 'SPO2', 'Temperatura', 'Dor'].map(
+                (vital) => (
+                  <article key={vital}>
+                    <span>{vital}</span>
+                    <strong>--</strong>
+                    <small>parametro futuro</small>
+                  </article>
+                ),
+              )}
+            </div>
+
+            <label className="field">
+              <span>Exame fisico, hipotese diagnostica e diagnostico</span>
+              <textarea
+                className="clinical-large-textarea"
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    diagnosis: event.target.value,
+                  }))
+                }
+                placeholder="Ex: BEG, hidratado, exame segmentar, hipotese diagnostica, CID quando aplicavel."
+                value={form.diagnosis}
+              />
+            </label>
+          </section>
+        ) : null}
+
+        {activeSection === 'prescricao' ? (
+          <section className="clinical-section">
+            <div className="clinical-section-header">
+              <div>
+                <p className="eyebrow">Prescricao</p>
+                <h3>Medicamentos, conduta e orientacoes</h3>
+              </div>
+              <span className="inline-badge">dispensacao futura</span>
+            </div>
+
+            <label className="field">
+              <span>Prescricao e conduta</span>
+              <textarea
+                className="clinical-large-textarea"
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    prescription: event.target.value,
+                  }))
+                }
+                placeholder="Digite uma medicacao ou conduta por linha. Ex: Dipirona 1g EV se dor."
+                value={form.prescription}
+              />
+            </label>
+
+            <div className="clinical-list-card">
+              <strong>Medicamentos prescritos</strong>
+              {medicationLines.length === 0 ? (
+                <span>Nenhuma medicacao registrada neste atendimento.</span>
+              ) : (
+                <ul className="clinical-line-list">
+                  {medicationLines.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </section>
+        ) : null}
+
+        {activeSection === 'exames' ? (
+          <section className="clinical-section">
+            <div className="clinical-section-header">
+              <div>
+                <p className="eyebrow">Exames e procedimentos</p>
+                <h3>Pedidos vinculados ao atendimento</h3>
+              </div>
+              <span className="inline-badge">proximo modulo</span>
+            </div>
+
+            <div className="clinical-placeholder-grid">
+              <DirectoryState
+                code="EX"
+                title="Solicitacao estruturada em preparacao."
+                description="A tela ja reserva o espaco para pedir exames, procedimentos, imagem e laudos dentro do consultorio."
+              />
+              <DirectoryState
+                code="LA"
+                title="Laudos e resultados ficarao vinculados aqui."
+                description="Quando o modulo de pedidos estiver conectado, o medico acompanha resultado e impressao por este painel."
+              />
+            </div>
+          </section>
+        ) : null}
+
+        {activeSection === 'finalizacao' ? (
+          <section className="clinical-section">
+            <div className="clinical-section-header">
+              <div>
+                <p className="eyebrow">Finalizacao</p>
+                <h3>Status, fechamento e historico</h3>
+              </div>
+              <span className="inline-badge">
+                {careStatusSummary(form.status)}
+              </span>
+            </div>
+
+            <div className="clinical-two-column">
+              <label className="field">
+                <span>Status do atendimento</span>
+                <select
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      status: event.target.value,
+                    }))
+                  }
+                  value={form.status}
+                >
+                  {appointmentStatuses.map((status) => (
+                    <option key={status} value={status}>
+                      {humanizeEnum(status)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="clinical-list-card">
+                <strong>Gravar no historico clinico</strong>
+                <span>
+                  Nesta etapa inicial, anamnese, diagnostico e prescricao ficam
+                  salvos no atendimento. Depois ligaremos com historico clinico
+                  estruturado.
+                </span>
+              </div>
+            </div>
+          </section>
+        ) : null}
+
+        <footer className="consultorio-action-bar">
+          <div className="quick-actions care-actions">
+            <button
+              className={`mini-button ${
+                form.status === 'CONFIRMADA' ? 'is-active' : ''
+              }`}
+              disabled={isSubmitting || !canManageCare}
+              onClick={() => void saveWithStatus('CONFIRMADA')}
+              type="button"
+            >
+              Chamar paciente
+            </button>
+            <button
+              className={`mini-button ${
+                form.status === 'NAO_COMPARECEU' ? 'is-active' : ''
+              }`}
+              disabled={isSubmitting || !canManageCare}
+              onClick={() => void saveWithStatus('NAO_COMPARECEU')}
+              type="button"
+            >
+              Registrar ausencia
+            </button>
+          </div>
+
+          <div className="consultorio-save-actions">
+            <button
+              className="ghost-button"
+              disabled={isSubmitting || !canManageCare}
+              type="submit"
+            >
+              {isSubmitting ? 'Salvando...' : 'Salvar evolucao'}
+            </button>
+            <button
+              className="primary-button"
+              disabled={isSubmitting || !canManageCare}
+              onClick={() => void saveWithStatus('REALIZADA')}
+              type="button"
+            >
+              Salvar e finalizar atendimento
+            </button>
+          </div>
+        </footer>
+
+        {!canManageCare ? (
+          <p className="empty-state compact">
+            Este perfil pode consultar a ficha, mas nao possui permissao para
+            alterar o atendimento.
+          </p>
+        ) : null}
+      </section>
+    </form>
   );
 }
 
