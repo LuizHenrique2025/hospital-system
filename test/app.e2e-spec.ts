@@ -4,7 +4,7 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 
 import { AppModule } from '../src/app.module';
-import { PrismaService } from '../src/prisma/prisma.service';
+import { PrismaService } from '../src/infra/prisma/prisma.service';
 
 describe('AuthController (e2e)', () => {
   let app: INestApplication<App>;
@@ -44,7 +44,7 @@ describe('AuthController (e2e)', () => {
   it('/api/auth/login (POST) rejects invalid credentials', () => {
     return request(app.getHttpServer())
       .post('/api/auth/login')
-      .send({ email: 'missing@example.com', password: '123456' })
+      .send({ username: 'missing-user', password: '123456' })
       .expect(401);
   });
 });

@@ -16,7 +16,11 @@ import {
   useNavigate,
 } from 'react-router-dom';
 import './App.css';
+import { DetailItem } from './components/ui/DetailItem';
+import { OperationalModal } from './components/ui/OperationalModal';
+import { ResultPagination } from './components/ui/ResultPagination';
 import { apiRequest } from './lib/api';
+import { normalizeLogin } from './lib/normalizers';
 import type {
   Agreement,
   AgreementPricingRule,
@@ -48,6 +52,8 @@ import type {
   Sector,
   UserProfile,
 } from './lib/types';
+import { LoginScreen } from './pages/LoginPage';
+import { ModulePlaceholderPage } from './pages/ModulePlaceholderPage';
 
 type Session = {
   token: string;
@@ -164,8 +170,6 @@ type PermissionPreviewOption = {
   label: string;
   value: string;
 };
-
-type PaginationPageItem = number | 'gap';
 
 type AppointmentFormState = {
   patientId: string;
@@ -2155,129 +2159,6 @@ function App() {
   );
 }
 
-type LoginScreenProps = {
-  handleLogin: (event: React.FormEvent<HTMLFormElement>) => Promise<void>;
-  isSubmitting: boolean;
-  loginForm: {
-    username: string;
-    password: string;
-  };
-  setLoginForm: React.Dispatch<
-    React.SetStateAction<{
-      username: string;
-      password: string;
-    }>
-  >;
-};
-
-function LoginScreen({
-  handleLogin,
-  isSubmitting,
-  loginForm,
-  setLoginForm,
-}: LoginScreenProps) {
-  return (
-    <main className="login-app-shell">
-      <section className="login-shell clinic-login-shell">
-        <form className="auth-card clinic-login-card" onSubmit={handleLogin}>
-          <div className="clinic-login-title">
-            <span className="clinic-login-eyebrow">Acesso operacional</span>
-            <h1>Sistema Revitalite</h1>
-            <p>Entre com seu usuario e senha autorizados.</p>
-          </div>
-
-          <div className="clinic-field-block">
-            <span className="clinic-password-label">Login</span>
-            <label className="clinic-login-field">
-              <span className="field-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" role="img">
-                  <path d="M12 12.6a4.1 4.1 0 1 0 0-8.2 4.1 4.1 0 0 0 0 8.2Z" />
-                  <path d="M4.8 20.2a7.2 7.2 0 0 1 14.4 0" />
-                </svg>
-              </span>
-              <span className="sr-only">Login</span>
-              <input
-                aria-label="Login"
-                autoComplete="username"
-                placeholder="Digite seu login"
-                value={loginForm.username}
-                onChange={(event) =>
-                  setLoginForm((current) => ({
-                    ...current,
-                    username: normalizeLogin(event.target.value),
-                  }))
-                }
-                required
-              />
-              <button
-                aria-label="Limpar login"
-                className="login-reset-button"
-                type="button"
-                onClick={() =>
-                  setLoginForm((current) => ({
-                    ...current,
-                    username: '',
-                  }))
-                }
-              >
-                <svg viewBox="0 0 24 24" role="img">
-                  <path d="M20 12a8 8 0 1 1-2.35-5.65" />
-                  <path d="M20 4.8v5.1h-5.1" />
-                </svg>
-              </button>
-            </label>
-          </div>
-
-          <label className="clinic-password-block">
-            <span className="clinic-password-label">Senha</span>
-            <span className="clinic-password-input">
-              <span className="field-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" role="img">
-                  <path d="M8.8 14.5a3.6 3.6 0 1 1 1.75-3.1H22l-2.1 2.1 1.3 1.3-1.7 1.7-1.3-1.3-1.6 1.6-1.3-1.3h-4.75a3.6 3.6 0 0 1-1.65 1Z" />
-                  <path d="M5.6 11.4h.01" />
-                </svg>
-              </span>
-              <span className="sr-only">Senha</span>
-              <input
-                aria-label="Senha"
-                autoComplete="current-password"
-                type="password"
-                placeholder="Informe sua senha"
-                value={loginForm.password}
-                onChange={(event) =>
-                  setLoginForm((current) => ({
-                    ...current,
-                    password: event.target.value,
-                  }))
-                }
-                required
-              />
-            </span>
-          </label>
-
-          <button className="forgot-password-link" type="button">
-            Esqueceu sua senha?
-          </button>
-
-          <div className="clinic-login-actions">
-            <button
-              className="primary-button clinic-access-button"
-              type="submit"
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? 'Entrando...' : 'Acessar'}
-            </button>
-          </div>
-
-          <p className="clinic-login-footnote">
-            Acesso restrito aos setores autorizados do Hospital Revitalite.
-          </p>
-        </form>
-      </section>
-    </main>
-  );
-}
-
 type UsersPageProps = {
   form: UserFormState;
   isSubmitting: boolean;
@@ -3433,165 +3314,6 @@ function PermissionCheckboxFieldset({
   );
 }
 
-type ResultPaginationProps = {
-  currentPage: number;
-  isLoading?: boolean;
-  label: string;
-  onPageChange: (page: number) => void;
-  pageSize: number;
-  totalItems: number;
-};
-
-function ResultPagination({
-  currentPage,
-  isLoading = false,
-  label,
-  onPageChange,
-  pageSize,
-  totalItems,
-}: ResultPaginationProps) {
-  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
-  const safePage = Math.min(Math.max(currentPage, 1), totalPages);
-  const startItem = totalItems === 0 ? 0 : (safePage - 1) * pageSize + 1;
-  const endItem = Math.min(safePage * pageSize, totalItems);
-
-  if (totalItems <= pageSize) {
-    return null;
-  }
-
-  return (
-    <nav className="result-pagination" aria-label={`Paginacao de ${label}`}>
-      <span className="pagination-summary">
-        {startItem}-{endItem} de {totalItems.toLocaleString('pt-BR')}
-      </span>
-
-      <div className="pagination-controls">
-        <button
-          className="pagination-button"
-          disabled={isLoading || safePage <= 1}
-          onClick={() => onPageChange(safePage - 1)}
-          type="button"
-        >
-          Anterior
-        </button>
-
-        <div className="pagination-pages">
-          {buildPaginationPages(safePage, totalPages).map((pageItem, index) =>
-            pageItem === 'gap' ? (
-              <span className="pagination-gap" key={`gap-${index}`}>
-                ...
-              </span>
-            ) : (
-              <button
-                aria-current={pageItem === safePage ? 'page' : undefined}
-                className={
-                  pageItem === safePage
-                    ? 'pagination-page current'
-                    : 'pagination-page'
-                }
-                disabled={isLoading}
-                key={pageItem}
-                onClick={() => onPageChange(pageItem)}
-                type="button"
-              >
-                {pageItem}
-              </button>
-            ),
-          )}
-        </div>
-
-        <button
-          className="pagination-button"
-          disabled={isLoading || safePage >= totalPages}
-          onClick={() => onPageChange(safePage + 1)}
-          type="button"
-        >
-          Proxima
-        </button>
-      </div>
-    </nav>
-  );
-}
-
-function DetailItem({
-  label,
-  value,
-}: {
-  label: string;
-  value: number | string;
-}) {
-  return (
-    <div className="record-line">
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
-type OperationalModalProps = {
-  children: React.ReactNode;
-  eyebrow?: string;
-  isOpen: boolean;
-  onClose: () => void;
-  size?: 'standard' | 'wide' | 'clinical';
-  title: string;
-  toneLabel?: string;
-};
-
-function OperationalModal({
-  children,
-  eyebrow,
-  isOpen,
-  onClose,
-  size = 'wide',
-  title,
-  toneLabel,
-}: OperationalModalProps) {
-  if (!isOpen) {
-    return null;
-  }
-
-  const titleId = `modal-${title
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')}`;
-
-  return (
-    <div
-      className="detail-modal-backdrop"
-      onClick={onClose}
-      role="presentation"
-    >
-      <section
-        aria-labelledby={titleId}
-        aria-modal="true"
-        className={`detail-modal operational-modal ${size}`}
-        onClick={(event) => event.stopPropagation()}
-        role="dialog"
-      >
-        <header className="detail-modal-header">
-          <div>
-            {eyebrow ? <p className="eyebrow">{eyebrow}</p> : null}
-            <h2 id={titleId}>{title}</h2>
-          </div>
-          <div className="toolbar-inline">
-            {toneLabel ? (
-              <span className="inline-badge">{toneLabel}</span>
-            ) : null}
-            <button className="ghost-button" onClick={onClose} type="button">
-              Fechar
-            </button>
-          </div>
-        </header>
-
-        {children}
-      </section>
-    </div>
-  );
-}
-
 type WorkspaceLayoutProps = {
   activeEnvironment: NavigationEnvironment;
   activeModules: ModuleItem[];
@@ -4049,43 +3771,6 @@ function EnvironmentTransition({ environment }: EnvironmentTransitionProps) {
       <small>{environment.hint}</small>
       <div className="environment-transition-bar" />
     </div>
-  );
-}
-
-type ModulePlaceholderPageProps = {
-  description: string;
-  environment: string;
-  steps: string[];
-  title: string;
-};
-
-function ModulePlaceholderPage({
-  description,
-  environment,
-  steps,
-  title,
-}: ModulePlaceholderPageProps) {
-  return (
-    <section className="panel module-placeholder">
-      <div className="page-header">
-        <div>
-          <p className="eyebrow">{environment}</p>
-          <h2>{title}</h2>
-        </div>
-        <span className="inline-badge">Em configuracao</span>
-      </div>
-
-      <p>{description}</p>
-
-      <div className="placeholder-flow">
-        {steps.map((step, index) => (
-          <article key={step}>
-            <span>{String(index + 1).padStart(2, '0')}</span>
-            <strong>{step}</strong>
-          </article>
-        ))}
-      </div>
-    </section>
   );
 }
 
@@ -11673,10 +11358,6 @@ function isSameLocalDate(value: string) {
   );
 }
 
-function normalizeLogin(value: string) {
-  return value.trim().toLowerCase().replace(/\s+/g, '.');
-}
-
 function getRolePermissionOptions(role: Role): PermissionPreviewOption[] {
   return [
     {
@@ -11735,39 +11416,6 @@ function getRolePermissionOptions(role: Role): PermissionPreviewOption[] {
 
 function hasRoleAccess(role: Role, allowedRoles: Role[]) {
   return role === 'ADMIN' || allowedRoles.includes(role);
-}
-
-function buildPaginationPages(
-  currentPage: number,
-  totalPages: number,
-): PaginationPageItem[] {
-  if (totalPages <= 7) {
-    return Array.from({ length: totalPages }, (_, index) => index + 1);
-  }
-
-  const pages = new Set<number>([
-    1,
-    2,
-    totalPages - 1,
-    totalPages,
-    currentPage - 1,
-    currentPage,
-    currentPage + 1,
-  ]);
-  const sortedPages = Array.from(pages)
-    .filter((page) => page >= 1 && page <= totalPages)
-    .sort((left, right) => left - right);
-
-  return sortedPages.reduce<PaginationPageItem[]>((items, page, index) => {
-    const previousPage = sortedPages[index - 1];
-
-    if (previousPage && page - previousPage > 1) {
-      items.push('gap');
-    }
-
-    items.push(page);
-    return items;
-  }, []);
 }
 
 function paginateRecords<T>(records: T[], page: number, pageSize: number) {

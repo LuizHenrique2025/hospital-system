@@ -8,6 +8,15 @@ export default () => ({
     url: process.env.DATABASE_URL,
   },
   cors: {
-    origin: process.env.FRONTEND_URL || '*',
+    origin: process.env.FRONTEND_URL,
+  },
+  throttle: {
+    ttl: parseInt(process.env.THROTTLE_TTL_MS || '60000', 10),
+    limit: parseInt(process.env.THROTTLE_LIMIT || '120', 10),
+    authLimit: parseInt(process.env.AUTH_THROTTLE_LIMIT || '5', 10),
+    authBlockDuration: parseInt(
+      process.env.AUTH_THROTTLE_BLOCK_MS || '300000',
+      10,
+    ),
   },
 });

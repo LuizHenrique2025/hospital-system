@@ -1,24 +1,25 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD, APP_INTERCEPTOR, Reflector } from '@nestjs/core';
-import { PrismaModule } from './prisma/prisma.module';
-import { UsersModule } from './users/users.module';
-import { AuthModule } from './auth/auth.module';
-import { PatientsModule } from './patients/patients.module';
-import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
-import { NursesModule } from './nurses/nurses.module';
-import { AppointmentsModule } from './appointments/appointments.module';
-import { DoctorsModule } from './doctors/doctors.module';
-import { SectorsModule } from './sectors/sectors.module';
-import { CommunicationsModule } from './communications/communications.module';
-import { ProceduresModule } from './procedures/procedures.module';
-import { ExamOrdersModule } from './exam-orders/exam-orders.module';
-import { PricingModule } from './pricing/pricing.module';
-import { CbhpmModule } from './cbhpm/cbhpm.module';
-import { AgreementsModule } from './agreements/agreements.module';
-import { AuditInterceptor } from './audit/audit.interceptor';
-import { AuditModule } from './audit/audit.module';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import configuration from './config/configuration';
+import { PrismaModule } from './infra/prisma/prisma.module';
+import { AgreementsModule } from './modules/agreements/agreements.module';
+import { AppointmentsModule } from './modules/appointments/appointments.module';
+import { AuditInterceptor } from './modules/audit/audit.interceptor';
+import { AuditModule } from './modules/audit/audit.module';
+import { AuthModule } from './modules/auth/auth.module';
+import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
+import { CbhpmModule } from './modules/cbhpm/cbhpm.module';
+import { CommunicationsModule } from './modules/communications/communications.module';
+import { DoctorsModule } from './modules/doctors/doctors.module';
+import { ExamOrdersModule } from './modules/exam-orders/exam-orders.module';
+import { NursesModule } from './modules/nurses/nurses.module';
+import { PatientsModule } from './modules/patients/patients.module';
+import { PricingModule } from './modules/pricing/pricing.module';
+import { ProceduresModule } from './modules/procedures/procedures.module';
+import { SectorsModule } from './modules/sectors/sectors.module';
+import { UsersModule } from './modules/users/users.module';
 
 @Module({
   imports: [
@@ -26,6 +27,15 @@ import configuration from './config/configuration';
       isGlobal: true,
       load: [configuration],
       envFilePath: '.env',
+    }),
+    ThrottlerModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => [
+        {
+          ttl: configService.get<number>('throttle.ttl') ?? 60000,
+          limit: configService.get<number>('throttle.limit') ?? 120,
+        },
+      ],
     }),
     PrismaModule,
     UsersModule,
@@ -44,6 +54,10 @@ import configuration from './config/configuration';
     AuditModule,
   ],
   providers: [
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
