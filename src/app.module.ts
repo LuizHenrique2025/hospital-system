@@ -10,6 +10,8 @@ import { AuditInterceptor } from './modules/audit/audit.interceptor';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
+import { BillingGuidesModule } from './modules/billing-guides/billing-guides.module';
+import { BudgetEstimatesModule } from './modules/budget-estimates/budget-estimates.module';
 import { CbhpmModule } from './modules/cbhpm/cbhpm.module';
 import { CommunicationsModule } from './modules/communications/communications.module';
 import { DoctorsModule } from './modules/doctors/doctors.module';
@@ -51,6 +53,8 @@ import { UsersModule } from './modules/users/users.module';
     PricingModule,
     CbhpmModule,
     AgreementsModule,
+    BillingGuidesModule,
+    BudgetEstimatesModule,
     AuditModule,
   ],
   providers: [

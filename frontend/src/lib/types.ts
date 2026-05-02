@@ -206,6 +206,56 @@ export type ProcedurePrice = {
   pricingTable: PricingTable;
 };
 
+export type BudgetEstimateStatus =
+  | 'DRAFT'
+  | 'PENDING_APPROVAL'
+  | 'APPROVED'
+  | 'CONVERTED'
+  | 'CANCELED'
+  | 'EXPIRED';
+
+export type BudgetEstimateItem = {
+  id: string;
+  procedureId: string;
+  pricingTableId?: string | null;
+  procedurePriceId?: string | null;
+  description: string;
+  quantity: number;
+  unitPriceCents: number;
+  operationalCostCents?: number | null;
+  discountCents: number;
+  totalCents: number;
+  notes?: string | null;
+  procedure: Procedure;
+  pricingTable?: PricingTable | null;
+  procedurePrice?: ProcedurePrice | null;
+};
+
+export type BudgetEstimate = {
+  id: string;
+  code: string;
+  patientId?: string | null;
+  providerId?: string | null;
+  status: BudgetEstimateStatus;
+  title?: string | null;
+  notes?: string | null;
+  subtotalCents: number;
+  discountCents: number;
+  totalCents: number;
+  approvedAt?: string | null;
+  expiresAt?: string | null;
+  createdAt: string;
+  updatedAt?: string;
+  patient?: Patient | null;
+  provider?: Agreement | null;
+  convertedGuide?: {
+    id: string;
+    guideNumber: string;
+    currentStatus: string;
+  } | null;
+  items: BudgetEstimateItem[];
+};
+
 export type CbhpmProcedure = {
   id: string;
   codigo: string;

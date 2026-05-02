@@ -102,6 +102,71 @@ enum AuditAction {
   DELETE
 }
 
+enum BillingGuideStatus {
+  OPEN
+  AUTHORIZATION_PENDING
+  AUTHORIZED
+  PARTIALLY_AUTHORIZED
+  DENIED
+  IN_EXECUTION
+  EXECUTED
+  ACCOUNT_REVIEW
+  SENT_TO_PROVIDER
+  PAID
+  PARTIALLY_PAID
+  GLOSA
+  PENDING_DOCUMENTATION
+  REJECTED
+  APPEAL_IN_PROGRESS
+  APPEAL_ACCEPTED
+  APPEAL_DENIED
+  LOSS_ACCEPTED
+  CLOSED
+  CANCELED
+}
+
+enum BillingGuideMovementType {
+  OPENED
+  STATUS_CHANGED
+  AUTHORIZATION_REQUESTED
+  AUTHORIZED
+  DENIED
+  EXECUTION_RECORDED
+  ACCOUNT_REVIEW
+  SENT_TO_PROVIDER
+  PROVIDER_RETURN
+  GLOSA_RECORDED
+  APPEAL_CREATED
+  APPEAL_RETURN
+  DOCUMENT_ATTACHED
+  CLOSED
+  CANCELED
+  COMMENT
+}
+
+enum BillingGuideItemStatus {
+  REQUESTED
+  AUTHORIZATION_PENDING
+  AUTHORIZED
+  PARTIALLY_AUTHORIZED
+  DENIED
+  EXECUTED
+  BILLED
+  GLOSA
+  APPEALED
+  PAID
+  CANCELED
+}
+
+enum BudgetEstimateStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  CONVERTED
+  CANCELED
+  EXPIRED
+}
+
 model User {
   id        String   @id @default(uuid())
   name      String
@@ -114,9 +179,14 @@ model User {
 
   doctor                   Doctor?
   nurse                    Nurse?
-  sentInternalMessages     InternalMessage[] @relation("SentInternalMessages")
-  receivedInternalMessages InternalMessage[] @relation("ReceivedInternalMessages")
+  sentInternalMessages     InternalMessage[]      @relation("SentInternalMessages")
+  receivedInternalMessages InternalMessage[]      @relation("ReceivedInternalMessages")
   auditLogs                AuditLog[]
+  createdBillingGuides     BillingGuide[]         @relation("CreatedBillingGuides")
+  updatedBillingGuides     BillingGuide[]         @relation("UpdatedBillingGuides")
+  guideMovements           BillingGuideMovement[] @relation("BillingGuideMovementResponsible")
+  createdBudgetEstimates   BudgetEstimate[]       @relation("CreatedBudgetEstimates")
+  approvedBudgetEstimates  BudgetEstimate[]       @relation("ApprovedBudgetEstimates")
 }
 
 model Patient {
@@ -143,8 +213,10 @@ model Patient {
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 
-  appointments Appointment[]
-  examOrders   ExamOrder[]
+  appointments    Appointment[]
+  examOrders      ExamOrder[]
+  billingGuides   BillingGuide[]
+  budgetEstimates BudgetEstimate[]
 
   @@map("patients")
 }
@@ -224,9 +296,10 @@ model Appointment {
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
-  patient    Patient     @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  doctor     Doctor      @relation(fields: [doctorId], references: [id], onDelete: Cascade)
-  examOrders ExamOrder[]
+  patient       Patient        @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor        Doctor         @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  examOrders    ExamOrder[]
+  billingGuides BillingGuide[]
 
   @@map("appointments")
 }
@@ -297,29 +370,33 @@ model HealthInsuranceProvider {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  pricingRules AgreementPricingRule[]
+  pricingRules    AgreementPricingRule[]
+  billingGuides   BillingGuide[]
+  budgetEstimates BudgetEstimate[]
 
   @@map("health_insurance_providers")
 }
 
 model Procedure {
-  id                    String           @id @default(uuid())
-  code                  String           @unique
+  id                    String               @id @default(uuid())
+  code                  String               @unique
   description           String
-  type                  ProcedureType    @default(PROCEDURE)
+  type                  ProcedureType        @default(PROCEDURE)
   tableCode             String?
   groupName             String?
   unit                  String?
   referencePriceCents   Int?
-  requiresAuthorization Boolean          @default(false)
-  requiresReport        Boolean          @default(false)
-  billable              Boolean          @default(true)
-  active                Boolean          @default(true)
+  requiresAuthorization Boolean              @default(false)
+  requiresReport        Boolean              @default(false)
+  billable              Boolean              @default(true)
+  active                Boolean              @default(true)
   notes                 String?
-  createdAt             DateTime         @default(now())
-  updatedAt             DateTime         @updatedAt
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
   examOrderItems        ExamOrderItem[]
   prices                ProcedurePrice[]
+  billingGuideItems     BillingGuideItem[]
+  budgetEstimateItems   BudgetEstimateItem[]
 
   @@map("procedures")
 }
@@ -335,8 +412,10 @@ model PricingTable {
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 
-  prices         ProcedurePrice[]
-  agreementRules AgreementPricingRule[]
+  prices              ProcedurePrice[]
+  agreementRules      AgreementPricingRule[]
+  billingGuideItems   BillingGuideItem[]
+  budgetEstimateItems BudgetEstimateItem[]
 
   @@unique([name, year])
   @@map("pricing_tables")
@@ -378,8 +457,9 @@ model ProcedurePrice {
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
-  procedure    Procedure    @relation(fields: [procedureId], references: [id], onDelete: Cascade)
-  pricingTable PricingTable @relation(fields: [pricingTableId], references: [id], onDelete: Cascade)
+  procedure           Procedure            @relation(fields: [procedureId], references: [id], onDelete: Cascade)
+  pricingTable        PricingTable         @relation(fields: [pricingTableId], references: [id], onDelete: Cascade)
+  budgetEstimateItems BudgetEstimateItem[]
 
   @@unique([procedureId, pricingTableId])
   @@map("procedure_prices")
@@ -456,6 +536,155 @@ model ExamOrderItem {
 
   @@unique([examOrderId, procedureId])
   @@map("exam_order_items")
+}
+
+model BillingGuide {
+  id                    String             @id @default(uuid())
+  guideNumber           String             @unique
+  authorizationCode     String?
+  patientId             String
+  appointmentId         String?
+  providerId            String?
+  currentStatus         BillingGuideStatus @default(OPEN)
+  originSector          String?
+  careType              String?
+  requestedAmountCents  Int                @default(0)
+  authorizedAmountCents Int                @default(0)
+  paidAmountCents       Int                @default(0)
+  deniedAmountCents     Int                @default(0)
+  appealedAmountCents   Int                @default(0)
+  notes                 String?
+  openedAt              DateTime           @default(now())
+  closedAt              DateTime?
+  createdById           String?
+  updatedById           String?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+
+  patient              Patient                  @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  appointment          Appointment?             @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  provider             HealthInsuranceProvider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  createdBy            User?                    @relation("CreatedBillingGuides", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy            User?                    @relation("UpdatedBillingGuides", fields: [updatedById], references: [id], onDelete: SetNull)
+  items                BillingGuideItem[]
+  movements            BillingGuideMovement[]
+  sourceBudgetEstimate BudgetEstimate?
+
+  @@index([patientId, createdAt])
+  @@index([appointmentId])
+  @@index([providerId, currentStatus])
+  @@index([currentStatus, updatedAt])
+  @@map("billing_guides")
+}
+
+model BillingGuideItem {
+  id                    String                 @id @default(uuid())
+  guideId               String
+  procedureId           String
+  pricingTableId        String?
+  quantity              Int                    @default(1)
+  status                BillingGuideItemStatus @default(REQUESTED)
+  requestedAmountCents  Int                    @default(0)
+  authorizedAmountCents Int?
+  deniedAmountCents     Int?
+  paidAmountCents       Int?
+  notes                 String?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  guide        BillingGuide  @relation(fields: [guideId], references: [id], onDelete: Cascade)
+  procedure    Procedure     @relation(fields: [procedureId], references: [id], onDelete: Restrict)
+  pricingTable PricingTable? @relation(fields: [pricingTableId], references: [id], onDelete: SetNull)
+
+  @@index([guideId])
+  @@index([procedureId])
+  @@index([pricingTableId])
+  @@index([status])
+  @@map("billing_guide_items")
+}
+
+model BillingGuideMovement {
+  id                String                   @id @default(uuid())
+  guideId           String
+  movementType      BillingGuideMovementType @default(STATUS_CHANGED)
+  fromStatus        BillingGuideStatus?
+  toStatus          BillingGuideStatus
+  sector            String?
+  responsibleUserId String?
+  reason            String?
+  notes             String?
+  amountCents       Int?
+  metadata          Json?
+  createdAt         DateTime                 @default(now())
+
+  guide           BillingGuide @relation(fields: [guideId], references: [id], onDelete: Cascade)
+  responsibleUser User?        @relation("BillingGuideMovementResponsible", fields: [responsibleUserId], references: [id], onDelete: SetNull)
+
+  @@index([guideId, createdAt])
+  @@index([responsibleUserId, createdAt])
+  @@index([toStatus, createdAt])
+  @@index([sector, createdAt])
+  @@map("billing_guide_movements")
+}
+
+model BudgetEstimate {
+  id               String               @id @default(uuid())
+  code             String               @unique
+  patientId        String?
+  providerId       String?
+  status           BudgetEstimateStatus @default(DRAFT)
+  title            String?
+  notes            String?
+  subtotalCents    Int                  @default(0)
+  discountCents    Int                  @default(0)
+  totalCents       Int                  @default(0)
+  approvedAt       DateTime?
+  expiresAt        DateTime?
+  convertedGuideId String?              @unique
+  createdById      String?
+  approvedById     String?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  patient        Patient?                 @relation(fields: [patientId], references: [id], onDelete: SetNull)
+  provider       HealthInsuranceProvider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  convertedGuide BillingGuide?            @relation(fields: [convertedGuideId], references: [id], onDelete: SetNull)
+  createdBy      User?                    @relation("CreatedBudgetEstimates", fields: [createdById], references: [id], onDelete: SetNull)
+  approvedBy     User?                    @relation("ApprovedBudgetEstimates", fields: [approvedById], references: [id], onDelete: SetNull)
+  items          BudgetEstimateItem[]
+
+  @@index([patientId, createdAt])
+  @@index([providerId, status])
+  @@index([status, updatedAt])
+  @@map("budget_estimates")
+}
+
+model BudgetEstimateItem {
+  id                   String   @id @default(uuid())
+  estimateId           String
+  procedureId          String
+  pricingTableId       String?
+  procedurePriceId     String?
+  description          String
+  quantity             Int      @default(1)
+  unitPriceCents       Int      @default(0)
+  operationalCostCents Int?
+  discountCents        Int      @default(0)
+  totalCents           Int      @default(0)
+  notes                String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  estimate       BudgetEstimate  @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  procedure      Procedure       @relation(fields: [procedureId], references: [id], onDelete: Restrict)
+  pricingTable   PricingTable?   @relation(fields: [pricingTableId], references: [id], onDelete: SetNull)
+  procedurePrice ProcedurePrice? @relation(fields: [procedurePriceId], references: [id], onDelete: SetNull)
+
+  @@index([estimateId])
+  @@index([procedureId])
+  @@index([pricingTableId])
+  @@index([procedurePriceId])
+  @@map("budget_estimate_items")
 }
 
 model AuditLog {

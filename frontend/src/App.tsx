@@ -52,6 +52,8 @@ import type {
   Sector,
   UserProfile,
 } from './lib/types';
+import { BillingWorkspacePage } from './pages/BillingWorkspacePage';
+import { BudgetCalculatorPage } from './pages/BudgetCalculatorPage';
 import { LoginScreen } from './pages/LoginPage';
 import { ModulePlaceholderPage } from './pages/ModulePlaceholderPage';
 
@@ -363,6 +365,12 @@ const activeModules: ModuleItem[] = [
     roles: ['ATENDENTE', 'FATURAMENTO'],
   },
   {
+    path: '/orcamentos',
+    label: 'Orcamentos',
+    hint: 'Calculadora hospitalar',
+    roles: ['ATENDENTE', 'MEDICO', 'ENFERMEIRO', 'FATURAMENTO'],
+  },
+  {
     path: '/cbhpm',
     label: 'CBHPM',
     hint: 'Importacoes e consulta',
@@ -545,6 +553,7 @@ const administrativeModuleGroups: AdministrativeModuleGroup[] = [
       '/pacientes',
       '/procedimentos',
       '/tabelas-precos',
+      '/orcamentos',
       '/cbhpm',
     ],
   },
@@ -556,6 +565,7 @@ const administrativeModuleGroups: AdministrativeModuleGroup[] = [
       '/atender',
       '/procedimentos',
       '/tabelas-precos',
+      '/orcamentos',
       '/cbhpm',
       '/pedidos-exames',
       '/laudos',
@@ -628,6 +638,7 @@ const navigationEnvironments: NavigationEnvironment[] = [
       '/central',
       '/agendamento',
       '/atender',
+      '/orcamentos',
       '/pedidos-exames',
       '/laudos',
       '/recibo-nfse',
@@ -689,6 +700,7 @@ const navigationEnvironments: NavigationEnvironment[] = [
       '/central',
       '/procedimentos',
       '/tabelas-precos',
+      '/orcamentos',
       '/cbhpm',
       '/convenios',
       '/faturamento',
@@ -1746,6 +1758,10 @@ function App() {
           element={<PricingTablesPage sessionToken={session.token} />}
         />
         <Route
+          path="/orcamentos"
+          element={<BudgetCalculatorPage sessionToken={session.token} />}
+        />
+        <Route
           path="/cbhpm"
           element={<CbhpmPage sessionToken={session.token} />}
         />
@@ -2057,99 +2073,70 @@ function App() {
         <Route
           path="/faturamento"
           element={
-            <BillingPage
+            <BillingWorkspacePage
               appointments={appointments}
               patientTotal={patientTotal}
+              view="overview"
             />
           }
         />
         <Route
           path="/guias"
           element={
-            <ModulePlaceholderPage
-              environment="Faturamento"
-              title="Guias"
-              description="Controle de guias por convenio, paciente e atendimento."
-              steps={[
-                'Criar ou importar guia',
-                'Relacionar procedimentos realizados',
-                'Controlar status de envio e retorno',
-              ]}
+            <BillingWorkspacePage
+              appointments={appointments}
+              patientTotal={patientTotal}
+              view="guides"
             />
           }
         />
         <Route
           path="/contas"
           element={
-            <ModulePlaceholderPage
-              environment="Faturamento"
-              title="Contas"
-              description="Contas hospitalares, fechamento e conferencia."
-              steps={[
-                'Agrupar itens por atendimento',
-                'Conferir procedimentos e valores',
-                'Fechar conta para guia ou nota',
-              ]}
+            <BillingWorkspacePage
+              appointments={appointments}
+              patientTotal={patientTotal}
+              view="accounts"
             />
           }
         />
         <Route
           path="/notas-fiscais"
           element={
-            <ModulePlaceholderPage
-              environment="Faturamento"
-              title="Notas Fiscais"
-              description="Notas fiscais e documentos fiscais relacionados."
-              steps={[
-                'Preparar nota por conta fechada',
-                'Controlar emissao e cancelamento',
-                'Relacionar nota a recibo e guia',
-              ]}
+            <BillingWorkspacePage
+              appointments={appointments}
+              patientTotal={patientTotal}
+              view="invoices"
             />
           }
         />
         <Route
           path="/glosas"
           element={
-            <ModulePlaceholderPage
-              environment="Faturamento"
-              title="Glosas"
-              description="Controle de glosas, recursos e perdas financeiras."
-              steps={[
-                'Registrar glosa por guia ou item',
-                'Acompanhar recurso e retorno',
-                'Mensurar perdas por convenio',
-              ]}
+            <BillingWorkspacePage
+              appointments={appointments}
+              patientTotal={patientTotal}
+              view="denials"
             />
           }
         />
         <Route
           path="/importacao-xml"
           element={
-            <ModulePlaceholderPage
-              environment="Faturamento"
-              title="Importacao XML"
-              description="Entrada de XML para conferencia fiscal e operacional."
-              steps={[
-                'Importar XML recebido',
-                'Validar itens e dados fiscais',
-                'Relacionar XML a nota ou conta',
-              ]}
+            <BillingWorkspacePage
+              appointments={appointments}
+              patientTotal={patientTotal}
+              view="xml"
             />
           }
         />
         <Route
           path="/movimentacao-guias"
           element={
-            <ModulePlaceholderPage
-              environment="Faturamento"
-              title="Movimentacao de Guias"
-              description="Movimentacao, envio, retorno e rastreio de guias."
-              steps={[
-                'Registrar movimentacao da guia',
-                'Acompanhar envio, retorno e pendencias',
-                'Conectar guia a conta, nota e glosa',
-              ]}
+            <BillingWorkspacePage
+              appointments={appointments}
+              patientTotal={patientTotal}
+              view="movements"
             />
           }
         />
@@ -9069,184 +9056,6 @@ function PharmacyPage({ appointments, nurses, sectors }: PharmacyPageProps) {
             </div>
           </article>
         </div>
-      </section>
-    </>
-  );
-}
-
-type BillingPageProps = {
-  appointments: Appointment[];
-  patientTotal: number;
-};
-
-function BillingPage({ appointments, patientTotal }: BillingPageProps) {
-  const [search, setSearch] = useState('');
-  const [hasSearchedBilling, setHasSearchedBilling] = useState(false);
-  const deferredSearch = useDeferredValue(search.trim().toLowerCase());
-  const canSearchBilling = search.trim().length >= 2;
-  const billableSource = [...appointments]
-    .filter((appointment) => appointment.status === 'REALIZADA')
-    .sort(sortByAppointmentDate);
-  const billableAppointments = hasSearchedBilling
-    ? billableSource.filter((appointment) =>
-        matchAppointment(appointment, deferredSearch),
-      )
-    : [];
-  const openAccounts = appointments.filter((appointment) =>
-    ['AGENDADA', 'CONFIRMADA'].includes(appointment.status),
-  ).length;
-  const cancelledOrMissing = appointments.filter((appointment) =>
-    ['CANCELADA', 'NAO_COMPARECEU'].includes(appointment.status),
-  ).length;
-
-  function searchBilling(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    if (canSearchBilling) {
-      setHasSearchedBilling(true);
-    }
-  }
-
-  function clearBillingSearch() {
-    setSearch('');
-    setHasSearchedBilling(false);
-  }
-
-  return (
-    <>
-      <section className="summary-strip">
-        <article className="summary-card">
-          <span>Faturaveis</span>
-          <strong>{billableSource.length}</strong>
-          <small>atendimentos realizados</small>
-        </article>
-        <article className="summary-card">
-          <span>Contas abertas</span>
-          <strong>{openAccounts}</strong>
-          <small>aguardando fechamento</small>
-        </article>
-        <article className="summary-card">
-          <span>Excecoes</span>
-          <strong>{cancelledOrMissing}</strong>
-          <small>cancelados ou ausentes</small>
-        </article>
-        <article className="summary-card">
-          <span>Base pacientes</span>
-          <strong>{patientTotal}</strong>
-          <small>origem dos cadastros</small>
-        </article>
-      </section>
-
-      <section className="page-grid module-grid">
-        <article className="panel">
-          <div className="page-header">
-            <div>
-              <p className="eyebrow">Faturamento</p>
-              <h2>Buscar contas para cobranca</h2>
-            </div>
-            <span className="inline-badge">recibos e notas fiscais</span>
-          </div>
-
-          <OperationalSearchCard
-            canSearch={canSearchBilling}
-            description="Busque por paciente, medico, tipo ou status antes de abrir contas faturaveis."
-            onChange={setSearch}
-            onClear={clearBillingSearch}
-            onSearch={searchBilling}
-            placeholder="Buscar paciente, medico, tipo ou status"
-            resultText={
-              hasSearchedBilling
-                ? `${billableAppointments.length} contas encontradas`
-                : undefined
-            }
-            title="Localize a conta antes de emitir documentos."
-            value={search}
-          />
-
-          <div className="table-shell">
-            <div className="table-head appointments-grid">
-              <span>Paciente</span>
-              <span>Medico</span>
-              <span>Atendimento</span>
-              <span>Status</span>
-              <span>Tipo</span>
-            </div>
-
-            {!hasSearchedBilling ? (
-              <DirectoryState
-                code="01"
-                title="Nenhuma conta carregada automaticamente."
-                description="Use a busca para localizar o atendimento realizado antes de iniciar conferencia, recibo ou nota."
-              />
-            ) : billableAppointments.length === 0 ? (
-              <p className="empty-state">
-                Nenhuma conta faturavel ainda. Quando a consulta for marcada
-                como realizada, ela entra nesta lista.
-              </p>
-            ) : (
-              billableAppointments.map((appointment) => (
-                <div
-                  className="table-row appointments-grid"
-                  key={appointment.id}
-                >
-                  <span>{appointment.patient.name}</span>
-                  <span>{appointment.doctor.user.name}</span>
-                  <span>{formatDateTime(appointment.appointmentDate)}</span>
-                  <span>{humanizeEnum(appointment.status)}</span>
-                  <span>{humanizeEnum(appointment.type)}</span>
-                </div>
-              ))
-            )}
-          </div>
-        </article>
-
-        <article className="panel">
-          <div className="page-header">
-            <div>
-              <p className="eyebrow">Trilha fiscal</p>
-              <h2>Fluxo operacional</h2>
-            </div>
-          </div>
-
-          <div className="list-shell">
-            <div className="list-row">
-              <div>
-                <strong>1. Conta do atendimento</strong>
-                <span>capturar paciente, profissional, tipo e conduta</span>
-              </div>
-              <div>
-                <span>base pronta</span>
-              </div>
-            </div>
-            <div className="list-row">
-              <div>
-                <strong>2. Tabela e procedimento</strong>
-                <span>vincular valores, convenio ou particular</span>
-              </div>
-              <div>
-                <span>proximo</span>
-              </div>
-            </div>
-            <div className="list-row">
-              <div>
-                <strong>3. Recibo ou NF</strong>
-                <span>emitir documento fiscal e controlar pagamento</span>
-              </div>
-              <div>
-                <span>proximo</span>
-              </div>
-            </div>
-            <div className="list-row">
-              <div>
-                <strong>4. Relatorio financeiro</strong>
-                <span>fechamento por periodo, setor e profissional</span>
-              </div>
-              <div>
-                <span>proximo</span>
-              </div>
-            </div>
-          </div>
-        </article>
       </section>
     </>
   );
