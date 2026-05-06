@@ -150,7 +150,10 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
           apiRequest<Doctor[]>('/doctors', { token }),
           apiRequest<Nurse[]>('/nurses', { token }),
           apiRequest<Sector[]>('/sectors', { token }),
-          apiRequest<Appointment[]>('/appointments', { token }),
+          apiRequest<PaginatedResponse<Appointment>>(
+            '/appointments?page=1&limit=50',
+            { token },
+          ),
           apiRequest<CommunicationDashboard>('/communications/dashboard', {
             token,
           }),
@@ -166,7 +169,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
           patientResponse.total ??
           nextPatients.length;
         const nextDashboard = {
-          appointments: appointmentResponse,
+          appointments: appointmentResponse.data ?? [],
           auditSummary: auditSummaryResponse,
           communicationDashboard: communicationResponse,
           doctors: doctorResponse,

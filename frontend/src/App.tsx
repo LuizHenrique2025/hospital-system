@@ -1,4 +1,6 @@
 ﻿import {
+  lazy,
+  Suspense,
   startTransition,
   useCallback,
   useDeferredValue,
@@ -52,15 +54,51 @@ import type {
   Sector,
   UserProfile,
 } from './lib/types';
-import { BillingWorkspacePage } from './pages/BillingWorkspacePage';
-import { BudgetCalculatorPage } from './pages/BudgetCalculatorPage';
-import { LoginScreen } from './pages/LoginPage';
-import { AgreementsPage } from './pages/AgreementsPage';
-import { CarePage } from './pages/CarePage';
-import { PatientsPage } from './pages/PatientsPage';
-import { SchedulingPage } from './pages/SchedulingPage';
-import { TeamPage } from './pages/TeamPage';
-import { ModulePlaceholderPage } from './pages/ModulePlaceholderPage';
+const AgreementsPage = lazy(() =>
+  import('./pages/AgreementsPage').then((module) => ({
+    default: module.AgreementsPage,
+  })),
+);
+const BillingWorkspacePage = lazy(() =>
+  import('./pages/BillingWorkspacePage').then((module) => ({
+    default: module.BillingWorkspacePage,
+  })),
+);
+const BudgetCalculatorPage = lazy(() =>
+  import('./pages/BudgetCalculatorPage').then((module) => ({
+    default: module.BudgetCalculatorPage,
+  })),
+);
+const CarePage = lazy(() =>
+  import('./pages/CarePage').then((module) => ({
+    default: module.CarePage,
+  })),
+);
+const LoginScreen = lazy(() =>
+  import('./pages/LoginPage').then((module) => ({
+    default: module.LoginScreen,
+  })),
+);
+const ModulePlaceholderPage = lazy(() =>
+  import('./pages/ModulePlaceholderPage').then((module) => ({
+    default: module.ModulePlaceholderPage,
+  })),
+);
+const PatientsPage = lazy(() =>
+  import('./pages/PatientsPage').then((module) => ({
+    default: module.PatientsPage,
+  })),
+);
+const SchedulingPage = lazy(() =>
+  import('./pages/SchedulingPage').then((module) => ({
+    default: module.SchedulingPage,
+  })),
+);
+const TeamPage = lazy(() =>
+  import('./pages/TeamPage').then((module) => ({
+    default: module.TeamPage,
+  })),
+);
 
 type Notice = {
   kind: 'success' | 'error' | 'info';
@@ -847,6 +885,15 @@ const initialExamOrderForm: ExamOrderFormState = {
   items: [],
 };
 
+function RouteFallback() {
+  return (
+    <div className="route-fallback" role="status" aria-live="polite">
+      <span className="route-fallback-marker" />
+      <span>Carregando modulo...</span>
+    </div>
+  );
+}
+
 function App() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -1407,12 +1454,14 @@ function App() {
 
   if (!session) {
     return (
-      <LoginScreen
-        handleLogin={handleLogin}
-        isSubmitting={isSubmitting}
-        loginForm={loginForm}
-        setLoginForm={setLoginForm}
-      />
+      <Suspense fallback={<RouteFallback />}>
+        <LoginScreen
+          handleLogin={handleLogin}
+          isSubmitting={isSubmitting}
+          loginForm={loginForm}
+          setLoginForm={setLoginForm}
+        />
+      </Suspense>
     );
   }
 
@@ -1922,6 +1971,8 @@ type SettingsPageProps = {
   users: UserProfile[];
 };
 
+type SettingsTabId = 'general' | 'events' | 'information';
+
 function SettingsPage({
   auditSummary,
   sessionToken,
@@ -1929,6 +1980,7 @@ function SettingsPage({
 }: SettingsPageProps) {
   const userCount = users.length;
   const adminCount = users.filter((user) => user.role === 'ADMIN').length;
+  const [settingsTab, setSettingsTab] = useState<SettingsTabId>('general');
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [focusedAuditLog, setFocusedAuditLog] = useState<AuditLog | null>(null);
   const [auditTotal, setAuditTotal] = useState(0);
@@ -1943,7 +1995,39 @@ function SettingsPage({
   const [auditError, setAuditError] = useState<string | null>(null);
   const deferredAuditSearch = useDeferredValue(auditSearch.trim());
   const sensitiveLogCount = auditLogs.filter(isSensitiveAuditLog).length;
-  const settingsBlocks = [
+  const settingsTabs: Array<{
+    description: string;
+    id: SettingsTabId;
+    label: string;
+    metric: string;
+  }> = [
+    {
+      id: 'general',
+      label: 'Geral',
+      description: 'Acessos, permissoes e parametros principais.',
+      metric: `${userCount} usuarios`,
+    },
+    {
+      id: 'events',
+      label: 'Eventos do sistema',
+      description: 'Logs auditaveis com filtros por acao, perfil e modulo.',
+      metric: `${auditSummary.total.toLocaleString('pt-BR')} eventos`,
+    },
+    {
+      id: 'information',
+      label: 'Informacoes',
+      description: 'Bases importadas, tabelas e rastreabilidade tecnica.',
+      metric: 'CBHPM',
+    },
+  ];
+  const settingsBlocks: Array<{
+    action: string;
+    description: string;
+    icon: React.ReactNode;
+    path?: string;
+    tab?: SettingsTabId;
+    title: string;
+  }> = [
     {
       title: 'Acessos e permissoes',
       description:
@@ -1980,7 +2064,8 @@ function SettingsPage({
       title: 'Auditoria LGPD/SBIS',
       description:
         'Consulte usuario, perfil, rota, acao, horario e finalidade operacional dos acessos autenticados.',
-      action: 'Painel ativo',
+      action: 'Abrir eventos',
+      tab: 'events',
       icon: (
         <svg aria-hidden="true" viewBox="0 0 24 24">
           <path d="M9 11 12 14 22 4" />
@@ -2003,6 +2088,10 @@ function SettingsPage({
   ];
 
   useEffect(() => {
+    if (settingsTab !== 'events') {
+      return undefined;
+    }
+
     let ignore = false;
 
     async function loadAuditLogs() {
@@ -2090,6 +2179,7 @@ function SettingsPage({
     auditSensitiveOnly,
     deferredAuditSearch,
     sessionToken,
+    settingsTab,
   ]);
 
   function resetAuditFilters() {
@@ -2146,7 +2236,31 @@ function SettingsPage({
 
   return (
     <section className="settings-page-stack">
-      <div className="page-grid settings-workspace">
+      <div className="settings-tabs" role="tablist" aria-label="Configuracoes">
+        {settingsTabs.map((tab) => (
+          <button
+            aria-selected={settingsTab === tab.id}
+            className={
+              settingsTab === tab.id
+                ? 'settings-tab-button is-active'
+                : 'settings-tab-button'
+            }
+            key={tab.id}
+            onClick={() => setSettingsTab(tab.id)}
+            role="tab"
+            type="button"
+          >
+            <span>
+              <strong>{tab.label}</strong>
+              <small>{tab.description}</small>
+            </span>
+            <em>{tab.metric}</em>
+          </button>
+        ))}
+      </div>
+
+      {settingsTab === 'general' ? (
+        <div className="page-grid settings-workspace">
         <article className="panel settings-vision-panel">
           <div>
             <p className="eyebrow">Configuracoes</p>
@@ -2169,6 +2283,14 @@ function SettingsPage({
                     <NavLink className="settings-action" to={block.path}>
                       {block.action}
                     </NavLink>
+                  ) : block.tab ? (
+                    <button
+                      className="settings-action"
+                      onClick={() => setSettingsTab(block.tab!)}
+                      type="button"
+                    >
+                      {block.action}
+                    </button>
                   ) : (
                     <span className="settings-action disabled">
                       {block.action}
@@ -2217,11 +2339,15 @@ function SettingsPage({
             </span>
           </div>
         </aside>
-      </div>
+        </div>
+      ) : null}
 
-      <CbhpmInformationPanel sessionToken={sessionToken} />
+      {settingsTab === 'information' ? (
+        <CbhpmInformationPanel sessionToken={sessionToken} />
+      ) : null}
 
-      <article className="panel audit-console-panel">
+      {settingsTab === 'events' ? (
+        <article className="panel audit-console-panel settings-tab-panel">
         <div className="page-header">
           <div>
             <p className="eyebrow">Auditoria e seguranca</p>
@@ -2510,7 +2636,8 @@ function SettingsPage({
             )}
           </aside>
         </div>
-      </article>
+        </article>
+      ) : null}
     </section>
   );
 }
@@ -3200,7 +3327,9 @@ function WorkspaceLayout({
           </aside>
 
           <section className="workspace-content">
-            <Outlet />
+            <Suspense fallback={<RouteFallback />}>
+              <Outlet />
+            </Suspense>
           </section>
         </section>
       </section>

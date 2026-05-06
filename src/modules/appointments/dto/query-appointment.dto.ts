@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { ExamOrderStatus } from '@prisma/client';
+import { AppointmentStatus, AppointmentType } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
   IsEnum,
@@ -11,7 +11,7 @@ import {
   Min,
 } from 'class-validator';
 
-export class QueryExamOrderDto {
+export class QueryAppointmentDto {
   @ApiPropertyOptional({ example: 1, default: 1 })
   @IsOptional()
   @Type(() => Number)
@@ -28,17 +28,23 @@ export class QueryExamOrderDto {
   limit?: number = 25;
 
   @ApiPropertyOptional({
-    example: 'luiz vitamina',
-    description: 'Busca por paciente, CPF, medico, procedimento ou observacao',
+    example: 'luiz rotina',
+    description:
+      'Busca por paciente, CPF, medico, setor, diagnostico ou notas.',
   })
   @IsString()
   @IsOptional()
   q?: string;
 
-  @ApiPropertyOptional({ enum: ExamOrderStatus })
-  @IsEnum(ExamOrderStatus)
+  @ApiPropertyOptional({ enum: AppointmentStatus })
+  @IsEnum(AppointmentStatus)
   @IsOptional()
-  status?: ExamOrderStatus;
+  status?: AppointmentStatus;
+
+  @ApiPropertyOptional({ enum: AppointmentType })
+  @IsEnum(AppointmentType)
+  @IsOptional()
+  type?: AppointmentType;
 
   @ApiPropertyOptional({ example: 'patient-uuid-here' })
   @IsUUID()
@@ -48,5 +54,15 @@ export class QueryExamOrderDto {
   @ApiPropertyOptional({ example: 'doctor-uuid-here' })
   @IsUUID()
   @IsOptional()
-  requesterDoctorId?: string;
+  doctorId?: string;
+
+  @ApiPropertyOptional({ example: '2026-04-01' })
+  @IsString()
+  @IsOptional()
+  appointmentFrom?: string;
+
+  @ApiPropertyOptional({ example: '2026-04-30' })
+  @IsString()
+  @IsOptional()
+  appointmentTo?: string;
 }

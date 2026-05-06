@@ -218,6 +218,9 @@ model Patient {
   billingGuides   BillingGuide[]
   budgetEstimates BudgetEstimate[]
 
+  @@index([name])
+  @@index([phone])
+  @@index([status, createdAt])
   @@map("patients")
 }
 

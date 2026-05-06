@@ -9,6 +9,7 @@ import {
   Patch,
   Post,
   Put,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -25,6 +26,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { AppointmentsService } from './appointments.service';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
+import { QueryAppointmentDto } from './dto/query-appointment.dto';
 import { UpdateAppointmentDto } from './dto/update-appointment.dto';
 
 @ApiTags('Consultas')
@@ -54,8 +56,8 @@ export class AppointmentsController {
   )
   @ApiOperation({ summary: 'Listar consultas' })
   @ApiResponse({ status: 200, description: 'Lista de consultas retornada' })
-  findAll() {
-    return this.appointmentsService.findAll();
+  findAll(@Query() query: QueryAppointmentDto) {
+    return this.appointmentsService.findAll(query);
   }
 
   @Get('patient/:patientId')

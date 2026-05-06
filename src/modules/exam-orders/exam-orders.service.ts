@@ -38,8 +38,8 @@ export class ExamOrdersService {
   }
 
   async findAll(query: QueryExamOrderDto) {
-    const page = query.page ?? 1;
-    const limit = query.limit ?? 25;
+    const page = Math.max(query.page ?? 1, 1);
+    const limit = Math.min(Math.max(query.limit ?? 25, 1), 100);
     const skip = (page - 1) * limit;
     const search = query.q?.trim();
     const where: Prisma.ExamOrderWhereInput = {};
@@ -202,10 +202,14 @@ export class ExamOrdersService {
     }
 
     if (dto.items) {
-      const procedureIds = [...new Set(dto.items.map((item) => item.procedureId))];
+      const procedureIds = [
+        ...new Set(dto.items.map((item) => item.procedureId)),
+      ];
 
       if (procedureIds.length !== dto.items.length) {
-        throw new BadRequestException('O pedido possui procedimentos duplicados');
+        throw new BadRequestException(
+          'O pedido possui procedimentos duplicados',
+        );
       }
 
       const procedures = await this.prisma.procedure.findMany({
