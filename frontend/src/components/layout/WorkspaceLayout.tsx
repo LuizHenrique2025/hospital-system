@@ -59,11 +59,11 @@ export function WorkspaceLayout({
       <section className="workspace-shell">
         <header className="topbar">
           <div className="brand-cluster">
-            <div className="brand-mark">HS</div>
-            <div>
-              <p className="eyebrow">Centro operacional</p>
-              <h1>Hospital Revitalite</h1>
-            </div>
+            <img
+              alt="Hospital Dia Revitalite"
+              className="brand-logo"
+              src="/hospital-dia-revitalite-logo.png"
+            />
           </div>
 
           <div className="topbar-meta">
