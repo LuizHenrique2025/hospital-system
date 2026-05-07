@@ -94,6 +94,11 @@ const CarePage = lazy(() =>
     default: module.CarePage,
   })),
 );
+const DocumentTemplatesPage = lazy(() =>
+  import('./pages/DocumentTemplatesPage').then((module) => ({
+    default: module.DocumentTemplatesPage,
+  })),
+);
 const LoginScreen = lazy(() =>
   import('./pages/LoginPage').then((module) => ({
     default: module.LoginScreen,
@@ -1026,7 +1031,6 @@ function App() {
             onOpenEnvironmentPicker={() => setIsEnvironmentPickerOpen(true)}
             session={session}
             transitionEnvironment={transitionEnvironment}
-            upcomingModules={activeEnvironment.roadmap}
           />
         }
       >
@@ -1035,8 +1039,10 @@ function App() {
           path="/central"
           element={
             <OverviewPage
+              appointments={appointments}
               communicationDashboard={communicationDashboard}
               onDashboardRefresh={() => loadDashboard(session.token)}
+              patientTotal={patientTotal}
               sessionToken={session.token}
             />
           }
@@ -1202,6 +1208,30 @@ function App() {
           }
         />
         <Route
+          path="/modelos-documentos"
+          element={
+            <DocumentTemplatesPage
+              description="Cadastre atestados, receitas, pedidos de exame, relatorios e demais documentos usados no consultorio."
+              environment="Consultorio"
+              sessionToken={session.token}
+              templateType="DOCUMENT"
+              title="Modelos de Documento"
+            />
+          }
+        />
+        <Route
+          path="/modelos-laudos"
+          element={
+            <DocumentTemplatesPage
+              description="Cadastre modelos de laudo por grupo, layout e variaveis para resultados medicos."
+              environment="Consultorio"
+              sessionToken={session.token}
+              templateType="REPORT"
+              title="Modelos de Laudo"
+            />
+          }
+        />
+        <Route
           path="/recibo-nfse"
           element={
             <ModulePlaceholderPage
@@ -1347,6 +1377,7 @@ function App() {
               onSaveCareRecord={saveCareRecord}
               patients={patients}
               profile={session.profile}
+              sessionToken={session.token}
             />
           }
         />
@@ -1422,6 +1453,21 @@ function App() {
                 'Cadastrar principio ativo e apresentacao',
                 'Relacionar medicamento ao produto de estoque',
                 'Controlar dispensacao por paciente',
+              ]}
+            />
+          }
+        />
+        <Route
+          path="/tabelas-medicamentos"
+          element={
+            <ModulePlaceholderPage
+              environment="Farmacia / Estoque"
+              title="Tabelas de Medicamentos"
+              description="Tabelas negociadas para precificacao de medicamentos, materiais e OPME."
+              steps={[
+                'Cadastrar tabela por operadora ou origem comercial',
+                'Importar valores de medicamentos e materiais',
+                'Aplicar tabela na dispensacao e no faturamento',
               ]}
             />
           }
@@ -2736,8 +2782,10 @@ function PermissionCheckboxFieldset({
 }
 
 type OverviewPageProps = {
+  appointments: Appointment[];
   communicationDashboard: CommunicationDashboard;
   onDashboardRefresh: () => Promise<void>;
+  patientTotal: number;
   sessionToken: string;
 };
 
@@ -2766,10 +2814,14 @@ const initialInternalMessageForm = {
 };
 
 function OverviewPage({
+  appointments,
   communicationDashboard,
   onDashboardRefresh,
+  patientTotal,
   sessionToken,
 }: OverviewPageProps) {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [mailboxBox, setMailboxBox] = useState<MailboxFolder>('inbox');
   const [messages, setMessages] = useState<InternalEmail[]>(
     communicationDashboard.emails,
@@ -2778,6 +2830,7 @@ function OverviewPage({
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(
     null,
   );
+  const [isMailboxOpen, setIsMailboxOpen] = useState(false);
   const [isComposeOpen, setIsComposeOpen] = useState(false);
   const [messageForm, setMessageForm] = useState(initialInternalMessageForm);
   const [mailboxStatus, setMailboxStatus] = useState<
@@ -2791,10 +2844,57 @@ function OverviewPage({
   const unreadCount = messages.filter((email) => email.unread).length;
   const selectedMessage =
     messages.find((message) => message.id === selectedMessageId) ?? null;
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayAppointments = appointments.filter((appointment) =>
+    appointment.appointmentDate?.startsWith(todayIso),
+  );
+  const confirmedAppointments = appointments.filter((appointment) =>
+    ['CONFIRMADO', 'CONFIRMED', 'AGENDADO', 'SCHEDULED'].includes(
+      appointment.status.toUpperCase(),
+    ),
+  );
+  const finishedAppointments = appointments.filter((appointment) =>
+    ['REALIZADO', 'FINALIZADO', 'COMPLETED', 'DONE'].includes(
+      appointment.status.toUpperCase(),
+    ),
+  );
   const canSendMessage =
     messageForm.recipientId &&
     messageForm.subject.trim().length >= 3 &&
     messageForm.body.trim().length >= 3;
+
+  const overviewStats = [
+    {
+      accent: 'clinical',
+      label: 'Pacientes',
+      detail: 'base ativa cadastrada',
+      value: patientTotal,
+    },
+    {
+      accent: 'assist',
+      label: 'Consultas hoje',
+      detail: `${todayAppointments.length} agenda(s) do dia`,
+      value: todayAppointments.length,
+    },
+    {
+      accent: 'warning',
+      label: 'Aguardando',
+      detail: `${confirmedAppointments.length} confirmadas/agendadas`,
+      value: confirmedAppointments.length,
+    },
+    {
+      accent: 'success',
+      label: 'Finalizadas',
+      detail: `${finishedAppointments.length} registros encerrados`,
+      value: finishedAppointments.length,
+    },
+    {
+      accent: 'mail',
+      label: 'Caixa interna',
+      detail: `${unreadCount} mensagens nao lidas`,
+      value: messages.length,
+    },
+  ];
 
   const loadMessages = useCallback(
     async (box: MailboxFolder = mailboxBox) => {
@@ -2829,6 +2929,14 @@ function OverviewPage({
   useEffect(() => {
     void loadMessages(mailboxBox);
   }, [loadMessages, mailboxBox]);
+
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+
+    if (searchParams.get('mailbox') === 'open') {
+      setIsMailboxOpen(true);
+    }
+  }, [location.search]);
 
   useEffect(() => {
     async function loadRecipients() {
@@ -2952,9 +3060,36 @@ function OverviewPage({
     }
   }
 
+  function closeMailbox() {
+    setIsMailboxOpen(false);
+
+    if (new URLSearchParams(location.search).get('mailbox') === 'open') {
+      navigate('/central', { replace: true });
+    }
+  }
+
   return (
     <>
-      <section className="page-grid internal-communication-grid">
+      <section className="overview-workspace">
+        <div className="overview-stat-strip">
+          {overviewStats.map((stat) => (
+            <button
+              className={`overview-stat-card ${stat.accent}`}
+              key={stat.label}
+              onClick={() => {
+                if (stat.accent === 'mail') {
+                  setIsMailboxOpen(true);
+                }
+              }}
+              type="button"
+            >
+              <span>{stat.label}</span>
+              <strong>{stat.value}</strong>
+              <small>{stat.detail}</small>
+            </button>
+          ))}
+        </div>
+
         <article className="panel internal-board-panel">
           <div className="page-header">
             <div>
@@ -2964,7 +3099,16 @@ function OverviewPage({
                 Avisos, comunicados e orientacoes publicados para a equipe.
               </small>
             </div>
-            <span className="status-pill">{muralCount} publicados</span>
+            <div className="toolbar-inline">
+              <span className="status-pill">{muralCount} publicados</span>
+              <button
+                className="ghost-button compact-button"
+                onClick={() => setIsMailboxOpen(true)}
+                type="button"
+              >
+                Abrir caixa interna
+              </button>
+            </div>
           </div>
 
           <div className="notice-list internal-board-list">
@@ -2993,116 +3137,138 @@ function OverviewPage({
             )}
           </div>
         </article>
+      </section>
 
-        <article className="panel internal-mail-panel">
-          <div className="page-header">
-            <div>
-              <p className="eyebrow">Caixa interna</p>
-              <h2>Email interno</h2>
-              <small>{unreadCount} mensagens nao lidas</small>
-            </div>
-            <button
-              className="ghost-button compact-button"
-              onClick={() => setIsComposeOpen(true)}
-              type="button"
-            >
-              Nova mensagem
-            </button>
-          </div>
-
-          <div className="mailbox-tabs">
-            {mailboxTabs.map((tab) => (
+      <OperationalModal
+        eyebrow="Caixa interna"
+        isOpen={isMailboxOpen}
+        onClose={closeMailbox}
+        size="wide"
+        title="Email interno"
+        toneLabel={`${unreadCount} nao lidas`}
+      >
+        <div className="internal-mail-modal-grid">
+          <section className="internal-mail-list-panel">
+            <div className="page-header compact">
+              <div>
+                <p className="eyebrow">Mensagens</p>
+                <h3>Correio interno</h3>
+                <small>Contato entre recepcao, medico, faturamento e apoio.</small>
+              </div>
               <button
-                className={mailboxBox === tab.box ? 'is-active' : ''}
-                key={tab.box}
-                onClick={() => setMailboxBox(tab.box)}
+                className="primary-button compact-button"
+                onClick={() => setIsComposeOpen(true)}
                 type="button"
               >
-                {tab.label}
+                Nova mensagem
               </button>
-            ))}
-          </div>
+            </div>
 
-          {mailboxNotice ? (
-            <p className={`notice-banner notice-${mailboxNotice.kind}`}>
-              {mailboxNotice.text}
-            </p>
-          ) : null}
-
-          <div className="inbox-list">
-            {mailboxStatus === 'loading' ? (
-              <p className="empty-state">Carregando mensagens...</p>
-            ) : messages.length === 0 ? (
-              <p className="empty-state">Caixa interna sem mensagens.</p>
-            ) : (
-              messages.map((email) => (
+            <div className="mailbox-tabs">
+              {mailboxTabs.map((tab) => (
                 <button
-                  className={`mail-row mail-row-button ${
-                    email.unread ? 'is-unread' : ''
-                  } ${selectedMessageId === email.id ? 'is-selected' : ''}`}
-                  key={email.id}
-                  onClick={() => void openMessage(email)}
+                  className={mailboxBox === tab.box ? 'is-active' : ''}
+                  key={tab.box}
+                  onClick={() => setMailboxBox(tab.box)}
                   type="button"
                 >
-                  <div>
-                    <span>
-                      {mailboxBox === 'sent' ? `Para ${email.to}` : email.from}
-                    </span>
-                    <strong>{email.subject}</strong>
-                    <p>{email.preview}</p>
-                  </div>
-                  <small>
-                    {email.timeLabel ||
-                      (email.sentAt ? formatTime(email.sentAt) : '--:--')}
-                  </small>
+                  {tab.label}
                 </button>
-              ))
-            )}
-          </div>
-
-          {selectedMessage ? (
-            <div className="mail-detail-card">
-              <div>
-                <p className="eyebrow">Mensagem em foco</p>
-                <h3>{selectedMessage.subject}</h3>
-                <small>
-                  De {selectedMessage.from}
-                  {selectedMessage.to ? ` para ${selectedMessage.to}` : ''}
-                </small>
-              </div>
-              <p>{selectedMessage.body || selectedMessage.preview}</p>
-              <div className="mail-detail-actions">
-                {mailboxBox === 'trash' || mailboxBox === 'archived' ? (
-                  <button
-                    className="mini-button"
-                    onClick={() => void moveSelectedMessage('restore')}
-                    type="button"
-                  >
-                    Restaurar
-                  </button>
-                ) : (
-                  <button
-                    className="mini-button"
-                    onClick={() => void moveSelectedMessage('archive')}
-                    type="button"
-                  >
-                    Arquivar
-                  </button>
-                )}
-                {mailboxBox !== 'trash' ? (
-                  <button
-                    className="mini-button"
-                    onClick={() => void moveSelectedMessage('delete')}
-                    type="button"
-                  >
-                    Excluir
-                  </button>
-                ) : null}
-              </div>
+              ))}
             </div>
-          ) : null}
-        </article>
-      </section>
+
+            {mailboxNotice ? (
+              <p className={`notice-banner notice-${mailboxNotice.kind}`}>
+                {mailboxNotice.text}
+              </p>
+            ) : null}
+
+            <div className="inbox-list modal-inbox-list">
+              {mailboxStatus === 'loading' ? (
+                <p className="empty-state">Carregando mensagens...</p>
+              ) : messages.length === 0 ? (
+                <p className="empty-state">Caixa interna sem mensagens.</p>
+              ) : (
+                messages.map((email) => (
+                  <button
+                    className={`mail-row mail-row-button ${
+                      email.unread ? 'is-unread' : ''
+                    } ${selectedMessageId === email.id ? 'is-selected' : ''}`}
+                    key={email.id}
+                    onClick={() => void openMessage(email)}
+                    type="button"
+                  >
+                    <div>
+                      <span>
+                        {mailboxBox === 'sent' ? `Para ${email.to}` : email.from}
+                      </span>
+                      <strong>{email.subject}</strong>
+                      <p>{email.preview}</p>
+                    </div>
+                    <small>
+                      {email.timeLabel ||
+                        (email.sentAt ? formatTime(email.sentAt) : '--:--')}
+                    </small>
+                  </button>
+                ))
+              )}
+            </div>
+          </section>
+
+          <section className="internal-mail-detail-panel">
+            {selectedMessage ? (
+              <div className="mail-detail-card expanded">
+                <div>
+                  <p className="eyebrow">Mensagem em foco</p>
+                  <h3>{selectedMessage.subject}</h3>
+                  <small>
+                    De {selectedMessage.from}
+                    {selectedMessage.to ? ` para ${selectedMessage.to}` : ''}
+                  </small>
+                </div>
+                <p>{selectedMessage.body || selectedMessage.preview}</p>
+                <div className="mail-detail-actions">
+                  {mailboxBox === 'trash' || mailboxBox === 'archived' ? (
+                    <button
+                      className="mini-button"
+                      onClick={() => void moveSelectedMessage('restore')}
+                      type="button"
+                    >
+                      Restaurar
+                    </button>
+                  ) : (
+                    <button
+                      className="mini-button"
+                      onClick={() => void moveSelectedMessage('archive')}
+                      type="button"
+                    >
+                      Arquivar
+                    </button>
+                  )}
+                  {mailboxBox !== 'trash' ? (
+                    <button
+                      className="mini-button"
+                      onClick={() => void moveSelectedMessage('delete')}
+                      type="button"
+                    >
+                      Excluir
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            ) : (
+              <div className="mail-detail-card empty-detail">
+                <span className="step-marker">IN</span>
+                <strong>Selecione uma mensagem</strong>
+                <p>
+                  Abra um item da caixa interna para visualizar o conteudo e
+                  tomar uma acao.
+                </p>
+              </div>
+            )}
+          </section>
+        </div>
+      </OperationalModal>
 
       {isComposeOpen ? (
         <div
@@ -6094,6 +6260,7 @@ type DoctorOfficePageProps = {
   ) => Promise<void>;
   patients: Patient[];
   profile: UserProfile;
+  sessionToken: string;
 };
 
 function DoctorOfficePage({
@@ -6104,6 +6271,7 @@ function DoctorOfficePage({
   onSaveCareRecord,
   patients,
   profile,
+  sessionToken,
 }: DoctorOfficePageProps) {
   const currentDoctor =
     profile.role === 'MEDICO'
@@ -6155,6 +6323,7 @@ function DoctorOfficePage({
         onSaveCareRecord={onSaveCareRecord}
         patients={patients}
         queueActionLabel="Abrir consultorio"
+        sessionToken={sessionToken}
         statusEyebrow="Evolucao medica"
         statusTitle="Conduta, prescricao e fechamento"
         title="Fila medica do consultorio"
@@ -6181,36 +6350,40 @@ function PharmacyPage({ appointments, nurses, sectors }: PharmacyPageProps) {
     .sort(sortByAppointmentDate);
 
   return (
-    <>
-      <section className="summary-strip">
-        <article className="summary-card">
+    <section className="pharmacy-workspace">
+      <div className="overview-stat-strip pharmacy-stat-strip">
+        <article className="overview-stat-card clinical">
           <span>Prescricoes</span>
           <strong>{prescriptions.length}</strong>
           <small>condutas registradas</small>
         </article>
-        <article className="summary-card">
+        <article className="overview-stat-card assist">
           <span>Equipe farmacia</span>
           <strong>{pharmacyTeam.length}</strong>
           <small>profissionais vinculados</small>
         </article>
-        <article className="summary-card">
+        <article className="overview-stat-card success">
           <span>Setor farmacia</span>
           <strong>{pharmacySector ? 'OK' : '--'}</strong>
           <small>base organizacional</small>
         </article>
-        <article className="summary-card">
+        <article className="overview-stat-card mail">
           <span>Estoque</span>
           <strong>{stockSector ? 'OK' : '--'}</strong>
           <small>vinculo para baixa futura</small>
         </article>
-      </section>
+      </div>
 
-      <section className="page-grid module-grid">
-        <article className="panel">
+      <section className="page-grid pharmacy-grid">
+        <article className="panel pharmacy-dispensation-panel">
           <div className="page-header">
             <div>
               <p className="eyebrow">Farmacia</p>
               <h2>Dispensacao por prescricao</h2>
+              <small>
+                Medicamentos prescritos no atendimento aparecem aqui para
+                conferencia, dispensacao e baixa futura no estoque.
+              </small>
             </div>
             <span className="inline-badge">ligada ao atendimento</span>
           </div>
@@ -6249,8 +6422,8 @@ function PharmacyPage({ appointments, nurses, sectors }: PharmacyPageProps) {
               </div>
             </div>
 
-            <div className="list-shell">
-              <div className="list-row">
+            <div className="list-shell action-list-shell">
+              <NavLink className="list-row action-row-link" to="/medicamentos">
                 <div>
                   <strong>Medicamentos</strong>
                   <span>cadastro, principio ativo, concentracao e unidade</span>
@@ -6258,8 +6431,8 @@ function PharmacyPage({ appointments, nurses, sectors }: PharmacyPageProps) {
                 <div>
                   <span>modelo</span>
                 </div>
-              </div>
-              <div className="list-row">
+              </NavLink>
+              <NavLink className="list-row action-row-link" to="/estoque-lotes">
                 <div>
                   <strong>Lotes e validade</strong>
                   <span>entrada de estoque e rastreio por lote</span>
@@ -6267,8 +6440,20 @@ function PharmacyPage({ appointments, nurses, sectors }: PharmacyPageProps) {
                 <div>
                   <span>modelo</span>
                 </div>
-              </div>
-              <div className="list-row">
+              </NavLink>
+              <NavLink
+                className="list-row action-row-link"
+                to="/tabelas-medicamentos"
+              >
+                <div>
+                  <strong>Tabelas de medicamentos</strong>
+                  <span>valores negociados para farmacia e materiais</span>
+                </div>
+                <div>
+                  <span>novo</span>
+                </div>
+              </NavLink>
+              <div className="list-row muted-row">
                 <div>
                   <strong>Baixa por dispensacao</strong>
                   <span>ligar prescricao ao consumo real do estoque</span>
@@ -6311,7 +6496,7 @@ function PharmacyPage({ appointments, nurses, sectors }: PharmacyPageProps) {
           </article>
         </div>
       </section>
-    </>
+    </section>
   );
 }
 

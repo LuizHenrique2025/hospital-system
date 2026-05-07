@@ -1,5 +1,4 @@
 import {
-  ConflictException,
   Injectable,
   NotFoundException,
   UnauthorizedException,
@@ -22,20 +21,6 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto): Promise<UserResponseDto> {
-    const existingUsername = await this.usersService.findByUsername(
-      dto.username,
-    );
-
-    if (existingUsername) {
-      throw new ConflictException('Login ja esta em uso');
-    }
-
-    const existingUser = await this.usersService.findByEmail(dto.email);
-
-    if (existingUser) {
-      throw new ConflictException('Email ja esta em uso');
-    }
-
     return this.usersService.createUser({
       name: dto.name,
       username: dto.username,

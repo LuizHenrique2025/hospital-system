@@ -39,7 +39,6 @@ type WorkspaceLayoutProps = {
   onOpenEnvironmentPicker: () => void;
   session: Session;
   transitionEnvironment: NavigationEnvironment | null;
-  upcomingModules: string[];
 };
 
 export function WorkspaceLayout({
@@ -54,7 +53,6 @@ export function WorkspaceLayout({
   onOpenEnvironmentPicker,
   session,
   transitionEnvironment,
-  upcomingModules,
 }: WorkspaceLayoutProps) {
   return (
     <main className="app-shell">
@@ -126,7 +124,7 @@ export function WorkspaceLayout({
                 className="sidebar-quick-actions"
                 aria-label="Atalhos rapidos"
               >
-                <NavLink className="sidebar-quick-link" to="/central">
+                <NavLink className="sidebar-quick-link" to="/central?mailbox=open">
                   <span className="sidebar-quick-icon">IN</span>
                   <span>
                     <strong>Caixa interna</strong>
@@ -142,17 +140,6 @@ export function WorkspaceLayout({
               ) : (
                 <EnvironmentModuleNav modules={activeModules} />
               )}
-            </div>
-
-            <div className="module-future">
-              <span className="module-caption">Trilha</span>
-              <div className="roadmap-inline">
-                {upcomingModules.map((moduleName) => (
-                  <span className="roadmap-chip compact" key={moduleName}>
-                    {moduleName}
-                  </span>
-                ))}
-              </div>
             </div>
 
             <SidebarUserMenu

@@ -167,6 +167,11 @@ enum BudgetEstimateStatus {
   EXPIRED
 }
 
+enum DocumentTemplateType {
+  DOCUMENT
+  REPORT
+}
+
 model User {
   id        String   @id @default(uuid())
   name      String
@@ -539,6 +544,25 @@ model ExamOrderItem {
 
   @@unique([examOrderId, procedureId])
   @@map("exam_order_items")
+}
+
+model DocumentTemplate {
+  id          String               @id @default(uuid())
+  code        String               @unique
+  name        String
+  description String?
+  group       String
+  layout      String?
+  type        DocumentTemplateType @default(DOCUMENT)
+  content     String
+  variables   String[]             @default([])
+  active      Boolean              @default(true)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  @@index([type, active])
+  @@index([group])
+  @@map("document_templates")
 }
 
 model BillingGuide {

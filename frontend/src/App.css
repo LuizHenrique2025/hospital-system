@@ -2892,18 +2892,167 @@ textarea {
   grid-template-columns: minmax(0, 1.2fr) minmax(340px, 0.9fr);
 }
 
-.internal-communication-grid {
-  grid-template-columns: minmax(0, 1.35fr) minmax(360px, 0.75fr);
-  align-items: start;
+.overview-workspace {
+  display: grid;
+  gap: 18px;
 }
 
-.internal-board-panel,
-.internal-mail-panel {
+.overview-stat-strip {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.overview-stat-card {
+  position: relative;
+  display: grid;
+  min-height: 118px;
+  gap: 4px;
+  padding: 18px 20px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-top: 4px solid var(--clinical);
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(247, 248, 247, 0.9)),
+    var(--surface);
+  box-shadow: var(--shadow-soft);
+  color: var(--text);
+  cursor: default;
+  text-align: left;
+}
+
+.overview-stat-card::after {
+  position: absolute;
+  inset: auto -20px -34px auto;
+  width: 96px;
+  height: 96px;
+  border-radius: 999px;
+  background: rgba(122, 158, 138, 0.11);
+  content: '';
+}
+
+.overview-stat-card.assist {
+  border-top-color: var(--graphite);
+}
+
+.overview-stat-card.warning {
+  border-top-color: rgba(31, 41, 51, 0.68);
+}
+
+.overview-stat-card.success {
+  border-top-color: var(--clinical-deep);
+}
+
+.overview-stat-card.mail {
+  border-top-color: var(--accent-strong);
+  cursor: pointer;
+}
+
+.overview-stat-card.mail:hover {
+  border-color: rgba(31, 41, 51, 0.42);
+  transform: translateY(-1px);
+}
+
+.overview-stat-card span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.overview-stat-card strong {
+  font-family: 'Sora', 'IBM Plex Sans', sans-serif;
+  font-size: clamp(1.8rem, 2.2vw, 2.8rem);
+  line-height: 1;
+}
+
+.overview-stat-card small {
+  position: relative;
+  z-index: 1;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.internal-board-panel {
   min-height: 360px;
 }
 
 .internal-board-list {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.internal-mail-modal-grid {
+  display: grid;
+  grid-template-columns: minmax(360px, 0.85fr) minmax(0, 1.15fr);
+  gap: 16px;
+}
+
+.internal-mail-list-panel,
+.internal-mail-detail-panel {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+}
+
+.modal-inbox-list {
+  max-height: min(54vh, 520px);
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.mail-detail-card.expanded {
+  min-height: 320px;
+  border-style: solid;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(247, 248, 247, 0.78)),
+    var(--surface);
+}
+
+.mail-detail-card.empty-detail {
+  min-height: 320px;
+  align-content: center;
+  justify-items: start;
+}
+
+.pharmacy-workspace {
+  display: grid;
+  gap: 18px;
+}
+
+.pharmacy-stat-strip {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.pharmacy-grid {
+  grid-template-columns: minmax(0, 1.35fr) minmax(360px, 0.65fr);
+  align-items: start;
+}
+
+.pharmacy-dispensation-panel {
+  min-height: 420px;
+}
+
+.action-list-shell {
+  gap: 8px;
+}
+
+.action-row-link {
+  transition:
+    border-color 0.18s ease,
+    transform 0.18s ease,
+    background 0.18s ease;
+}
+
+.action-row-link:hover {
+  border-color: rgba(95, 141, 120, 0.45);
+  background: rgba(122, 158, 138, 0.1);
+  transform: translateX(2px);
+}
+
+.muted-row {
+  opacity: 0.78;
 }
 
 @media (min-width: 1440px) {
@@ -2918,6 +3067,20 @@ textarea {
   .overview-grid,
   .internal-communication-grid {
     grid-template-columns: minmax(0, 1.8fr) minmax(420px, 0.95fr);
+  }
+}
+
+@media (max-width: 1320px) {
+  .overview-stat-strip {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .pharmacy-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .internal-mail-modal-grid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -3001,7 +3164,7 @@ textarea {
 
 .mailbox-tabs button.is-active {
   border-color: var(--accent-strong);
-  background: rgba(251, 146, 60, 0.14);
+  background: rgba(122, 158, 138, 0.16);
   color: var(--text);
 }
 
@@ -3435,6 +3598,16 @@ textarea {
   background: rgba(255, 255, 255, 0.64);
 }
 
+.clinical-command-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.62);
+}
+
 .consultorio-metric-grid span,
 .clinical-vitals-grid span,
 .clinical-vitals-grid small {
@@ -3481,6 +3654,168 @@ textarea {
 
 .clinical-placeholder-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.clinical-history-list,
+.clinical-professional-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.clinical-history-item,
+.clinical-professional-grid article,
+.clinical-action-card {
+  padding: 13px;
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.clinical-history-item {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.clinical-history-item small,
+.clinical-professional-grid small,
+.clinical-action-card span {
+  color: var(--muted);
+}
+
+.clinical-professional-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.clinical-order-builder,
+.clinical-document-toolbar {
+  display: grid;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.clinical-order-builder {
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.34fr);
+}
+
+.clinical-document-toolbar {
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 0.36fr) minmax(190px, 0.3fr);
+}
+
+.clinical-large-textarea.compact {
+  min-height: 150px;
+}
+
+.clinical-action-card {
+  width: 100%;
+  text-align: left;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.clinical-action-card:hover {
+  border-color: rgba(122, 158, 138, 0.34);
+  background: rgba(122, 158, 138, 0.08);
+}
+
+.clinical-document-actions {
+  display: grid;
+  gap: 8px;
+  align-content: end;
+}
+
+.clinical-document-textarea {
+  min-height: 250px;
+  font-family: 'IBM Plex Mono', Consolas, monospace;
+}
+
+.clinical-print-document {
+  display: grid;
+  gap: 16px;
+  padding: 22px;
+  border: 1px dashed rgba(31, 41, 51, 0.24);
+  border-radius: 18px;
+  background: #ffffff;
+}
+
+.clinical-print-document p,
+.clinical-print-document h3 {
+  margin: 0;
+}
+
+.clinical-print-document pre {
+  margin: 0;
+  white-space: pre-wrap;
+  font-family: 'IBM Plex Sans', sans-serif;
+  line-height: 1.65;
+}
+
+.document-template-workspace {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.document-template-grid {
+  grid-template-columns: 0.88fr minmax(260px, 1.7fr) 0.9fr 0.86fr 0.58fr 0.82fr;
+}
+
+.template-editor {
+  display: grid;
+  gap: 16px;
+}
+
+.template-editor-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 0.45fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.template-content-textarea {
+  min-height: 460px;
+  font-family: 'IBM Plex Mono', Consolas, monospace;
+  line-height: 1.55;
+}
+
+.template-preview-card {
+  min-height: 460px;
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+  align-content: start;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.84)),
+    var(--surface-strong);
+}
+
+.template-preview-card h3,
+.template-preview-card p {
+  margin: 0;
+}
+
+.template-preview-card pre {
+  margin: 0;
+  white-space: pre-wrap;
+  font-family: 'IBM Plex Sans', sans-serif;
+  line-height: 1.65;
+}
+
+.template-variable-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.template-variable-list span {
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(122, 158, 138, 0.08);
+  color: var(--clinical-deep);
+  font-size: 0.76rem;
+  font-weight: 800;
 }
 
 .consultorio-action-bar {
@@ -4629,6 +4964,28 @@ textarea {
   }
 }
 
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+
+  .clinical-print-document,
+  .clinical-print-document * {
+    visibility: visible !important;
+  }
+
+  .clinical-print-document {
+    position: absolute;
+    inset: 0;
+    width: auto;
+    min-height: 100vh;
+    padding: 34px;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+}
+
 @media (max-width: 1280px) {
   .login-shell,
   .overview-grid,
@@ -4655,6 +5012,11 @@ textarea {
   .clinical-two-column,
   .clinical-vitals-grid,
   .clinical-placeholder-grid,
+  .clinical-order-builder,
+  .clinical-document-toolbar,
+  .clinical-professional-grid,
+  .document-template-grid,
+  .template-editor-grid,
   .summary-strip,
   .cbhpm-stat-grid,
   .overview-pulse,
@@ -4756,6 +5118,7 @@ textarea {
   .doctors-grid,
   .nurses-grid,
   .care-grid,
+  .clinical-history-item,
   .audit-grid {
     grid-template-columns: 1fr;
   }

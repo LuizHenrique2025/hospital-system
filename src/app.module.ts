@@ -14,6 +14,7 @@ import { BillingGuidesModule } from './modules/billing-guides/billing-guides.mod
 import { BudgetEstimatesModule } from './modules/budget-estimates/budget-estimates.module';
 import { CbhpmModule } from './modules/cbhpm/cbhpm.module';
 import { CommunicationsModule } from './modules/communications/communications.module';
+import { DocumentTemplatesModule } from './modules/document-templates/document-templates.module';
 import { DoctorsModule } from './modules/doctors/doctors.module';
 import { ExamOrdersModule } from './modules/exam-orders/exam-orders.module';
 import { NursesModule } from './modules/nurses/nurses.module';
@@ -48,6 +49,7 @@ import { UsersModule } from './modules/users/users.module';
     DoctorsModule,
     SectorsModule,
     CommunicationsModule,
+    DocumentTemplatesModule,
     ProceduresModule,
     ExamOrdersModule,
     PricingModule,

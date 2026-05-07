@@ -5,6 +5,7 @@ import { DetailItem } from '../components/ui/DetailItem';
 import { DirectoryState } from '../components/ui/DirectoryState';
 import { OperationalModal } from '../components/ui/OperationalModal';
 import { OperationalSearchCard } from '../components/ui/OperationalSearchCard';
+import { apiRequest } from '../lib/api';
 import {
   appointmentStatuses,
   calculateAge,
@@ -21,7 +22,12 @@ import {
   type CareRecordFormState,
   type CareRecordPayload,
 } from '../lib/appSupport';
-import type { Appointment, Patient } from '../lib/types';
+import type {
+  Appointment,
+  DocumentTemplate,
+  PaginatedResponse,
+  Patient,
+} from '../lib/types';
 type CarePageProps = {
   appointments: Appointment[];
   canManageCare: boolean;
@@ -37,6 +43,7 @@ type CarePageProps = {
   ) => Promise<void>;
   patients: Patient[];
   queueActionLabel?: string;
+  sessionToken?: string;
   statusEyebrow?: string;
   statusTitle?: string;
   title?: string;
@@ -54,6 +61,7 @@ export function CarePage({
   onSaveCareRecord,
   patients,
   queueActionLabel = 'Abrir ficha',
+  sessionToken,
   statusEyebrow = 'Leitura operacional',
   statusTitle = 'Status e proxima acao',
   title = 'Fila operacional',
@@ -87,6 +95,18 @@ export function CarePage({
         (appointment) => appointment.id === selectedAppointmentId,
       ) ?? null)
     : null;
+  const activePatientAppointments = activeAppointment
+    ? appointments
+        .filter(
+          (appointment) =>
+            appointment.patient.id === activeAppointment.patient.id,
+        )
+        .sort(
+          (left, right) =>
+            new Date(right.appointmentDate).getTime() -
+            new Date(left.appointmentDate).getTime(),
+        )
+    : [];
   const waitingCount = appointments.filter((appointment) =>
     ['AGENDADA', 'CONFIRMADA'].includes(appointment.status),
   ).length;
@@ -434,6 +454,8 @@ export function CarePage({
             }-consultorio`}
             missingCount={missingCount}
             onSaveCareRecord={onSaveCareRecord}
+            relatedAppointments={activePatientAppointments}
+            sessionToken={sessionToken}
             waitingCount={waitingCount}
           />
         ) : activeAppointment ? (
@@ -801,15 +823,175 @@ type ConsultorioRecordPanelProps = {
     appointmentId: string,
     payload: CareRecordPayload,
   ) => Promise<void>;
+  relatedAppointments: Appointment[];
+  sessionToken?: string;
   waitingCount: number;
 };
 
 type ConsultorioSection =
   | 'rosto'
+  | 'historico'
   | 'exame'
   | 'prescricao'
-  | 'exames'
+  | 'pedidos'
+  | 'documentos'
   | 'finalizacao';
+
+type ClinicalDocumentType =
+  | 'ATESTADO'
+  | 'PEDIDO_EXAME'
+  | 'RECEITA'
+  | 'RELATORIO';
+
+const clinicalDocumentTypeLabels: Record<ClinicalDocumentType, string> = {
+  ATESTADO: 'Atestado medico',
+  PEDIDO_EXAME: 'Pedido de exame',
+  RECEITA: 'Receita / prescricao',
+  RELATORIO: 'Relatorio medico',
+};
+
+function buildClinicalDocument(
+  type: ClinicalDocumentType,
+  appointment: Appointment,
+  form: CareRecordFormState,
+  examRequestDraft: string,
+) {
+  const patient = appointment.patient;
+  const doctor = appointment.doctor;
+  const doctorLine = `${doctor.user.name} - CRM ${doctor.crm}/${doctor.crmUf}`;
+  const appointmentDate = formatDate(appointment.appointmentDate);
+  const documentHeader = `Paciente: ${patient.name}
+CPF: ${patient.cpf}
+Data: ${appointmentDate}
+Profissional: ${doctorLine}`;
+
+  if (type === 'ATESTADO') {
+    return `${documentHeader}
+
+ATESTADO MEDICO
+
+Atesto, para os devidos fins, que o(a) paciente acima identificado(a) esteve em atendimento nesta unidade na data informada.
+
+Conduta / observacao:
+${form.diagnosis || form.notes || 'Sem observacao complementar registrada.'}
+
+Assinatura e carimbo do profissional`;
+  }
+
+  if (type === 'PEDIDO_EXAME') {
+    return `${documentHeader}
+
+PEDIDO DE EXAMES / PROCEDIMENTOS
+
+Solicito os seguintes exames/procedimentos:
+${examRequestDraft || 'Informe os exames solicitados antes de imprimir.'}
+
+Indicacao clinica:
+${form.diagnosis || form.notes || 'Nao informada.'}
+
+Assinatura e carimbo do profissional`;
+  }
+
+  if (type === 'RECEITA') {
+    return `${documentHeader}
+
+RECEITA / PRESCRICAO
+
+${form.prescription || 'Nenhuma medicacao registrada.'}
+
+Orientacoes:
+${form.notes || 'Seguir orientacao medica.'}
+
+Assinatura e carimbo do profissional`;
+  }
+
+  return `${documentHeader}
+
+RELATORIO MEDICO
+
+Historico / anamnese:
+${form.notes || 'Nao informado.'}
+
+Hipotese diagnostica / diagnostico:
+${form.diagnosis || 'Nao informado.'}
+
+Prescricao / conduta:
+${form.prescription || 'Nao informada.'}
+
+Assinatura e carimbo do profissional`;
+}
+
+function createClinicalVariables(
+  appointment: Appointment,
+  form: CareRecordFormState,
+  examRequestDraft: string,
+) {
+  const patient = appointment.patient;
+  const doctor = appointment.doctor;
+
+  return {
+    '#ANAMNESE#': form.notes || 'Nao informado.',
+    '#CIDCONS#': 'A DEFINIR',
+    '#CONCLUSAOLAUDO#': form.diagnosis || 'Conclusao nao informada.',
+    '#CPFPACIENTE#': patient.cpf,
+    '#DATADOCUMENTO#': new Date().toLocaleDateString('pt-BR'),
+    '#DATANASCIMENTOPACIENTE#': formatDate(patient.birthDate),
+    '#DESCRICAOLAUDO#': form.diagnosis || 'Descricao nao informada.',
+    '#DIAGNOSTICO#': form.diagnosis || 'Nao informado.',
+    '#HORADOCUMENTO#': formatTime(appointment.appointmentDate),
+    '#HORAINICIO#': formatTime(appointment.appointmentDate),
+    '#INDICACAOCLINICA#': form.diagnosis || form.notes || 'Nao informada.',
+    '#LISTAGEMEXAMESPEDIDOEXAME#':
+      examRequestDraft || 'Nenhum exame informado.',
+    '#NOMECONVENIO#': 'Nao informado',
+    '#NOMEPLANO#': '',
+    '#NOMEPACIENTE#': patient.name,
+    '#NOMEPROCEDIMENTO#': humanizeEnum(appointment.type),
+    '#NOMEPROFISSIONAL#': doctor.user.name,
+    '#OBSERVACAOCLINICA#': form.notes || 'Sem observacao.',
+    '#PRESCRICAO#': form.prescription || 'Nenhuma prescricao registrada.',
+    '#CRMPROFISSIONAL#': `${doctor.crm}/${doctor.crmUf}`,
+  };
+}
+
+function renderTemplateContent(
+  content: string,
+  variables: Record<string, string>,
+) {
+  return content.replace(/#[A-Z0-9_]+#/gi, (token) => {
+    return variables[token.toUpperCase()] ?? token;
+  });
+}
+
+function resolveDocumentType(template: DocumentTemplate): ClinicalDocumentType {
+  const haystack = `${template.code} ${template.name} ${template.group}`
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase();
+
+  if (haystack.includes('PEDIDO') || haystack.includes('EXAME')) {
+    return 'PEDIDO_EXAME';
+  }
+
+  if (haystack.includes('RECEIT') || haystack.includes('PRESCR')) {
+    return 'RECEITA';
+  }
+
+  if (haystack.includes('RELATORIO')) {
+    return 'RELATORIO';
+  }
+
+  return 'ATESTADO';
+}
+
+function findMatchingDocumentTemplate(
+  templates: DocumentTemplate[],
+  type: ClinicalDocumentType,
+) {
+  return (
+    templates.find((template) => resolveDocumentType(template) === type) ?? null
+  );
+}
 
 function ConsultorioRecordPanel({
   appointment,
@@ -818,6 +1000,8 @@ function ConsultorioRecordPanel({
   isSubmitting,
   missingCount,
   onSaveCareRecord,
+  relatedAppointments,
+  sessionToken,
   waitingCount,
 }: ConsultorioRecordPanelProps) {
   const [activeSection, setActiveSection] =
@@ -825,6 +1009,24 @@ function ConsultorioRecordPanel({
   const [form, setForm] = useState<CareRecordFormState>(() =>
     createCareRecordForm(appointment),
   );
+  const [examRequestDraft, setExamRequestDraft] = useState('');
+  const [documentType, setDocumentType] =
+    useState<ClinicalDocumentType>('ATESTADO');
+  const [documentDraft, setDocumentDraft] = useState(() =>
+    buildClinicalDocument(
+      'ATESTADO',
+      appointment,
+      createCareRecordForm(appointment),
+      '',
+    ),
+  );
+  const [documentTemplates, setDocumentTemplates] = useState<
+    DocumentTemplate[]
+  >([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [templateStatus, setTemplateStatus] = useState<
+    'idle' | 'loading' | 'ready' | 'error'
+  >('idle');
   const patient = appointment.patient;
   const patientInitials = patient.name
     .split(' ')
@@ -836,6 +1038,30 @@ function ConsultorioRecordPanel({
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean);
+  const previousAppointments = relatedAppointments
+    .filter((relatedAppointment) => relatedAppointment.id !== appointment.id)
+    .slice(0, 6);
+  const professionalHistory = Array.from(
+    relatedAppointments
+      .reduce((professionals, relatedAppointment) => {
+        const doctor = relatedAppointment.doctor;
+        professionals.set(doctor.id, {
+          id: doctor.id,
+          lastVisit: relatedAppointment.appointmentDate,
+          name: doctor.user.name,
+          specialty:
+            doctor.specialties.length > 0
+              ? doctor.specialties.join(', ')
+              : 'Especialidade nao informada',
+          crm: `${doctor.crm}/${doctor.crmUf}`,
+        });
+        return professionals;
+      }, new Map<string, { id: string; lastVisit: string; name: string; specialty: string; crm: string }>())
+      .values(),
+  );
+  const selectedDocumentLabel =
+    documentTemplates.find((template) => template.id === selectedTemplateId)
+      ?.name ?? clinicalDocumentTypeLabels[documentType];
   const consultorioSections: Array<{
     id: ConsultorioSection;
     label: string;
@@ -845,6 +1071,11 @@ function ConsultorioRecordPanel({
       id: 'rosto',
       label: 'Folha de rosto',
       description: 'Anamnese e contexto inicial',
+    },
+    {
+      id: 'historico',
+      label: 'Historico',
+      description: 'Consultas e profissionais',
     },
     {
       id: 'exame',
@@ -857,9 +1088,14 @@ function ConsultorioRecordPanel({
       description: 'Medicacao e conduta',
     },
     {
-      id: 'exames',
-      label: 'Exames',
-      description: 'Pedidos e laudos',
+      id: 'pedidos',
+      label: 'Pedido de exame',
+      description: 'Solicitacao e laudos',
+    },
+    {
+      id: 'documentos',
+      label: 'Documentos',
+      description: 'Atestados e impressao',
     },
     {
       id: 'finalizacao',
@@ -890,6 +1126,100 @@ function ConsultorioRecordPanel({
 
     setForm(nextForm);
     await onSaveCareRecord(appointment.id, normalizeCareRecord(nextForm));
+  }
+
+  useEffect(() => {
+    if (!sessionToken) {
+      return;
+    }
+
+    let isMounted = true;
+
+    async function loadDocumentTemplates() {
+      setTemplateStatus('loading');
+
+      try {
+        const queryParams = new URLSearchParams({
+          active: 'true',
+          limit: '50',
+          page: '1',
+          type: 'DOCUMENT',
+        });
+        const response = await apiRequest<PaginatedResponse<DocumentTemplate>>(
+          `/document-templates?${queryParams.toString()}`,
+          { token: sessionToken },
+        );
+        const nextTemplates = response.data ?? [];
+
+        if (!isMounted) {
+          return;
+        }
+
+        setDocumentTemplates(nextTemplates);
+        setTemplateStatus('ready');
+
+        const firstTemplate = nextTemplates[0];
+
+        if (firstTemplate && !selectedTemplateId) {
+          setSelectedTemplateId(firstTemplate.id);
+          setDocumentType(resolveDocumentType(firstTemplate));
+          setDocumentDraft(
+            renderTemplateContent(
+              firstTemplate.content,
+              createClinicalVariables(appointment, form, examRequestDraft),
+            ),
+          );
+        }
+      } catch {
+        if (isMounted) {
+          setDocumentTemplates([]);
+          setTemplateStatus('error');
+        }
+      }
+    }
+
+    void loadDocumentTemplates();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [appointment.id, selectedTemplateId, sessionToken]);
+
+  function refreshDocument(nextType = documentType) {
+    const selectedTemplate = documentTemplates.find(
+      (template) => template.id === selectedTemplateId,
+    );
+
+    if (selectedTemplate) {
+      setDocumentDraft(
+        renderTemplateContent(
+          selectedTemplate.content,
+          createClinicalVariables(appointment, form, examRequestDraft),
+        ),
+      );
+      return;
+    }
+
+    setDocumentDraft(buildClinicalDocument(nextType, appointment, form, examRequestDraft));
+  }
+
+  function openDocument(nextType: ClinicalDocumentType) {
+    const matchingTemplate = findMatchingDocumentTemplate(
+      documentTemplates,
+      nextType,
+    );
+
+    setDocumentType(nextType);
+    setSelectedTemplateId(matchingTemplate?.id ?? '');
+    setDocumentDraft(
+      matchingTemplate
+        ? renderTemplateContent(
+            matchingTemplate.content,
+            createClinicalVariables(appointment, form, examRequestDraft),
+          )
+        : buildClinicalDocument(nextType, appointment, form, examRequestDraft),
+    );
+    setActiveSection('documentos');
   }
 
   return (
@@ -983,6 +1313,37 @@ function ConsultorioRecordPanel({
           </article>
         </div>
 
+        <div className="clinical-command-strip">
+          <button
+            className="mini-button"
+            onClick={() => setActiveSection('historico')}
+            type="button"
+          >
+            Consultas anteriores
+          </button>
+          <button
+            className="mini-button"
+            onClick={() => setActiveSection('pedidos')}
+            type="button"
+          >
+            Pedido de exame
+          </button>
+          <button
+            className="mini-button"
+            onClick={() => openDocument('ATESTADO')}
+            type="button"
+          >
+            Atestado
+          </button>
+          <button
+            className="mini-button"
+            onClick={() => openDocument('RECEITA')}
+            type="button"
+          >
+            Imprimir prescricao
+          </button>
+        </div>
+
         {activeSection === 'rosto' ? (
           <section className="clinical-section">
             <div className="clinical-section-header">
@@ -1023,6 +1384,82 @@ function ConsultorioRecordPanel({
                     'Nenhum problema registrado neste atendimento.'}
                 </span>
               </div>
+            </div>
+          </section>
+        ) : null}
+
+        {activeSection === 'historico' ? (
+          <section className="clinical-section">
+            <div className="clinical-section-header">
+              <div>
+                <p className="eyebrow">Historico do paciente</p>
+                <h3>Consultas anteriores e profissionais</h3>
+              </div>
+              <span className="inline-badge">
+                {previousAppointments.length} consulta(s)
+              </span>
+            </div>
+
+            <div className="clinical-two-column">
+              <div className="clinical-list-card">
+                <strong>Consultas anteriores</strong>
+                {previousAppointments.length === 0 ? (
+                  <span>
+                    Nenhuma consulta anterior encontrada nesta base do
+                    consultorio.
+                  </span>
+                ) : (
+                  <div className="clinical-history-list">
+                    {previousAppointments.map((previousAppointment) => (
+                      <article
+                        className="clinical-history-item"
+                        key={previousAppointment.id}
+                      >
+                        <div>
+                          <strong>
+                            {formatDateTime(
+                              previousAppointment.appointmentDate,
+                            )}
+                          </strong>
+                          <span>
+                            {previousAppointment.doctor.user.name} -{' '}
+                            {humanizeEnum(previousAppointment.status)}
+                          </span>
+                        </div>
+                        <small>{humanizeEnum(previousAppointment.type)}</small>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="clinical-list-card">
+                <strong>Profissionais que ja atenderam</strong>
+                {professionalHistory.length === 0 ? (
+                  <span>Nenhum profissional anterior localizado.</span>
+                ) : (
+                  <div className="clinical-professional-grid">
+                    {professionalHistory.map((professional) => (
+                      <article key={professional.id}>
+                        <strong>{professional.name}</strong>
+                        <span>CRM {professional.crm}</span>
+                        <span>{professional.specialty}</span>
+                        <small>
+                          Ultimo registro: {formatDate(professional.lastVisit)}
+                        </small>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="clinical-list-card">
+              <strong>Historico clinico cadastral</strong>
+              <span>
+                {patient.medicalHistory ||
+                  'Historico clinico ainda nao preenchido no cadastro.'}
+              </span>
             </div>
           </section>
         ) : null}
@@ -1106,28 +1543,181 @@ function ConsultorioRecordPanel({
           </section>
         ) : null}
 
-        {activeSection === 'exames' ? (
+        {activeSection === 'pedidos' ? (
           <section className="clinical-section">
             <div className="clinical-section-header">
               <div>
-                <p className="eyebrow">Exames e procedimentos</p>
-                <h3>Pedidos vinculados ao atendimento</h3>
+                <p className="eyebrow">Pedido de exame</p>
+                <h3>Solicitacao, laudos e cobranca</h3>
               </div>
-              <span className="inline-badge">proximo modulo</span>
+              <span className="inline-badge">rascunho medico</span>
+            </div>
+
+            <div className="clinical-order-builder">
+              <label className="field">
+                <span>Exames / procedimentos solicitados</span>
+                <textarea
+                  className="clinical-large-textarea compact"
+                  onChange={(event) => setExamRequestDraft(event.target.value)}
+                  placeholder="Digite um exame por linha. Ex: Hemograma completo, PCR, Raio-X torax PA e perfil."
+                  value={examRequestDraft}
+                />
+              </label>
+
+              <div className="clinical-list-card">
+                <strong>Fluxo previsto</strong>
+                <ul className="clinical-line-list">
+                  <li>Pedido fica vinculado ao atendimento do consultorio.</li>
+                  <li>Recepcao/financeiro confere autorizacao e cobranca.</li>
+                  <li>Resultado/laudo retorna para leitura do medico.</li>
+                </ul>
+              </div>
             </div>
 
             <div className="clinical-placeholder-grid">
-              <DirectoryState
-                code="EX"
-                title="Solicitacao estruturada em preparacao."
-                description="A tela ja reserva o espaco para pedir exames, procedimentos, imagem e laudos dentro do consultorio."
-              />
-              <DirectoryState
-                code="LA"
-                title="Laudos e resultados ficarao vinculados aqui."
-                description="Quando o modulo de pedidos estiver conectado, o medico acompanha resultado e impressao por este painel."
-              />
+              <button
+                className="clinical-action-card"
+                onClick={() => openDocument('PEDIDO_EXAME')}
+                type="button"
+              >
+                <strong>Gerar pedido para impressao</strong>
+                <span>
+                  Monta o documento com paciente, medico, indicacao clinica e
+                  lista de exames.
+                </span>
+              </button>
+              <button
+                className="clinical-action-card"
+                onClick={() => setActiveSection('documentos')}
+                type="button"
+              >
+                <strong>Ver documentos do atendimento</strong>
+                <span>
+                  Centraliza atestados, receitas, relatorios e pedidos.
+                </span>
+              </button>
             </div>
+          </section>
+        ) : null}
+
+        {activeSection === 'documentos' ? (
+          <section className="clinical-section">
+            <div className="clinical-section-header">
+              <div>
+                <p className="eyebrow">Documentos medicos</p>
+                <h3>Gerar, revisar e imprimir</h3>
+              </div>
+              <span className="inline-badge">impressao local</span>
+            </div>
+
+            <div className="clinical-document-toolbar">
+              <label className="field">
+                <span>Modelo cadastrado</span>
+                <select
+                  onChange={(event) => {
+                    const templateId = event.target.value;
+                    const selectedTemplate = documentTemplates.find(
+                      (template) => template.id === templateId,
+                    );
+
+                    setSelectedTemplateId(templateId);
+
+                    if (!selectedTemplate) {
+                      setDocumentDraft(
+                        buildClinicalDocument(
+                          documentType,
+                          appointment,
+                          form,
+                          examRequestDraft,
+                        ),
+                      );
+                      return;
+                    }
+
+                    const nextType = resolveDocumentType(selectedTemplate);
+
+                    setDocumentType(nextType);
+                    setDocumentDraft(
+                      renderTemplateContent(
+                        selectedTemplate.content,
+                        createClinicalVariables(
+                          appointment,
+                          form,
+                          examRequestDraft,
+                        ),
+                      ),
+                    );
+                  }}
+                  value={selectedTemplateId}
+                >
+                  <option value="">
+                    {templateStatus === 'loading'
+                      ? 'Carregando modelos...'
+                      : 'Selecione um modelo'}
+                  </option>
+                  {documentTemplates.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.name} - {template.group}
+                    </option>
+                  ))}
+                </select>
+                <small>
+                  {templateStatus === 'error'
+                    ? 'Nao foi possivel carregar modelos do banco.'
+                    : `${documentTemplates.length} modelo(s) disponiveis`}
+                </small>
+              </label>
+
+              <label className="field">
+                <span>Tipo rapido</span>
+                <select
+                  onChange={(event) => openDocument(event.target.value as ClinicalDocumentType)}
+                  value={documentType}
+                >
+                  {Object.entries(clinicalDocumentTypeLabels).map(
+                    ([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ),
+                  )}
+                </select>
+              </label>
+
+              <div className="clinical-document-actions">
+                <button
+                  className="ghost-button"
+                  onClick={() => refreshDocument()}
+                  type="button"
+                >
+                  Gerar texto
+                </button>
+                <button
+                  className="primary-button"
+                  onClick={() => window.print()}
+                  type="button"
+                >
+                  Imprimir documento
+                </button>
+              </div>
+            </div>
+
+            <label className="field">
+              <span>Conteudo do documento</span>
+              <textarea
+                className="clinical-document-textarea"
+                onChange={(event) => setDocumentDraft(event.target.value)}
+                value={documentDraft}
+              />
+            </label>
+
+            <article className="clinical-print-document">
+              <div>
+                <p>Hospital Revitalize</p>
+                <h3>{selectedDocumentLabel}</h3>
+              </div>
+              <pre>{documentDraft}</pre>
+            </article>
           </section>
         ) : null}
 

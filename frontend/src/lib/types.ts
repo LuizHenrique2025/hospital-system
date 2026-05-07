@@ -158,6 +158,8 @@ export type PricingTableType =
   | 'OPERATIONAL_FEE'
   | 'MATERIAL_MEDICATION';
 
+export type DocumentTemplateType = 'DOCUMENT' | 'REPORT';
+
 export type Procedure = {
   id: string;
   code: string;
@@ -204,6 +206,22 @@ export type ProcedurePrice = {
   notes?: string | null;
   procedure: Procedure;
   pricingTable: PricingTable;
+};
+
+export type DocumentTemplate = {
+  id: string;
+  code: string;
+  name: string;
+  description?: string | null;
+  group: string;
+  layout?: string | null;
+  type: DocumentTemplateType;
+  content: string;
+  variables: string[];
+  active: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  renderedContent?: string;
 };
 
 export type BudgetEstimateStatus =
