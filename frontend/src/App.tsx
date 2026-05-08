@@ -2848,15 +2848,52 @@ function OverviewPage({
   const todayAppointments = appointments.filter((appointment) =>
     appointment.appointmentDate?.startsWith(todayIso),
   );
+  const scheduledAppointments = appointments.filter((appointment) =>
+    ['AGENDADO', 'SCHEDULED'].includes(appointment.status.toUpperCase()),
+  );
   const confirmedAppointments = appointments.filter((appointment) =>
-    ['CONFIRMADO', 'CONFIRMED', 'AGENDADO', 'SCHEDULED'].includes(
-      appointment.status.toUpperCase(),
-    ),
+    ['CONFIRMADO', 'CONFIRMED'].includes(appointment.status.toUpperCase()),
   );
   const finishedAppointments = appointments.filter((appointment) =>
     ['REALIZADO', 'FINALIZADO', 'COMPLETED', 'DONE'].includes(
       appointment.status.toUpperCase(),
     ),
+  );
+  const canceledAppointments = appointments.filter((appointment) =>
+    ['CANCELADO', 'CANCELED', 'CANCELLED', 'NO_SHOW'].includes(
+      appointment.status.toUpperCase(),
+    ),
+  );
+  const officeFinishedAppointments = finishedAppointments.filter((appointment) =>
+    appointment.type.toUpperCase().includes('CONSULT'),
+  );
+  const pendingPaAppointments = todayAppointments.filter((appointment) =>
+    ['AGENDADO', 'SCHEDULED', 'CONFIRMADO', 'CONFIRMED'].includes(
+      appointment.status.toUpperCase(),
+    ),
+  );
+  const attendedAppointments =
+    finishedAppointments.length > 0 ? finishedAppointments : todayAppointments;
+  const maleAttendedCount = attendedAppointments.filter(
+    (appointment) => appointment.patient.gender === 'MASCULINO',
+  ).length;
+  const femaleAttendedCount = attendedAppointments.filter(
+    (appointment) => appointment.patient.gender === 'FEMININO',
+  ).length;
+  const newPatientAppointments = attendedAppointments.filter((appointment) => {
+    const type = appointment.type.toUpperCase();
+
+    return type.includes('PRIMEIRA') || type.includes('FIRST');
+  });
+  const recurrentAppointments = attendedAppointments.filter(
+    (appointment) => !newPatientAppointments.includes(appointment),
+  );
+  const maxChartValue = Math.max(
+    1,
+    maleAttendedCount,
+    femaleAttendedCount,
+    newPatientAppointments.length,
+    recurrentAppointments.length,
   );
   const canSendMessage =
     messageForm.recipientId &&
@@ -2865,34 +2902,56 @@ function OverviewPage({
 
   const overviewStats = [
     {
-      accent: 'clinical',
-      label: 'Pacientes',
-      detail: 'base ativa cadastrada',
-      value: patientTotal,
-    },
-    {
       accent: 'assist',
-      label: 'Consultas hoje',
-      detail: `${todayAppointments.length} agenda(s) do dia`,
-      value: todayAppointments.length,
+      label: 'Agendados',
+      detail: 'consultas aguardando fluxo',
+      value: scheduledAppointments.length,
     },
     {
-      accent: 'warning',
-      label: 'Aguardando',
-      detail: `${confirmedAppointments.length} confirmadas/agendadas`,
+      accent: 'clinical',
+      label: 'Confirmados',
+      detail: 'pacientes prontos para chamada',
       value: confirmedAppointments.length,
     },
     {
+      accent: 'danger',
+      label: 'Cancelados',
+      detail: 'ausencias e cancelamentos',
+      value: canceledAppointments.length,
+    },
+    {
       accent: 'success',
-      label: 'Finalizadas',
-      detail: `${finishedAppointments.length} registros encerrados`,
-      value: finishedAppointments.length,
+      label: 'Finaliz. consultorio',
+      detail: 'atendimentos encerrados',
+      value: officeFinishedAppointments.length,
+    },
+    {
+      accent: 'warning',
+      label: 'PA pendente',
+      detail: 'fila do dia para evoluir',
+      value: pendingPaAppointments.length,
     },
     {
       accent: 'mail',
       label: 'Caixa interna',
       detail: `${unreadCount} mensagens nao lidas`,
       value: messages.length,
+    },
+  ];
+  const overviewChartGroups = [
+    {
+      female: femaleAttendedCount,
+      label: 'Pacientes atendidos',
+      male: maleAttendedCount,
+    },
+    {
+      female: recurrentAppointments.filter(
+        (appointment) => appointment.patient.gender === 'FEMININO',
+      ).length,
+      label: 'Pacientes recorrentes',
+      male: recurrentAppointments.filter(
+        (appointment) => appointment.patient.gender === 'MASCULINO',
+      ).length,
     },
   ];
 
@@ -3071,25 +3130,6 @@ function OverviewPage({
   return (
     <>
       <section className="overview-workspace">
-        <div className="overview-stat-strip">
-          {overviewStats.map((stat) => (
-            <button
-              className={`overview-stat-card ${stat.accent}`}
-              key={stat.label}
-              onClick={() => {
-                if (stat.accent === 'mail') {
-                  setIsMailboxOpen(true);
-                }
-              }}
-              type="button"
-            >
-              <span>{stat.label}</span>
-              <strong>{stat.value}</strong>
-              <small>{stat.detail}</small>
-            </button>
-          ))}
-        </div>
-
         <article className="panel internal-board-panel">
           <div className="page-header">
             <div>
@@ -3137,6 +3177,82 @@ function OverviewPage({
             )}
           </div>
         </article>
+
+        <section className="panel overview-monitoring-panel">
+          <div className="page-header">
+            <div>
+              <p className="eyebrow">Monitoramento</p>
+              <h2>Indicadores operacionais</h2>
+              <small>
+                Visao rapida da agenda, atendimentos e caixa interna apos o
+                mural.
+              </small>
+            </div>
+            <span className="status-pill">{patientTotal} pacientes na base</span>
+          </div>
+
+          <div className="overview-stat-strip">
+            {overviewStats.map((stat) => (
+              <button
+                className={`overview-stat-card ${stat.accent}`}
+                key={stat.label}
+                onClick={() => {
+                  if (stat.accent === 'mail') {
+                    setIsMailboxOpen(true);
+                  }
+                }}
+                type="button"
+              >
+                <span>{stat.label}</span>
+                <strong>{stat.value}</strong>
+                <small>{stat.detail}</small>
+              </button>
+            ))}
+          </div>
+
+          <div className="overview-chart-card">
+            <div className="overview-chart-header">
+              <div>
+                <span>Pacientes atendidos</span>
+                <strong>Quantidade total: {attendedAppointments.length}</strong>
+              </div>
+              <div className="overview-chart-legend">
+                <span className="legend-item male">Masculino</span>
+                <span className="legend-item female">Feminino</span>
+              </div>
+            </div>
+
+            <div
+              aria-label="Grafico de pacientes atendidos por genero"
+              className="overview-bar-chart"
+              role="img"
+            >
+              {overviewChartGroups.map((group) => (
+                <div className="overview-chart-group" key={group.label}>
+                  <div className="overview-bars">
+                    <span
+                      className="overview-bar male"
+                      style={{
+                        height: `${Math.max(10, (group.male / maxChartValue) * 100)}%`,
+                      }}
+                    >
+                      <strong>{group.male}</strong>
+                    </span>
+                    <span
+                      className="overview-bar female"
+                      style={{
+                        height: `${Math.max(10, (group.female / maxChartValue) * 100)}%`,
+                      }}
+                    >
+                      <strong>{group.female}</strong>
+                    </span>
+                  </div>
+                  <small>{group.label}</small>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
       </section>
 
       <OperationalModal
