@@ -212,6 +212,8 @@ function EnvironmentModuleNav({ modules }: EnvironmentModuleNavProps) {
               className={({ isActive }) =>
                 isActive ? 'side-module-link active' : 'side-module-link'
               }
+              rel={moduleItem.openInNewTab ? 'noreferrer' : undefined}
+              target={moduleItem.openInNewTab ? '_blank' : undefined}
               to={moduleItem.path}
             >
               <span className="module-nav-icon">
@@ -303,6 +305,8 @@ function AdministrativeModuleGrid({ modules }: AdministrativeModuleGridProps) {
                           : 'admin-module-link'
                       }
                       key={moduleItem.path}
+                      rel={moduleItem.openInNewTab ? 'noreferrer' : undefined}
+                      target={moduleItem.openInNewTab ? '_blank' : undefined}
                       to={moduleItem.path}
                     >
                       <span className="module-nav-icon compact">

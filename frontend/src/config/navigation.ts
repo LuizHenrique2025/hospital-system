@@ -22,6 +22,7 @@ export type ModuleItem = {
   path: string;
   label: string;
   hint: string;
+  openInNewTab?: boolean;
   roles?: Role[];
 };
 
@@ -145,8 +146,8 @@ export const activeModules: ModuleItem[] = [
   },
   {
     path: '/pronto-atendimento',
-    label: 'Pronto Atendimento',
-    hint: 'Triagem e fila PA',
+    label: 'Consultorio PA',
+    hint: 'Atendimento medico PA',
     roles: ['ATENDENTE', 'MEDICO', 'ENFERMEIRO'],
   },
   {
@@ -156,10 +157,16 @@ export const activeModules: ModuleItem[] = [
     roles: ['ATENDENTE', 'ENFERMEIRO'],
   },
   {
-    path: '/pa-enfermagem',
-    label: 'Enfermagem PA',
-    hint: 'Triagem e sinais',
+    path: '/pa-triagem',
+    label: 'Triagem',
+    hint: 'Sinais e classificacao',
     roles: ['ENFERMEIRO', 'MEDICO', 'ATENDENTE'],
+  },
+  {
+    path: '/pa-pedidos',
+    label: 'Pedidos PA',
+    hint: 'Exames e medicamentos',
+    roles: ['MEDICO', 'ENFERMEIRO', 'ATENDENTE', 'FARMACIA'],
   },
   {
     path: '/pa-dispensacao-medica',
@@ -168,9 +175,9 @@ export const activeModules: ModuleItem[] = [
     roles: ['MEDICO', 'ENFERMEIRO', 'FARMACIA'],
   },
   {
-    path: '/pa-exames-ambulatoriais',
-    label: 'Exames Amb.',
-    hint: 'Coletas e ambulatorio',
+    path: '/pa-imagem',
+    label: 'Imagem PA',
+    hint: 'Exames de imagem',
     roles: ['MEDICO', 'ENFERMEIRO', 'ATENDENTE'],
   },
   {
@@ -303,12 +310,12 @@ export const administrativeModuleGroups: AdministrativeModuleGroup[] = [
     hint: 'Recepcao PA, triagem, exames e dispensacao',
     paths: [
       '/pa-recepcao',
+      '/pa-triagem',
       '/pronto-atendimento',
-      '/pa-enfermagem',
+      '/pa-pedidos',
       '/pa-dispensacao-medica',
-      '/pedidos-exames',
       '/laudos',
-      '/pa-exames-ambulatoriais',
+      '/pa-imagem',
     ],
   },
   {
@@ -386,20 +393,20 @@ export const navigationEnvironments: NavigationEnvironment[] = [
   {
     id: 'pronto-atendimento',
     label: 'Pronto Atendimento',
-    hint: 'Recepcao propria, enfermagem, exames e dispensacao PA',
+    hint: 'Recepcao, triagem, consultorio, exames e dispensacao PA',
     symbol: 'PA',
     toneClass: 'env-pa',
     modulePaths: [
       '/central',
       '/pa-recepcao',
+      '/pa-triagem',
       '/pronto-atendimento',
-      '/pa-enfermagem',
+      '/pa-pedidos',
       '/pa-dispensacao-medica',
-      '/pedidos-exames',
       '/laudos',
-      '/pa-exames-ambulatoriais',
+      '/pa-imagem',
     ],
-    roadmap: ['Recepcao PA', 'Triagem', 'Imagem', 'Dispensacao'],
+    roadmap: ['Recepcao', 'Triagem', 'Consultorio PA', 'Laudos'],
   },
   {
     id: 'consultorio',

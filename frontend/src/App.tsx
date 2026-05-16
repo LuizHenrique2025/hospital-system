@@ -211,6 +211,22 @@ type AppointmentFormState = {
   notes: string;
 };
 
+type EmergencyEntryPayload = {
+  agreement: string;
+  classification: string;
+  doctorId: string;
+  initialProcedure: string;
+  internalNotes: string;
+  medicationMaterial: string;
+  notes: string;
+  paymentMethod: string;
+  patientId: string;
+  plan: string;
+  requester: string;
+  socialName: string;
+  tax: string;
+};
+
 type ProcedureFormState = {
   code: string;
   description: string;
@@ -851,6 +867,73 @@ function App() {
     }
   }
 
+  async function createEmergencyEntry(payload: EmergencyEntryPayload) {
+    if (!session?.token) {
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      await apiRequest<Appointment>('/appointments', {
+        token: session.token,
+        body: {
+          patientId: payload.patientId,
+          doctorId: payload.doctorId,
+          appointmentDate: new Date().toISOString(),
+          status: 'AGENDADA',
+          type: 'URGENCIA',
+          notes: [
+            '[PA][AGUARDANDO_TRIAGEM] Entrada imediata de pronto atendimento.',
+            payload.notes.trim()
+              ? `Queixa inicial: ${payload.notes.trim()}`
+              : '',
+            payload.internalNotes.trim()
+              ? `Obs. interna: ${payload.internalNotes.trim()}`
+              : '',
+            payload.agreement ? `Convenio: ${payload.agreement}` : '',
+            payload.plan ? `Plano: ${payload.plan}` : '',
+            payload.classification
+              ? `Classificacao recepcao: ${payload.classification}`
+              : '',
+            payload.requester
+              ? `Profissional requisitante: ${payload.requester}`
+              : '',
+            payload.initialProcedure
+              ? `Procedimento inicial: ${payload.initialProcedure}`
+              : '',
+            payload.medicationMaterial
+              ? `Material/medicamento: ${payload.medicationMaterial}`
+              : '',
+            payload.tax ? `Taxa: ${payload.tax}` : '',
+            payload.paymentMethod
+              ? `Forma pagamento: ${payload.paymentMethod}`
+              : '',
+          ]
+            .filter(Boolean)
+            .join(' | '),
+        },
+      });
+
+      await loadDashboard(session.token);
+      setNotice({
+        kind: 'success',
+        text: 'Entrada de Pronto Atendimento aberta e enviada para triagem.',
+      });
+      navigate('/pa-triagem');
+    } catch (error) {
+      setNotice({
+        kind: 'error',
+        text:
+          error instanceof Error
+            ? error.message
+            : 'Nao foi possivel abrir a entrada de Pronto Atendimento.',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   async function saveCareRecord(
     appointmentId: string,
     payload: CareRecordPayload,
@@ -930,19 +1013,6 @@ function App() {
     navigate('/equipe');
   }
 
-  function openEmergencyScheduling() {
-    setAppointmentForm((current) => ({
-      ...current,
-      status: 'AGENDADA',
-      type: 'URGENCIA',
-    }));
-    setNotice({
-      kind: 'info',
-      text: 'Agendamento preparado para entrada de Pronto Atendimento.',
-    });
-    navigate('/agendamento');
-  }
-
   const canCreateAppointment =
     patients.some(isPatientActive) && doctors.length > 0;
   const canManageCare = Boolean(
@@ -969,9 +1039,14 @@ function App() {
           moduleItem.roles.includes(session.profile.role),
       )
     : activeModules;
-  const environmentModules = accessibleModules.filter((moduleItem) =>
-    activeEnvironment.modulePaths.includes(moduleItem.path),
+  const accessibleModulesByPath = new Map(
+    accessibleModules.map((moduleItem) => [moduleItem.path, moduleItem]),
   );
+  const environmentModules = activeEnvironment.modulePaths
+    .map((path) => accessibleModulesByPath.get(path))
+    .filter((moduleItem): moduleItem is (typeof accessibleModules)[number] =>
+      Boolean(moduleItem),
+    );
   const visibleModules =
     environmentModules.length > 0
       ? environmentModules
@@ -1156,9 +1231,9 @@ function App() {
               doctors={doctors}
               isSubmitting={isSubmitting}
               nurses={nurses}
-              onOpenScheduling={openEmergencyScheduling}
               onSaveCareRecord={saveCareRecord}
               patients={patients}
+              sessionToken={session.token}
               sectors={sectors}
             />
           }
@@ -1294,77 +1369,85 @@ function App() {
         <Route
           path="/pa-recepcao"
           element={
-            <ModulePlaceholderPage
-              environment="Pronto Atendimento"
-              title="Recepcao PA"
-              description="Entrada exclusiva para abrir pronto atendimento."
-              steps={[
-                'Localizar ou cadastrar paciente',
-                'Abrir ficha de pronto atendimento',
-                'Enviar para enfermagem e fila de triagem',
-              ]}
+            <EmergencyOperationalPage
+              appointments={appointments}
+              doctors={doctors}
+              isSubmitting={isSubmitting}
+              mode="reception"
+              nurses={nurses}
+              onCreateEmergencyEntry={createEmergencyEntry}
+              patients={patients}
+              sectors={sectors}
+            />
+          }
+        />
+        <Route
+          path="/pa-triagem"
+          element={
+            <EmergencyOperationalPage
+              appointments={appointments}
+              doctors={doctors}
+              isSubmitting={isSubmitting}
+              mode="nursing"
+              nurses={nurses}
+              onCreateEmergencyEntry={createEmergencyEntry}
+              patients={patients}
+              sectors={sectors}
             />
           }
         />
         <Route
           path="/pa-enfermagem"
+          element={<Navigate replace to="/pa-triagem" />}
+        />
+        <Route
+          path="/pa-pedidos"
           element={
-            <ModulePlaceholderPage
-              environment="Pronto Atendimento"
-              title="Enfermagem PA"
-              description="Triagem, sinais vitais e classificacao inicial."
-              steps={[
-                'Chamar paciente da recepcao PA',
-                'Registrar sinais vitais e queixa principal',
-                'Classificar prioridade e encaminhar',
-              ]}
+            <EmergencyOperationalPage
+              appointments={appointments}
+              doctors={doctors}
+              isSubmitting={isSubmitting}
+              mode="orders"
+              nurses={nurses}
+              onCreateEmergencyEntry={createEmergencyEntry}
+              patients={patients}
+              sectors={sectors}
             />
           }
         />
         <Route
           path="/pa-dispensacao-medica"
           element={
-            <ModulePlaceholderPage
-              environment="Pronto Atendimento"
-              title="Dispensacao Medica"
-              description="Medicacoes e dispensacoes vinculadas ao PA."
-              steps={[
-                'Receber prescricao do atendimento',
-                'Registrar medicamento dispensado',
-                'Baixar item do estoque ou farmacia',
-              ]}
+            <EmergencyOperationalPage
+              appointments={appointments}
+              doctors={doctors}
+              isSubmitting={isSubmitting}
+              mode="dispensation"
+              nurses={nurses}
+              onCreateEmergencyEntry={createEmergencyEntry}
+              patients={patients}
+              sectors={sectors}
             />
           }
         />
         <Route
           path="/pa-imagem"
           element={
-            <ModulePlaceholderPage
-              environment="Pronto Atendimento"
-              title="Exames de Imagem PA"
-              description="Solicitacao e acompanhamento de imagem no PA."
-              steps={[
-                'Receber pedido do medico do PA',
-                'Acompanhar realizacao do exame',
-                'Retornar resultado ao atendimento',
-              ]}
+            <EmergencyOperationalPage
+              appointments={appointments}
+              doctors={doctors}
+              isSubmitting={isSubmitting}
+              mode="imaging"
+              nurses={nurses}
+              onCreateEmergencyEntry={createEmergencyEntry}
+              patients={patients}
+              sectors={sectors}
             />
           }
         />
         <Route
           path="/pa-exames-ambulatoriais"
-          element={
-            <ModulePlaceholderPage
-              environment="Pronto Atendimento"
-              title="Exames Ambulatoriais PA"
-              description="Coletas e exames ambulatoriais ligados ao PA."
-              steps={[
-                'Receber pedido do PA',
-                'Registrar coleta ou execucao',
-                'Disponibilizar resultado para conduta',
-              ]}
-            />
-          }
+          element={<Navigate replace to="/pa-pedidos" />}
         />
         <Route
           path="/consultorio"
@@ -6279,12 +6362,12 @@ type EmergencyCarePageProps = {
   doctors: Doctor[];
   isSubmitting: boolean;
   nurses: Nurse[];
-  onOpenScheduling: () => void;
   onSaveCareRecord: (
     appointmentId: string,
     payload: CareRecordPayload,
   ) => Promise<void>;
   patients: Patient[];
+  sessionToken: string;
   sectors: Sector[];
 };
 
@@ -6294,9 +6377,9 @@ function EmergencyCarePage({
   doctors,
   isSubmitting,
   nurses,
-  onOpenScheduling,
   onSaveCareRecord,
   patients,
+  sessionToken,
   sectors,
 }: EmergencyCarePageProps) {
   const paSector = sectors.find((sector) => sector.code === 'PA') ?? null;
@@ -6339,28 +6422,878 @@ function EmergencyCarePage({
           <strong>{missingCount}</strong>
           <small>controle da fila de urgencia</small>
         </article>
-        <button
-          className="primary-button"
-          onClick={onOpenScheduling}
-          type="button"
-        >
-          Nova entrada PA
-        </button>
       </section>
 
-      <CarePage
-        appointments={paAppointments}
-        canManageCare={canManageCare}
-        emptyMessage="Nenhum atendimento de PA visivel. Crie uma entrada como URGENCIA ou vincule o medico ao setor PA."
-        eyebrow="Pronto Atendimento"
-        focusEyebrow="Triagem em foco"
-        isSubmitting={isSubmitting}
-        onSaveCareRecord={onSaveCareRecord}
+        <CarePage
+          appointments={paAppointments}
+          canManageCare={canManageCare}
+          emptyMessage="Nenhum atendimento de PA visivel. Crie uma entrada como URGENCIA ou vincule o medico ao setor PA."
+          eyebrow="Consultorio PA"
+          focusEyebrow="Paciente em atendimento PA"
+          initiallyShowQueue
+          isSubmitting={isSubmitting}
+          modalVariant="consultorio"
+          onSaveCareRecord={onSaveCareRecord}
+        openAppointmentsInNewTab
         patients={patients}
+        queueActionLabel="Abrir atendimento PA"
+        sessionToken={sessionToken}
         statusEyebrow="Leitura PA"
-        statusTitle="Status, chamada e desfecho"
-        title="Fila de urgencia e triagem"
+        statusTitle="Conduta, chamada e desfecho"
+        title="Consultorio do pronto atendimento"
       />
+    </>
+  );
+}
+
+type EmergencyOperationalMode =
+  | 'reception'
+  | 'nursing'
+  | 'orders'
+  | 'dispensation'
+  | 'exams'
+  | 'imaging';
+
+type EmergencyOperationalPageProps = {
+  appointments: Appointment[];
+  doctors: Doctor[];
+  isSubmitting: boolean;
+  mode: EmergencyOperationalMode;
+  nurses: Nurse[];
+  onCreateEmergencyEntry: (payload: EmergencyEntryPayload) => Promise<void>;
+  patients: Patient[];
+  sectors: Sector[];
+};
+
+const emergencyOperationalCopy: Record<
+  EmergencyOperationalMode,
+  {
+    actionLabel: string;
+    eyebrow: string;
+    highlight: string;
+    steps: Array<{ detail: string; label: string }>;
+    title: string;
+    subtitle: string;
+  }
+> = {
+  reception: {
+    actionLabel: 'Abrir nova entrada PA',
+    eyebrow: 'Recepcao PA',
+    highlight: 'Entrada, identificacao e abertura do atendimento',
+    subtitle:
+      'Recepcao localiza o paciente, abre a passagem de urgencia e encaminha para triagem.',
+    title: 'Porta de entrada do pronto atendimento',
+    steps: [
+      {
+        label: 'Localizar paciente',
+        detail: 'Buscar ou cadastrar paciente antes de criar a ficha PA.',
+      },
+      {
+        label: 'Abrir atendimento',
+        detail: 'Criar passagem como urgencia e registrar motivo inicial.',
+      },
+      {
+        label: 'Encaminhar fila',
+        detail: 'Enviar para triagem, consultorio PA ou exames conforme fluxo.',
+      },
+    ],
+  },
+  nursing: {
+    actionLabel: 'Abrir fila do PA',
+    eyebrow: 'Triagem PA',
+    highlight: 'Sinais vitais, classificacao e evolucao inicial',
+    subtitle:
+      'Triagem recebe o paciente aberto pela recepcao, registra sinais, classifica prioridade e encaminha para o consultorio PA.',
+    title: 'Triagem do pronto atendimento',
+    steps: [
+      {
+        label: 'Chamar paciente',
+        detail: 'Selecionar atendimento aberto pela recepcao.',
+      },
+      {
+        label: 'Registrar sinais',
+        detail: 'Pressao, temperatura, dor, queixa e classificacao inicial.',
+      },
+      {
+        label: 'Evoluir conduta',
+        detail: 'Manter historico assistencial ate alta ou transferencia.',
+      },
+    ],
+  },
+  orders: {
+    actionLabel: 'Abrir pedidos de exames',
+    eyebrow: 'Pedidos PA',
+    highlight: 'Pedidos de exames e medicamentos vinculados ao PA',
+    subtitle:
+      'Medico do PA solicita exames, registra medicamentos e deixa a demanda pronta para execucao, dispensacao e cobranca.',
+    title: 'Pedidos de exames e medicamentos',
+    steps: [
+      {
+        label: 'Selecionar atendimento',
+        detail: 'Abrir o paciente do consultorio PA antes de solicitar.',
+      },
+      {
+        label: 'Solicitar exames',
+        detail: 'Criar pedido de exames, imagem ou ambulatoriais.',
+      },
+      {
+        label: 'Prescrever medicacao',
+        detail: 'Medicamentos prescritos seguem para dispensacao medica.',
+      },
+    ],
+  },
+  dispensation: {
+    actionLabel: 'Conferir prescricoes',
+    eyebrow: 'Dispensacao PA',
+    highlight: 'Medicacao vinculada ao atendimento medico do PA',
+    subtitle:
+      'Farmacia visualiza prescricoes do PA, controla status de separacao e prepara baixa no estoque.',
+    title: 'Dispensacao medica do pronto atendimento',
+    steps: [
+      {
+        label: 'Receber prescricao',
+        detail: 'Medicamentos salvos pelo medico aparecem para conferencia.',
+      },
+      {
+        label: 'Separar medicamento',
+        detail: 'Registrar preparo, lote e profissional responsavel.',
+      },
+      {
+        label: 'Dar baixa futura',
+        detail: 'Vincular dispensacao ao estoque quando o modulo estiver ativo.',
+      },
+    ],
+  },
+  exams: {
+    actionLabel: 'Abrir pedidos de exame',
+    eyebrow: 'Exames PA',
+    highlight: 'Pedidos, coleta, laudos e retorno para conduta',
+    subtitle:
+      'Exames ambulatoriais do PA ficam organizados por solicitacao, execucao, resultado e cobranca.',
+    title: 'Exames ambulatoriais e laudos do PA',
+    steps: [
+      {
+        label: 'Receber pedido',
+        detail: 'Pedido medico entra pela tela de pedidos de exames.',
+      },
+      {
+        label: 'Executar/coletar',
+        detail: 'Registrar coleta, realizacao ou pendencia assistencial.',
+      },
+      {
+        label: 'Liberar resultado',
+        detail: 'Laudo retorna para conduta e segue para faturamento.',
+      },
+    ],
+  },
+  imaging: {
+    actionLabel: 'Abrir laudos',
+    eyebrow: 'Imagem PA',
+    highlight: 'Exames de imagem solicitados pelo PA',
+    subtitle:
+      'Imagem PA acompanha solicitacao, realizacao, laudo e retorno do resultado para a conduta medica.',
+    title: 'Exames de imagem do pronto atendimento',
+    steps: [
+      {
+        label: 'Receber pedido',
+        detail: 'Pedido de imagem nasce no consultorio PA ou nos pedidos.',
+      },
+      {
+        label: 'Acompanhar realizacao',
+        detail: 'Controlar pendencia, sala/equipamento e status do exame.',
+      },
+      {
+        label: 'Liberar laudo',
+        detail: 'Resultado volta ao atendimento e segue para faturamento.',
+      },
+    ],
+  },
+};
+
+function EmergencyOperationalPage({
+  appointments,
+  doctors,
+  isSubmitting,
+  mode,
+  nurses,
+  onCreateEmergencyEntry,
+  patients,
+  sectors,
+}: EmergencyOperationalPageProps) {
+  const copy = emergencyOperationalCopy[mode];
+  const paSector = sectors.find((sector) => sector.code === 'PA') ?? null;
+  const paDoctors = doctors.filter((doctor) =>
+    professionalInSector(doctor, 'PA', paSector?.id),
+  );
+  const paNurses = nurses.filter((nurse) =>
+    professionalInSector(nurse, 'PA', paSector?.id),
+  );
+  const paAppointments = [...appointments]
+    .filter((appointment) => isEmergencyAppointment(appointment, doctors))
+    .sort(sortByAppointmentDate);
+  const waitingAppointments = paAppointments.filter((appointment) =>
+    ['AGENDADA', 'CONFIRMADA'].includes(appointment.status),
+  );
+  const prescribedAppointments = paAppointments.filter((appointment) =>
+    appointment.prescription?.trim(),
+  );
+  const completedAppointments = paAppointments.filter(
+    (appointment) => appointment.status === 'REALIZADA',
+  );
+  const missingAppointments = paAppointments.filter(
+    (appointment) => appointment.status === 'NAO_COMPARECEU',
+  );
+  const [isEmergencyEntryOpen, setIsEmergencyEntryOpen] = useState(false);
+  const [entryForm, setEntryForm] = useState<EmergencyEntryPayload>({
+    agreement: '',
+    classification: '',
+    doctorId: '',
+    initialProcedure: '',
+    internalNotes: '',
+    medicationMaterial: '',
+    notes: '',
+    paymentMethod: '',
+    patientId: '',
+    plan: '',
+    requester: '',
+    socialName: '',
+    tax: '',
+  });
+  const [entryPatientSearch, setEntryPatientSearch] = useState('');
+  const [entryDoctorSearch, setEntryDoctorSearch] = useState('');
+  const deferredEntryPatientSearch = useDeferredValue(
+    entryPatientSearch.trim().toLowerCase(),
+  );
+  const deferredEntryDoctorSearch = useDeferredValue(
+    entryDoctorSearch.trim().toLowerCase(),
+  );
+  const activePatients = patients.filter(isPatientActive);
+  const visibleEntryPatients = activePatients.filter((patient) => {
+    if (patient.id === entryForm.patientId) {
+      return true;
+    }
+
+    if (deferredEntryPatientSearch.length < 2) {
+      return false;
+    }
+
+    return [patient.name, patient.cpf, patient.phone, patient.email]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+      .includes(deferredEntryPatientSearch);
+  });
+  const visibleEntryDoctors = paDoctors.filter((doctor) => {
+    if (doctor.id === entryForm.doctorId) {
+      return true;
+    }
+
+    if (deferredEntryDoctorSearch.length < 2) {
+      return false;
+    }
+
+    return [
+      doctor.user.name,
+      doctor.crm,
+      doctor.crmUf,
+      doctor.specialties.join(' '),
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+      .includes(deferredEntryDoctorSearch);
+  });
+  const selectedEntryDoctor =
+    doctors.find((doctor) => doctor.id === entryForm.doctorId) ?? null;
+  const canCreateEmergencyEntry =
+    Boolean(entryForm.patientId) && Boolean(entryForm.doctorId);
+  const visibleAppointments =
+    mode === 'dispensation'
+      ? prescribedAppointments
+      : mode === 'exams' || mode === 'orders' || mode === 'imaging'
+        ? paAppointments.filter(
+            (appointment) =>
+              appointment.notes?.toLowerCase().includes('exame') ||
+              appointment.diagnosis?.toLowerCase().includes('exame') ||
+              appointment.type === 'URGENCIA',
+          )
+        : paAppointments;
+  const primaryLink =
+    mode === 'exams' || mode === 'orders'
+      ? '/pedidos-exames'
+      : mode === 'imaging'
+        ? '/laudos'
+      : mode === 'dispensation'
+        ? '/farmacia'
+        : '/pronto-atendimento';
+
+  async function submitEmergencyEntry(
+    event: React.FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
+    if (!canCreateEmergencyEntry) {
+      return;
+    }
+
+    await onCreateEmergencyEntry(entryForm);
+    setEntryForm({
+      agreement: '',
+      classification: '',
+      doctorId: '',
+      initialProcedure: '',
+      internalNotes: '',
+      medicationMaterial: '',
+      notes: '',
+      paymentMethod: '',
+      patientId: '',
+      plan: '',
+      requester: '',
+      socialName: '',
+      tax: '',
+    });
+    setEntryDoctorSearch('');
+    setEntryPatientSearch('');
+    setIsEmergencyEntryOpen(false);
+  }
+
+  return (
+    <>
+      <section className="pa-workspace">
+      <article className="panel pa-hero-panel">
+        <div className="page-header">
+          <div>
+            <p className="eyebrow">{copy.eyebrow}</p>
+            <h2>{copy.title}</h2>
+            <small>{copy.subtitle}</small>
+          </div>
+          <span className="inline-badge">{copy.highlight}</span>
+        </div>
+
+        <div className="summary-strip pa-summary-strip">
+          <article className="summary-card">
+            <span>Fila PA</span>
+            <strong>{paAppointments.length}</strong>
+            <small>passagens abertas ou historicas</small>
+          </article>
+          <article className="summary-card">
+            <span>Aguardando</span>
+            <strong>{waitingAppointments.length}</strong>
+            <small>para triagem ou atendimento</small>
+          </article>
+          <article className="summary-card">
+            <span>Prescricoes</span>
+            <strong>{prescribedAppointments.length}</strong>
+            <small>pendentes de dispensacao</small>
+          </article>
+          <article className="summary-card">
+            <span>Equipe PA</span>
+            <strong>{paDoctors.length + paNurses.length}</strong>
+            <small>
+              {paDoctors.length} med. / {paNurses.length} enf.
+            </small>
+          </article>
+        </div>
+      </article>
+
+      <section className="page-grid pa-flow-grid">
+        <article className="panel">
+          <div className="page-header">
+            <div>
+              <p className="eyebrow">Fluxo do setor</p>
+              <h2>Como esta aba deve trabalhar</h2>
+            </div>
+          </div>
+
+          <div className="pa-stage-grid">
+            {copy.steps.map((step, index) => (
+              <article className="pa-stage-card" key={step.label}>
+                <span>{String(index + 1).padStart(2, '0')}</span>
+                <strong>{step.label}</strong>
+                <p>{step.detail}</p>
+              </article>
+            ))}
+          </div>
+
+          <div className="pa-action-grid">
+            {mode === 'reception' ? (
+              <button
+                className="primary-button"
+                onClick={() => setIsEmergencyEntryOpen(true)}
+                type="button"
+              >
+                {copy.actionLabel}
+              </button>
+            ) : (
+              <NavLink className="primary-button" to={primaryLink}>
+                {copy.actionLabel}
+              </NavLink>
+            )}
+            <NavLink className="ghost-button" to="/pronto-atendimento">
+              Ver fila medica PA
+            </NavLink>
+            <NavLink className="ghost-button" to="/laudos">
+              Laudos e resultados
+            </NavLink>
+          </div>
+        </article>
+
+        <article className="panel">
+          <div className="page-header">
+            <div>
+              <p className="eyebrow">Leitura operacional</p>
+              <h2>Fila relacionada</h2>
+              <small>
+                Apenas uma visao do PA. A abertura completa continua em modal
+                na fila medica.
+              </small>
+            </div>
+            <span className="inline-badge">
+              {visibleAppointments.length} registros
+            </span>
+          </div>
+
+          <div className="list-shell pa-queue-preview">
+            {visibleAppointments.length === 0 ? (
+              <DirectoryState
+                code="PA"
+                title="Nenhum item para este setor."
+                description="Quando houver entrada, prescricao ou pedido do PA, o setor passa a visualizar aqui."
+              />
+            ) : (
+              visibleAppointments.slice(0, 8).map((appointment) => (
+                <div className="list-row" key={appointment.id}>
+                  <div>
+                    <strong>{appointment.patient.name}</strong>
+                    <span>
+                      {formatDateTime(appointment.appointmentDate)} -{' '}
+                      {appointment.doctor.user.name}
+                    </span>
+                  </div>
+                  <div>
+                    <span>{humanizeEnum(appointment.status)}</span>
+                    <small>{humanizeEnum(appointment.type)}</small>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </article>
+      </section>
+
+      <section className="page-grid pa-status-grid">
+        <article className="panel">
+          <div className="page-header">
+            <div>
+              <p className="eyebrow">Pendencias assistenciais</p>
+              <h2>Controle rapido</h2>
+            </div>
+          </div>
+
+          <div className="list-shell">
+            <div className="list-row">
+              <div>
+                <strong>Triagem pendente</strong>
+                <span>pacientes aguardando avaliacao inicial</span>
+              </div>
+              <div>
+                <span>{waitingAppointments.length}</span>
+              </div>
+            </div>
+            <div className="list-row">
+              <div>
+                <strong>Medicacao para conferir</strong>
+                <span>prescricoes vinculadas ao PA</span>
+              </div>
+              <div>
+                <span>{prescribedAppointments.length}</span>
+              </div>
+            </div>
+            <div className="list-row">
+              <div>
+                <strong>Atendimentos encerrados</strong>
+                <span>passagens finalizadas</span>
+              </div>
+              <div>
+                <span>{completedAppointments.length}</span>
+              </div>
+            </div>
+            <div className="list-row">
+              <div>
+                <strong>Ausencias</strong>
+                <span>pacientes que nao compareceram</span>
+              </div>
+              <div>
+                <span>{missingAppointments.length}</span>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article className="panel pa-next-panel">
+          <div className="page-header">
+            <div>
+              <p className="eyebrow">Proximo encaixe tecnico</p>
+              <h2>O que ainda vira banco</h2>
+            </div>
+          </div>
+
+          <div className="pa-stage-grid compact">
+            <article className="pa-stage-card">
+              <span>EV</span>
+              <strong>Evolucao assistencial</strong>
+              <p>Modelar evolucoes por horario, usuario e atendimento.</p>
+            </article>
+            <article className="pa-stage-card">
+              <span>RX</span>
+              <strong>Pedidos e laudos</strong>
+              <p>Vincular exames executados ao faturamento e ao prontuario.</p>
+            </article>
+            <article className="pa-stage-card">
+              <span>MD</span>
+              <strong>Dispensacao</strong>
+              <p>Baixa real por lote quando estoque estiver parametrizado.</p>
+            </article>
+          </div>
+        </article>
+      </section>
+      </section>
+
+      <OperationalModal
+        eyebrow="Recepcao PA"
+        isOpen={mode === 'reception' && isEmergencyEntryOpen}
+        onClose={() => setIsEmergencyEntryOpen(false)}
+        size="wide"
+        title="Entrada imediata no pronto atendimento"
+        toneLabel="Sem agendamento"
+      >
+        <form className="modal-form-panel" onSubmit={submitEmergencyEntry}>
+          <div className="page-header">
+            <div>
+              <p className="eyebrow">Entrada PA</p>
+              <h2>Abrir atendimento agora</h2>
+              <small>
+                Esta entrada nasce no P.A, vai para triagem e nao passa pela
+                agenda eletiva.
+              </small>
+            </div>
+            <span className="inline-badge">AGUARDANDO TRIAGEM</span>
+          </div>
+
+          <div className="pa-entry-layout">
+            <section className="pa-entry-section">
+              <div className="section-title-row">
+                <h3>Dados do atendimento</h3>
+                <span className="inline-badge">Ficha PA</span>
+              </div>
+
+              <div className="field-grid two-columns">
+                <label className="field">
+                  <span>Empresa</span>
+                  <input value="HOSPITAL REVITALITE" readOnly />
+                </label>
+                <label className="field">
+                  <span>Data / hora</span>
+                  <input value="Gerada automaticamente" readOnly />
+                </label>
+                <label className="field">
+                  <span>Buscar paciente</span>
+                  <input
+                    onChange={(event) =>
+                      setEntryPatientSearch(event.target.value)
+                    }
+                    placeholder="Nome, CPF, telefone ou email"
+                    value={entryPatientSearch}
+                  />
+                </label>
+                <label className="field">
+                  <span>Paciente localizado</span>
+                  <select
+                    onChange={(event) =>
+                      setEntryForm((current) => ({
+                        ...current,
+                        patientId: event.target.value,
+                      }))
+                    }
+                    value={entryForm.patientId}
+                  >
+                    <option value="">Selecione o paciente</option>
+                    {visibleEntryPatients.map((patient) => (
+                      <option key={patient.id} value={patient.id}>
+                        {patient.name} - {patient.cpf}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Convênio</span>
+                  <input
+                    onChange={(event) =>
+                      setEntryForm((current) => ({
+                        ...current,
+                        agreement: event.target.value,
+                      }))
+                    }
+                    placeholder="Particular, Unimed, SC Saude..."
+                    value={entryForm.agreement}
+                  />
+                </label>
+                <label className="field">
+                  <span>Plano</span>
+                  <input
+                    onChange={(event) =>
+                      setEntryForm((current) => ({
+                        ...current,
+                        plan: event.target.value,
+                      }))
+                    }
+                    placeholder="Plano/categoria"
+                    value={entryForm.plan}
+                  />
+                </label>
+                <label className="field">
+                  <span>Buscar médico PA</span>
+                  <input
+                    onChange={(event) =>
+                      setEntryDoctorSearch(event.target.value)
+                    }
+                    placeholder="Nome, CRM ou especialidade"
+                    value={entryDoctorSearch}
+                  />
+                </label>
+                <label className="field">
+                  <span>Profissional responsável</span>
+                  <select
+                    onChange={(event) =>
+                      setEntryForm((current) => ({
+                        ...current,
+                        doctorId: event.target.value,
+                      }))
+                    }
+                    value={entryForm.doctorId}
+                  >
+                    <option value="">Selecione o médico</option>
+                    {visibleEntryDoctors.map((doctor) => (
+                      <option key={doctor.id} value={doctor.id}>
+                        {doctor.user.name} - CRM {doctor.crm}/{doctor.crmUf}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Especialidade</span>
+                  <input
+                    value={
+                      selectedEntryDoctor?.specialties.join(', ') ||
+                      'PRONTO ATENDIMENTO'
+                    }
+                    readOnly
+                  />
+                </label>
+                <label className="field">
+                  <span>Classificação recepção</span>
+                  <select
+                    onChange={(event) =>
+                      setEntryForm((current) => ({
+                        ...current,
+                        classification: event.target.value,
+                      }))
+                    }
+                    value={entryForm.classification}
+                  >
+                    <option value="">Selecione</option>
+                    <option value="ROTINA_PA">Rotina PA</option>
+                    <option value="PRIORIDADE_ADMINISTRATIVA">
+                      Prioridade administrativa
+                    </option>
+                    <option value="ACIDENTE_TRAUMA">Acidente/trauma</option>
+                    <option value="SINTOMA_RESPIRATORIO">
+                      Sintoma respiratório
+                    </option>
+                  </select>
+                </label>
+              </div>
+            </section>
+
+            <section className="pa-entry-section">
+              <div className="section-title-row">
+                <h3>Observações e controle</h3>
+                <span className="inline-badge">Atendente logado</span>
+              </div>
+
+              <div className="field-grid two-columns">
+                <label className="field">
+                  <span>Obs. interna</span>
+                  <input
+                    onChange={(event) =>
+                      setEntryForm((current) => ({
+                        ...current,
+                        internalNotes: event.target.value,
+                      }))
+                    }
+                    placeholder="Observação interna da recepção"
+                    value={entryForm.internalNotes}
+                  />
+                </label>
+                <label className="field">
+                  <span>Profissional requisitante</span>
+                  <input
+                    onChange={(event) =>
+                      setEntryForm((current) => ({
+                        ...current,
+                        requester: event.target.value,
+                      }))
+                    }
+                    placeholder="Quando houver"
+                    value={entryForm.requester}
+                  />
+                </label>
+                <label className="field">
+                  <span>Razão social / responsável financeiro</span>
+                  <input
+                    onChange={(event) =>
+                      setEntryForm((current) => ({
+                        ...current,
+                        socialName: event.target.value,
+                      }))
+                    }
+                    placeholder="Particular ou empresa"
+                    value={entryForm.socialName}
+                  />
+                </label>
+                <label className="field">
+                  <span>Senha painel</span>
+                  <input value="Gerada após salvar" readOnly />
+                </label>
+                <label className="field full-row">
+                  <span>Queixa inicial / observação da recepção</span>
+                  <textarea
+                    onChange={(event) =>
+                      setEntryForm((current) => ({
+                        ...current,
+                        notes: event.target.value,
+                      }))
+                    }
+                    placeholder="Ex.: dor abdominal, febre, queda, falta de ar..."
+                    value={entryForm.notes}
+                  />
+                </label>
+              </div>
+            </section>
+          </div>
+
+          <div className="pa-entry-ledger">
+            <section className="pa-entry-section">
+              <div className="section-title-row">
+                <h3>Procedimentos</h3>
+                <span className="inline-badge">0</span>
+              </div>
+              <div className="field-grid two-columns">
+                <label className="field">
+                  <span>Procedimento inicial</span>
+                  <input
+                    onChange={(event) =>
+                      setEntryForm((current) => ({
+                        ...current,
+                        initialProcedure: event.target.value,
+                      }))
+                    }
+                    placeholder="Consulta PA, taxa, procedimento..."
+                    value={entryForm.initialProcedure}
+                  />
+                </label>
+                <label className="field">
+                  <span>Valor / tabela</span>
+                  <input placeholder="Será calculado pelo faturamento" readOnly />
+                </label>
+              </div>
+            </section>
+
+            <section className="pa-entry-section">
+              <div className="section-title-row">
+                <h3>Materiais e medicamentos</h3>
+                <span className="inline-badge">0</span>
+              </div>
+              <input
+                className="soft-input"
+                onChange={(event) =>
+                  setEntryForm((current) => ({
+                    ...current,
+                    medicationMaterial: event.target.value,
+                  }))
+                }
+                placeholder="Material/medicamento inicial, se houver"
+                value={entryForm.medicationMaterial}
+              />
+            </section>
+
+            <section className="pa-entry-section">
+              <div className="section-title-row">
+                <h3>Taxas</h3>
+                <span className="inline-badge">0</span>
+              </div>
+              <input
+                className="soft-input"
+                onChange={(event) =>
+                  setEntryForm((current) => ({
+                    ...current,
+                    tax: event.target.value,
+                  }))
+                }
+                placeholder="Taxa de sala, taxa PA, observação financeira"
+                value={entryForm.tax}
+              />
+            </section>
+
+            <section className="pa-entry-section">
+              <div className="section-title-row">
+                <h3>Pagamentos</h3>
+                <span className="inline-badge">Pendente</span>
+              </div>
+              <div className="field-grid two-columns">
+                <label className="field">
+                  <span>Forma pagamento</span>
+                  <select
+                    onChange={(event) =>
+                      setEntryForm((current) => ({
+                        ...current,
+                        paymentMethod: event.target.value,
+                      }))
+                    }
+                    value={entryForm.paymentMethod}
+                  >
+                    <option value="">Definir depois</option>
+                    <option value="DINHEIRO">Dinheiro</option>
+                    <option value="PIX">PIX</option>
+                    <option value="CARTAO">Cartão</option>
+                    <option value="CONVENIO">Convênio/faturamento</option>
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Valor total</span>
+                  <input value="Calculado após itens" readOnly />
+                </label>
+              </div>
+            </section>
+          </div>
+
+          <div className="helper-block">
+            <strong>Fluxo criado ao salvar</strong>
+            <span>
+              Atendimento de urgencia com entrada imediata, identificado como
+              PA e encaminhado para a fila de triagem.
+            </span>
+          </div>
+
+          <button
+            className="primary-button"
+            disabled={!canCreateEmergencyEntry || isSubmitting}
+            type="submit"
+          >
+            {isSubmitting ? 'Abrindo entrada...' : 'Abrir entrada PA agora'}
+          </button>
+        </form>
+      </OperationalModal>
     </>
   );
 }

@@ -37,6 +37,7 @@ type CarePageProps = {
   initiallyShowQueue?: boolean;
   isSubmitting: boolean;
   modalVariant?: CareModalVariant;
+  openAppointmentsInNewTab?: boolean;
   onSaveCareRecord: (
     appointmentId: string,
     payload: CareRecordPayload,
@@ -58,6 +59,7 @@ export function CarePage({
   initiallyShowQueue = false,
   isSubmitting,
   modalVariant = 'default',
+  openAppointmentsInNewTab = false,
   onSaveCareRecord,
   patients,
   queueActionLabel = 'Abrir ficha',
@@ -66,12 +68,23 @@ export function CarePage({
   statusTitle = 'Status e proxima acao',
   title = 'Fila operacional',
 }: CarePageProps) {
+  const directConsultorioParams = useMemo(
+    () => new URLSearchParams(window.location.search),
+    [],
+  );
+  const directAppointmentId = directConsultorioParams.get('appointmentId');
+  const isDirectConsultorio =
+    modalVariant === 'consultorio' &&
+    directConsultorioParams.get('consultorio') === '1' &&
+    Boolean(directAppointmentId);
   const [search, setSearch] = useState('');
-  const [hasSearchedQueue, setHasSearchedQueue] = useState(initiallyShowQueue);
+  const [hasSearchedQueue, setHasSearchedQueue] = useState(
+    initiallyShowQueue || isDirectConsultorio,
+  );
   const [selectedAppointmentId, setSelectedAppointmentId] = useState<
     null | string
-  >(null);
-  const [isCareModalOpen, setIsCareModalOpen] = useState(false);
+  >(directAppointmentId);
+  const [isCareModalOpen, setIsCareModalOpen] = useState(isDirectConsultorio);
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
   const canSearchQueue = search.trim().length >= 2;
   const filteredQueue = useMemo(
@@ -91,7 +104,7 @@ export function CarePage({
     [appointments, deferredSearch, hasSearchedQueue],
   );
   const activeAppointment = selectedAppointmentId
-    ? (filteredQueue.find(
+    ? ((isDirectConsultorio ? appointments : filteredQueue).find(
         (appointment) => appointment.id === selectedAppointmentId,
       ) ?? null)
     : null;
@@ -123,14 +136,14 @@ export function CarePage({
   useEffect(() => {
     if (
       selectedAppointmentId &&
-      !filteredQueue.some(
+      !(isDirectConsultorio ? appointments : filteredQueue).some(
         (appointment) => appointment.id === selectedAppointmentId,
       )
     ) {
       setSelectedAppointmentId(null);
       setIsCareModalOpen(false);
     }
-  }, [filteredQueue, selectedAppointmentId]);
+  }, [appointments, filteredQueue, isDirectConsultorio, selectedAppointmentId]);
 
   function searchQueue(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -148,12 +161,83 @@ export function CarePage({
   }
 
   function openAppointmentModal(appointment: Appointment) {
+    if (openAppointmentsInNewTab && modalVariant === 'consultorio') {
+      const targetUrl = new URL(window.location.href);
+
+      targetUrl.searchParams.set('appointmentId', appointment.id);
+      targetUrl.searchParams.set('consultorio', '1');
+      window.open(targetUrl.toString(), '_blank', 'noopener,noreferrer');
+      return;
+    }
+
     setSelectedAppointmentId(appointment.id);
     setIsCareModalOpen(true);
   }
 
   function closeAppointmentModal() {
+    if (isDirectConsultorio) {
+      window.close();
+      return;
+    }
+
     setIsCareModalOpen(false);
+  }
+
+  function closeDirectConsultorioTab() {
+    if (isDirectConsultorio) {
+      window.close();
+    }
+  }
+
+  if (isDirectConsultorio) {
+    return (
+      <section className="direct-consultorio-page">
+        <div className="direct-consultorio-header">
+          <div>
+            <p className="eyebrow">{focusEyebrow}</p>
+            <h1>
+              {activeAppointment
+                ? activeAppointment.patient.name
+                : 'Atendimento PA'}
+            </h1>
+            <small>
+              Aba exclusiva para evoluir, prescrever e finalizar a consulta.
+            </small>
+          </div>
+          <button
+            className="ghost-button"
+            onClick={closeAppointmentModal}
+            type="button"
+          >
+            Fechar aba
+          </button>
+        </div>
+
+        {activeAppointment ? (
+          <ConsultorioRecordPanel
+            appointment={activeAppointment}
+            canManageCare={canManageCare}
+            completedCount={completedCount}
+            isSubmitting={isSubmitting}
+            key={`${activeAppointment.id}-${
+              activeAppointment.updatedAt ?? activeAppointment.status
+            }-direct-consultorio`}
+            missingCount={missingCount}
+            onFinalize={closeDirectConsultorioTab}
+            onSaveCareRecord={onSaveCareRecord}
+            relatedAppointments={activePatientAppointments}
+            sessionToken={sessionToken}
+            waitingCount={waitingCount}
+          />
+        ) : (
+          <DirectoryState
+            code="PA"
+            title="Atendimento nao encontrado."
+            description="Volte para a fila do Consultorio PA e abra o paciente novamente."
+          />
+        )}
+      </section>
+    );
   }
 
   return (
@@ -819,6 +903,7 @@ type ConsultorioRecordPanelProps = {
   completedCount: number;
   isSubmitting: boolean;
   missingCount: number;
+  onFinalize?: () => void;
   onSaveCareRecord: (
     appointmentId: string,
     payload: CareRecordPayload,
@@ -834,6 +919,7 @@ type ConsultorioSection =
   | 'exame'
   | 'prescricao'
   | 'pedidos'
+  | 'laudos'
   | 'documentos'
   | 'finalizacao';
 
@@ -999,6 +1085,7 @@ function ConsultorioRecordPanel({
   completedCount,
   isSubmitting,
   missingCount,
+  onFinalize,
   onSaveCareRecord,
   relatedAppointments,
   sessionToken,
@@ -1035,6 +1122,10 @@ function ConsultorioRecordPanel({
     .map((part) => part[0]?.toUpperCase())
     .join('');
   const medicationLines = form.prescription
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const examRequestLines = examRequestDraft
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean);
@@ -1089,8 +1180,13 @@ function ConsultorioRecordPanel({
     },
     {
       id: 'pedidos',
-      label: 'Pedido de exame',
-      description: 'Solicitacao e laudos',
+      label: 'Exames / procedimentos',
+      description: 'Pedidos e cobranca',
+    },
+    {
+      id: 'laudos',
+      label: 'Laudos',
+      description: 'Resultados e leitura',
     },
     {
       id: 'documentos',
@@ -1126,6 +1222,10 @@ function ConsultorioRecordPanel({
 
     setForm(nextForm);
     await onSaveCareRecord(appointment.id, normalizeCareRecord(nextForm));
+
+    if (nextStatus === 'REALIZADA') {
+      onFinalize?.();
+    }
   }
 
   useEffect(() => {
@@ -1278,7 +1378,7 @@ function ConsultorioRecordPanel({
       <section className="consultorio-main-panel">
         <div className="consultorio-hero-card">
           <div>
-            <p className="eyebrow">Atendimento do consultorio</p>
+            <p className="eyebrow">Atendimento do consultorio PA</p>
             <h3>{appointment.doctor.user.name}</h3>
             <span>
               CRM {appointment.doctor.crm}/{appointment.doctor.crmUf} -{' '}
@@ -1323,10 +1423,24 @@ function ConsultorioRecordPanel({
           </button>
           <button
             className="mini-button"
+            onClick={() => setActiveSection('prescricao')}
+            type="button"
+          >
+            Medicação
+          </button>
+          <button
+            className="mini-button"
             onClick={() => setActiveSection('pedidos')}
             type="button"
           >
-            Pedido de exame
+            Exames / procedimentos
+          </button>
+          <button
+            className="mini-button"
+            onClick={() => setActiveSection('laudos')}
+            type="button"
+          >
+            Laudos
           </button>
           <button
             className="mini-button"
@@ -1540,6 +1654,31 @@ function ConsultorioRecordPanel({
                 </ul>
               )}
             </div>
+
+            <div className="clinical-placeholder-grid">
+              <button
+                className="clinical-action-card"
+                onClick={() => openDocument('RECEITA')}
+                type="button"
+              >
+                <strong>Gerar receita para impressao</strong>
+                <span>
+                  Usa os medicamentos prescritos e monta o documento para
+                  impressao.
+                </span>
+              </button>
+              <button
+                className="clinical-action-card"
+                onClick={() => setActiveSection('pedidos')}
+                type="button"
+              >
+                <strong>Enviar para dispensacao medica</strong>
+                <span>
+                  A farmacia do PA acompanha aqui o que foi prescrito pelo
+                  medico.
+                </span>
+              </button>
+            </div>
           </section>
         ) : null}
 
@@ -1565,11 +1704,34 @@ function ConsultorioRecordPanel({
               </label>
 
               <div className="clinical-list-card">
-                <strong>Fluxo previsto</strong>
+                <strong>Pedidos vinculados ao atendimento</strong>
+                {examRequestLines.length === 0 ? (
+                  <span>Nenhum exame ou procedimento solicitado.</span>
+                ) : (
+                  <ul className="clinical-line-list">
+                    {examRequestLines.map((line) => (
+                      <li key={line}>{line}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+
+            <div className="clinical-two-column">
+              <div className="clinical-list-card">
+                <strong>Fluxo de cobranca</strong>
                 <ul className="clinical-line-list">
                   <li>Pedido fica vinculado ao atendimento do consultorio.</li>
                   <li>Recepcao/financeiro confere autorizacao e cobranca.</li>
                   <li>Resultado/laudo retorna para leitura do medico.</li>
+                </ul>
+              </div>
+              <div className="clinical-list-card">
+                <strong>Status operacional</strong>
+                <ul className="clinical-line-list">
+                  <li>A realizar: aguardando execucao.</li>
+                  <li>Em analise: exame realizado e aguardando laudo.</li>
+                  <li>Liberado: resultado disponivel para conduta.</li>
                 </ul>
               </div>
             </div>
@@ -1595,6 +1757,73 @@ function ConsultorioRecordPanel({
                 <span>
                   Centraliza atestados, receitas, relatorios e pedidos.
                 </span>
+              </button>
+            </div>
+          </section>
+        ) : null}
+
+        {activeSection === 'laudos' ? (
+          <section className="clinical-section">
+            <div className="clinical-section-header">
+              <div>
+                <p className="eyebrow">Laudos e resultados</p>
+                <h3>Resultados do atendimento PA</h3>
+              </div>
+              <span className="inline-badge">retorno para conduta</span>
+            </div>
+
+            <div className="clinical-two-column">
+              <div className="clinical-list-card">
+                <strong>Laudos deste atendimento</strong>
+                {examRequestLines.length === 0 ? (
+                  <span>
+                    Nenhum pedido informado. Os laudos serao listados conforme
+                    os exames forem solicitados e liberados.
+                  </span>
+                ) : (
+                  <div className="clinical-history-list">
+                    {examRequestLines.map((line) => (
+                      <article className="clinical-history-item" key={line}>
+                        <div>
+                          <strong>{line}</strong>
+                          <span>Aguardando resultado/laudo.</span>
+                        </div>
+                        <small>A realizar</small>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="clinical-list-card">
+                <strong>Leitura medica</strong>
+                <span>
+                  Ao liberar o laudo, o resultado volta para esta ficha para o
+                  medico registrar conduta, prescricao, alta, internacao ou
+                  observacao.
+                </span>
+              </div>
+            </div>
+
+            <div className="clinical-placeholder-grid">
+              <button
+                className="clinical-action-card"
+                onClick={() => openDocument('RELATORIO')}
+                type="button"
+              >
+                <strong>Gerar relatorio medico</strong>
+                <span>
+                  Monta um documento com anamnese, diagnostico, prescricao e
+                  resultados informados.
+                </span>
+              </button>
+              <button
+                className="clinical-action-card"
+                onClick={() => setActiveSection('pedidos')}
+                type="button"
+              >
+                <strong>Voltar para pedidos</strong>
+                <span>Inclua novos exames ou procedimentos neste atendimento.</span>
               </button>
             </div>
           </section>
