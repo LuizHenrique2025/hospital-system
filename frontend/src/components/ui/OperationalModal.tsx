@@ -5,7 +5,7 @@ type OperationalModalProps = {
   eyebrow?: string;
   isOpen: boolean;
   onClose: () => void;
-  size?: 'standard' | 'wide' | 'clinical';
+  size?: 'standard' | 'wide' | 'expanded' | 'clinical';
   title: string;
   toneLabel?: string;
 };

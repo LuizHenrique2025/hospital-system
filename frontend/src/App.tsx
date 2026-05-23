@@ -1378,6 +1378,7 @@ function App() {
               onCreateEmergencyEntry={createEmergencyEntry}
               patients={patients}
               sectors={sectors}
+              sessionToken={session.token}
             />
           }
         />
@@ -1393,6 +1394,7 @@ function App() {
               onCreateEmergencyEntry={createEmergencyEntry}
               patients={patients}
               sectors={sectors}
+              sessionToken={session.token}
             />
           }
         />
@@ -1403,15 +1405,10 @@ function App() {
         <Route
           path="/pa-pedidos"
           element={
-            <EmergencyOperationalPage
-              appointments={appointments}
+            <ExamOrdersPage
               doctors={doctors}
-              isSubmitting={isSubmitting}
-              mode="orders"
-              nurses={nurses}
-              onCreateEmergencyEntry={createEmergencyEntry}
               patients={patients}
-              sectors={sectors}
+              sessionToken={session.token}
             />
           }
         />
@@ -1427,6 +1424,7 @@ function App() {
               onCreateEmergencyEntry={createEmergencyEntry}
               patients={patients}
               sectors={sectors}
+              sessionToken={session.token}
             />
           }
         />
@@ -1442,6 +1440,7 @@ function App() {
               onCreateEmergencyEntry={createEmergencyEntry}
               patients={patients}
               sectors={sectors}
+              sessionToken={session.token}
             />
           }
         />
@@ -6463,6 +6462,7 @@ type EmergencyOperationalPageProps = {
   onCreateEmergencyEntry: (payload: EmergencyEntryPayload) => Promise<void>;
   patients: Patient[];
   sectors: Sector[];
+  sessionToken: string | null;
 };
 
 const emergencyOperationalCopy: Record<
@@ -6619,7 +6619,9 @@ function EmergencyOperationalPage({
   onCreateEmergencyEntry,
   patients,
   sectors,
+  sessionToken,
 }: EmergencyOperationalPageProps) {
+  const navigate = useNavigate();
   const copy = emergencyOperationalCopy[mode];
   const paSector = sectors.find((sector) => sector.code === 'PA') ?? null;
   const paDoctors = doctors.filter((doctor) =>
@@ -6660,6 +6662,13 @@ function EmergencyOperationalPage({
     tax: '',
   });
   const [entryPatientSearch, setEntryPatientSearch] = useState('');
+  const [entryPatientResults, setEntryPatientResults] = useState<Patient[]>(
+    [],
+  );
+  const [entryPatientSearchStatus, setEntryPatientSearchStatus] = useState<
+    'idle' | 'loading' | 'ready' | 'error'
+  >('idle');
+  const [entryPatientSearchError, setEntryPatientSearchError] = useState('');
   const [entryDoctorSearch, setEntryDoctorSearch] = useState('');
   const deferredEntryPatientSearch = useDeferredValue(
     entryPatientSearch.trim().toLowerCase(),
@@ -6668,21 +6677,41 @@ function EmergencyOperationalPage({
     entryDoctorSearch.trim().toLowerCase(),
   );
   const activePatients = patients.filter(isPatientActive);
-  const visibleEntryPatients = activePatients.filter((patient) => {
-    if (patient.id === entryForm.patientId) {
-      return true;
+  const visibleEntryPatients = useMemo(() => {
+    const registry = new Map<string, Patient>();
+    const hasSearch = deferredEntryPatientSearch.length >= 2;
+
+    if (hasSearch) {
+      activePatients
+        .filter((patient) =>
+          [patient.name, patient.cpf, patient.phone, patient.email]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase()
+            .includes(deferredEntryPatientSearch),
+        )
+        .forEach((patient) => registry.set(patient.id, patient));
+      entryPatientResults
+        .filter(isPatientActive)
+        .forEach((patient) => registry.set(patient.id, patient));
     }
 
-    if (deferredEntryPatientSearch.length < 2) {
-      return false;
+    const selectedPatient = patients.find(
+      (patient) => patient.id === entryForm.patientId,
+    );
+
+    if (selectedPatient) {
+      registry.set(selectedPatient.id, selectedPatient);
     }
 
-    return [patient.name, patient.cpf, patient.phone, patient.email]
-      .filter(Boolean)
-      .join(' ')
-      .toLowerCase()
-      .includes(deferredEntryPatientSearch);
-  });
+    return Array.from(registry.values()).slice(0, 10);
+  }, [
+    activePatients,
+    deferredEntryPatientSearch,
+    entryForm.patientId,
+    entryPatientResults,
+    patients,
+  ]);
   const visibleEntryDoctors = paDoctors.filter((doctor) => {
     if (doctor.id === entryForm.doctorId) {
       return true;
@@ -6705,6 +6734,10 @@ function EmergencyOperationalPage({
   });
   const selectedEntryDoctor =
     doctors.find((doctor) => doctor.id === entryForm.doctorId) ?? null;
+  const selectedEntryPatient =
+    patients.find((patient) => patient.id === entryForm.patientId) ??
+    entryPatientResults.find((patient) => patient.id === entryForm.patientId) ??
+    null;
   const canCreateEmergencyEntry =
     Boolean(entryForm.patientId) && Boolean(entryForm.doctorId);
   const visibleAppointments =
@@ -6720,12 +6753,75 @@ function EmergencyOperationalPage({
         : paAppointments;
   const primaryLink =
     mode === 'exams' || mode === 'orders'
-      ? '/pedidos-exames'
+      ? '/pa-pedidos'
       : mode === 'imaging'
-        ? '/laudos'
+        ? '/pa-imagem'
       : mode === 'dispensation'
-        ? '/farmacia'
+        ? '/pa-dispensacao-medica'
         : '/pronto-atendimento';
+
+  useEffect(() => {
+    const searchTerm = entryPatientSearch.trim();
+
+    if (searchTerm.length < 2 || !sessionToken) {
+      setEntryPatientResults([]);
+      setEntryPatientSearchStatus('idle');
+      setEntryPatientSearchError('');
+      return;
+    }
+
+    let isActive = true;
+    setEntryPatientSearchStatus('loading');
+    setEntryPatientSearchError('');
+
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        const response = await apiRequest<PaginatedResponse<Patient>>(
+          `/patients?page=1&limit=10&q=${encodeURIComponent(searchTerm)}`,
+          { token: sessionToken },
+        );
+
+        if (!isActive) {
+          return;
+        }
+
+        setEntryPatientResults(response.data ?? []);
+        setEntryPatientSearchStatus('ready');
+      } catch (error) {
+        if (!isActive) {
+          return;
+        }
+
+        setEntryPatientResults([]);
+        setEntryPatientSearchStatus('error');
+        setEntryPatientSearchError(
+          error instanceof Error
+            ? error.message
+            : 'Nao foi possivel buscar pacientes.',
+        );
+      }
+    }, 280);
+
+    return () => {
+      isActive = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [entryPatientSearch, sessionToken]);
+
+  function selectEntryPatient(patient: Patient) {
+    setEntryForm((current) => ({
+      ...current,
+      patientId: patient.id,
+    }));
+    setEntryPatientSearch(formatPatientSearchLabel(patient));
+  }
+
+  function openPatientRegistration() {
+    setIsEmergencyEntryOpen(false);
+    navigate('/pacientes', {
+      state: { initialSearch: entryPatientSearch.trim() },
+    });
+  }
 
   async function submitEmergencyEntry(
     event: React.FormEvent<HTMLFormElement>,
@@ -6832,7 +6928,7 @@ function EmergencyOperationalPage({
             <NavLink className="ghost-button" to="/pronto-atendimento">
               Ver fila medica PA
             </NavLink>
-            <NavLink className="ghost-button" to="/laudos">
+            <NavLink className="ghost-button" to="/pa-imagem">
               Laudos e resultados
             </NavLink>
           </div>
@@ -6963,7 +7059,7 @@ function EmergencyOperationalPage({
         eyebrow="Recepcao PA"
         isOpen={mode === 'reception' && isEmergencyEntryOpen}
         onClose={() => setIsEmergencyEntryOpen(false)}
-        size="wide"
+        size="expanded"
         title="Entrada imediata no pronto atendimento"
         toneLabel="Sem agendamento"
       >
@@ -6999,32 +7095,78 @@ function EmergencyOperationalPage({
                 <label className="field">
                   <span>Buscar paciente</span>
                   <input
-                    onChange={(event) =>
-                      setEntryPatientSearch(event.target.value)
-                    }
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setEntryPatientSearch(value);
+
+                      if (entryForm.patientId) {
+                        setEntryForm((current) => ({
+                          ...current,
+                          patientId: '',
+                        }));
+                      }
+                    }}
                     placeholder="Nome, CPF, telefone ou email"
                     value={entryPatientSearch}
                   />
                 </label>
-                <label className="field">
+                <div className="field">
                   <span>Paciente localizado</span>
-                  <select
-                    onChange={(event) =>
-                      setEntryForm((current) => ({
-                        ...current,
-                        patientId: event.target.value,
-                      }))
+                  <input
+                    readOnly
+                    value={
+                      selectedEntryPatient
+                        ? formatPatientSearchLabel(selectedEntryPatient)
+                        : 'Selecione na busca inteligente'
                     }
-                    value={entryForm.patientId}
-                  >
-                    <option value="">Selecione o paciente</option>
-                    {visibleEntryPatients.map((patient) => (
-                      <option key={patient.id} value={patient.id}>
-                        {patient.name} - {patient.cpf}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                  />
+                </div>
+                <div className="smart-search-panel full-row">
+                  {entryPatientSearch.trim().length < 2 ? (
+                    <span className="smart-search-hint">
+                      Digite pelo menos 2 caracteres para consultar o cadastro.
+                    </span>
+                  ) : (
+                    <>
+                      <div className="smart-search-status">
+                        {entryPatientSearchStatus === 'loading'
+                          ? 'Buscando no banco de dados...'
+                          : entryPatientSearchStatus === 'error'
+                            ? entryPatientSearchError
+                            : `${visibleEntryPatients.length} paciente(s) encontrado(s)`}
+                      </div>
+                      {visibleEntryPatients.length > 0 ? (
+                        <div className="smart-search-results">
+                          {visibleEntryPatients.map((patient) => (
+                            <button
+                              className="smart-search-option"
+                              key={patient.id}
+                              onClick={() => selectEntryPatient(patient)}
+                              type="button"
+                            >
+                              <strong>{patient.name}</strong>
+                              <span>
+                                {formatPatientBirthDate(patient.birthDate)} - CPF{' '}
+                                {patient.cpf || 'sem CPF'}
+                              </span>
+                              <small>
+                                {patient.phone || 'sem telefone'}
+                                {patient.email ? ` - ${patient.email}` : ''}
+                              </small>
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                      <button
+                        className="ghost-button smart-search-new"
+                        onClick={openPatientRegistration}
+                        type="button"
+                      >
+                        Cadastrar novo paciente
+                      </button>
+                    </>
+                  )}
+                </div>
                 <label className="field">
                   <span>Convênio</span>
                   <input
@@ -7807,6 +7949,24 @@ function createProcedureForm(procedure: Procedure): ProcedureFormState {
 
 function formatDateInput(value: string) {
   return new Date(value).toISOString().slice(0, 10);
+}
+
+function formatPatientBirthDate(value?: string | null) {
+  if (!value) {
+    return 'data nao informada';
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return 'data nao informada';
+  }
+
+  return new Intl.DateTimeFormat('pt-BR').format(date);
+}
+
+function formatPatientSearchLabel(patient: Patient) {
+  return `${patient.name} - ${patient.cpf || 'sem CPF'}`;
 }
 
 function normalizeDigits(value: string) {
