@@ -13,6 +13,28 @@ import { QueryPatientDto } from './dto/query-patient.dto';
 export class PatientsService {
   constructor(private prisma: PrismaService) {}
 
+  private readonly patientListSelect = {
+    id: true,
+    name: true,
+    cpf: true,
+    rg: true,
+    birthDate: true,
+    gender: true,
+    bloodType: true,
+    phone: true,
+    email: true,
+    address: true,
+    city: true,
+    state: true,
+    zipCode: true,
+    emergencyContact: true,
+    emergencyPhone: true,
+    status: true,
+    blockReason: true,
+    createdAt: true,
+    updatedAt: true,
+  } satisfies Prisma.PatientSelect;
+
   async createPatient(dto: CreatePatientDto) {
     const existingPatient = await this.prisma.patient.findUnique({
       where: { cpf: dto.cpf },
@@ -83,6 +105,7 @@ export class PatientsService {
     const [patients, total] = await Promise.all([
       this.prisma.patient.findMany({
         where,
+        select: this.patientListSelect,
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },

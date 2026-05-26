@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD, APP_INTERCEPTOR, Reflector } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { LoggerModule } from 'nestjs-pino';
 import configuration from './config/configuration';
 import { PrismaModule } from './infra/prisma/prisma.module';
 import { AgreementsModule } from './modules/agreements/agreements.module';
@@ -17,10 +18,12 @@ import { CommunicationsModule } from './modules/communications/communications.mo
 import { DocumentTemplatesModule } from './modules/document-templates/document-templates.module';
 import { DoctorsModule } from './modules/doctors/doctors.module';
 import { ExamOrdersModule } from './modules/exam-orders/exam-orders.module';
+import { HealthModule } from './modules/health/health.module';
 import { NursesModule } from './modules/nurses/nurses.module';
 import { PatientsModule } from './modules/patients/patients.module';
 import { PricingModule } from './modules/pricing/pricing.module';
 import { ProceduresModule } from './modules/procedures/procedures.module';
+import { RealtimeModule } from './modules/realtime/realtime.module';
 import { SectorsModule } from './modules/sectors/sectors.module';
 import { UsersModule } from './modules/users/users.module';
 
@@ -30,6 +33,22 @@ import { UsersModule } from './modules/users/users.module';
       isGlobal: true,
       load: [configuration],
       envFilePath: '.env',
+    }),
+    LoggerModule.forRoot({
+      pinoHttp: {
+        level: process.env.LOG_LEVEL ?? 'info',
+        transport:
+          process.env.NODE_ENV === 'production'
+            ? undefined
+            : {
+                target: 'pino-pretty',
+                options: {
+                  colorize: true,
+                  singleLine: true,
+                  translateTime: 'SYS:standard',
+                },
+              },
+      },
     }),
     ThrottlerModule.forRootAsync({
       inject: [ConfigService],
@@ -52,11 +71,13 @@ import { UsersModule } from './modules/users/users.module';
     DocumentTemplatesModule,
     ProceduresModule,
     ExamOrdersModule,
+    HealthModule,
     PricingModule,
     CbhpmModule,
     AgreementsModule,
     BillingGuidesModule,
     BudgetEstimatesModule,
+    RealtimeModule,
     AuditModule,
   ],
   providers: [

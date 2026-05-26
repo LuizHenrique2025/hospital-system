@@ -1,11 +1,15 @@
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { Logger as PinoLogger } from 'nestjs-pino';
+import compression from 'compression';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  app.useLogger(app.get(PinoLogger));
+  const logger = new Logger('Bootstrap');
   const configService = app.get(ConfigService);
   const corsOrigin = configService.get<string>('cors.origin');
   const allowedOrigins = corsOrigin
@@ -14,6 +18,7 @@ async function bootstrap() {
     .filter(Boolean);
 
   app.setGlobalPrefix('api');
+  app.use(compression());
 
   app.enableCors({
     origin: allowedOrigins?.length ? allowedOrigins : false,
@@ -35,8 +40,8 @@ async function bootstrap() {
     .setDescription('API para gerenciamento de sistema hospitalar')
     .setVersion('1.0')
     .addBearerAuth()
-    .addTag('auth', 'Endpoints de autenticação')
-    .addTag('users', 'Endpoints de usuários')
+    .addTag('auth', 'Endpoints de autenticacao')
+    .addTag('users', 'Endpoints de usuarios')
     .addTag('patients', 'Endpoints de pacientes')
     .build();
 
@@ -47,8 +52,8 @@ async function bootstrap() {
 
   const port = configService.get<number>('port') || 3000;
   await app.listen(port);
-  console.log(`🚀 Aplicação rodando na porta ${port}`);
-  console.log(`📚 Documentação Swagger: http://localhost:${port}/api/docs`);
+  logger.log(`Aplicacao rodando na porta ${port}`);
+  logger.log(`Documentacao Swagger: http://localhost:${port}/api/docs`);
 }
 
 void bootstrap();

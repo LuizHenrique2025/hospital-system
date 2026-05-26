@@ -1,12 +1,13 @@
 import {
-  createContext,
   startTransition,
   useCallback,
+  createContext,
   useContext,
   useMemo,
   useState,
   type ReactNode,
 } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { apiRequest } from '../lib/api';
 import type {
@@ -73,6 +74,7 @@ const DashboardContext = createContext<DashboardContextValue | null>(null);
 
 export function DashboardProvider({ children }: { children: ReactNode }) {
   const { clearSession, setSession } = useAuth();
+  const queryClient = useQueryClient();
   const [cachedDashboard] = useState<DashboardCache | null>(() =>
     readStoredValue<DashboardCache>(dashboardCacheKey),
   );
@@ -109,6 +111,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
 
   const resetDashboard = useCallback(() => {
     localStorage.removeItem(dashboardCacheKey);
+    queryClient.removeQueries({ queryKey: ['dashboard'] });
     setUsers(emptyDashboard.users);
     setPatients(emptyDashboard.patients);
     setPatientTotal(emptyDashboard.patientTotal);
@@ -118,67 +121,17 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     setAppointments(emptyDashboard.appointments);
     setCommunicationDashboard(emptyDashboard.communicationDashboard);
     setAuditSummary(emptyDashboard.auditSummary);
-  }, []);
+  }, [queryClient]);
 
   const loadDashboard = useCallback(
     async (token: string) => {
       setIsDashboardBusy(true);
 
       try {
-        const profile = await apiRequest<UserProfile>('/auth/profile', {
-          token,
+        const { nextDashboard, profile } = await queryClient.fetchQuery({
+          queryKey: ['dashboard', token],
+          queryFn: () => fetchDashboard(token),
         });
-        const [
-          userResponse,
-          patientResponse,
-          doctorResponse,
-          nurseResponse,
-          sectorResponse,
-          appointmentResponse,
-          communicationResponse,
-          auditSummaryResponse,
-        ] = await Promise.all([
-          profile.role === 'ADMIN'
-            ? apiRequest<PaginatedResponse<UserProfile>>(
-                '/users?page=1&limit=100',
-                { token },
-              )
-            : Promise.resolve({ data: [] }),
-          apiRequest<PaginatedResponse<Patient>>('/patients?page=1&limit=50', {
-            token,
-          }),
-          apiRequest<Doctor[]>('/doctors', { token }),
-          apiRequest<Nurse[]>('/nurses', { token }),
-          apiRequest<Sector[]>('/sectors', { token }),
-          apiRequest<PaginatedResponse<Appointment>>(
-            '/appointments?page=1&limit=50',
-            { token },
-          ),
-          apiRequest<CommunicationDashboard>('/communications/dashboard', {
-            token,
-          }),
-          profile.role === 'ADMIN'
-            ? apiRequest<AuditSummary>('/audit/summary', { token })
-            : Promise.resolve(emptyAuditSummary),
-        ]);
-
-        const nextUsers = userResponse.data ?? [];
-        const nextPatients = patientResponse.data ?? [];
-        const nextPatientTotal =
-          patientResponse.meta?.total ??
-          patientResponse.total ??
-          nextPatients.length;
-        const nextDashboard = {
-          appointments: appointmentResponse.data ?? [],
-          auditSummary: auditSummaryResponse,
-          communicationDashboard: communicationResponse,
-          doctors: doctorResponse,
-          nurses: nurseResponse,
-          patients: nextPatients,
-          patientTotal: nextPatientTotal,
-          sectors: sectorResponse,
-          users: nextUsers,
-        };
 
         startTransition(() => {
           setSession({ token, profile });
@@ -202,7 +155,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
         setIsDashboardBusy(false);
       }
     },
-    [clearSession, resetDashboard, setSession],
+    [clearSession, queryClient, resetDashboard, setSession],
   );
 
   const value = useMemo(
@@ -241,6 +194,64 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
       {children}
     </DashboardContext.Provider>
   );
+}
+
+async function fetchDashboard(token: string) {
+  const profile = await apiRequest<UserProfile>('/auth/profile', {
+    token,
+  });
+  const [
+    userResponse,
+    patientResponse,
+    doctorResponse,
+    nurseResponse,
+    sectorResponse,
+    appointmentResponse,
+    communicationResponse,
+    auditSummaryResponse,
+  ] = await Promise.all([
+    profile.role === 'ADMIN'
+      ? apiRequest<PaginatedResponse<UserProfile>>('/users?page=1&limit=100', {
+          token,
+        })
+      : Promise.resolve({ data: [] }),
+    apiRequest<PaginatedResponse<Patient>>('/patients?page=1&limit=50', {
+      token,
+    }),
+    apiRequest<Doctor[]>('/doctors', { token }),
+    apiRequest<Nurse[]>('/nurses', { token }),
+    apiRequest<Sector[]>('/sectors', { token }),
+    apiRequest<PaginatedResponse<Appointment>>(
+      '/appointments?page=1&limit=50',
+      { token },
+    ),
+    apiRequest<CommunicationDashboard>('/communications/dashboard', {
+      token,
+    }),
+    profile.role === 'ADMIN'
+      ? apiRequest<AuditSummary>('/audit/summary', { token })
+      : Promise.resolve(emptyAuditSummary),
+  ]);
+
+  const nextUsers = userResponse.data ?? [];
+  const nextPatients = patientResponse.data ?? [];
+  const nextPatientTotal =
+    patientResponse.meta?.total ?? patientResponse.total ?? nextPatients.length;
+
+  return {
+    nextDashboard: {
+      appointments: appointmentResponse.data ?? [],
+      auditSummary: auditSummaryResponse,
+      communicationDashboard: communicationResponse,
+      doctors: doctorResponse,
+      nurses: nurseResponse,
+      patients: nextPatients,
+      patientTotal: nextPatientTotal,
+      sectors: sectorResponse,
+      users: nextUsers,
+    },
+    profile,
+  };
 }
 
 export function useDashboard() {

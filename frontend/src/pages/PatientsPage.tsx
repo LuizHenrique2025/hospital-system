@@ -2,10 +2,12 @@
 import type React from 'react';
 
 import { DirectoryState } from '../components/ui/DirectoryState';
+import { EmptyState } from '../components/ui/EmptyState';
 import { OperationalModal } from '../components/ui/OperationalModal';
 import { OperationalSearchCard } from '../components/ui/OperationalSearchCard';
 import { RecordLine } from '../components/ui/RecordLine';
 import { ResultPagination } from '../components/ui/ResultPagination';
+import { StatusBadge } from '../components/ui/StatusBadge';
 import { apiRequest } from '../lib/api';
 import {
   bloodTypes,
@@ -242,16 +244,26 @@ export function PatientsPage({
               description="Use a busca acima para consultar a base ou clique em Novo paciente para abrir um cadastro limpo."
             />
           ) : patientSearchStatus === 'loading' ? (
-            <p className="empty-state">Buscando pacientes no banco...</p>
+            <EmptyState
+              icon="..."
+              title="Consultando o cadastro"
+              description="Estamos buscando pacientes no banco de dados."
+            />
           ) : patientSearchStatus === 'error' ? (
-            <p className="empty-state">
-              {patientSearchError || 'Nao foi possivel buscar pacientes.'}
-            </p>
+            <EmptyState
+              icon="!"
+              title="Busca indisponivel"
+              description={
+                patientSearchError || 'Nao foi possivel buscar pacientes.'
+              }
+              action="Tente novamente em instantes."
+            />
           ) : patientResults.length === 0 ? (
-            <DirectoryState
-              code="00"
+            <EmptyState
+              icon="+"
               title="Nenhum paciente encontrado."
               description="Confira o termo pesquisado ou inicie um novo cadastro se for uma primeira passagem."
+              action="Use o botao Novo paciente para cadastrar."
             />
           ) : (
             <>
@@ -272,13 +284,10 @@ export function PatientsPage({
                     </small>
                   </span>
                   <span>
-                    <em
-                      className={`patient-status-pill ${patientStatusTone(
-                        patient.status,
-                      )}`}
-                    >
-                      {patientStatusLabel(patient.status)}
-                    </em>
+                    <StatusBadge
+                      label={patientStatusLabel(patient.status)}
+                      tone={patientStatusTone(patient.status)}
+                    />
                     <small>{patient.city || 'Cidade nao informada'}</small>
                   </span>
                   <span>{patient.phone}</span>

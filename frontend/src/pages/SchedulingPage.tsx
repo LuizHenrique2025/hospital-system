@@ -2,6 +2,7 @@
 import type React from 'react';
 
 import { DirectoryState } from '../components/ui/DirectoryState';
+import { StatusBadge } from '../components/ui/StatusBadge';
 import { OperationalModal } from '../components/ui/OperationalModal';
 import { OperationalSearchCard } from '../components/ui/OperationalSearchCard';
 import {
@@ -182,10 +183,10 @@ export function SchedulingPage({
                 <span>{appointment.doctor.user.name}</span>
                 <span>{formatDateTime(appointment.appointmentDate)}</span>
                 <span>
-                  <em
-                    className={`status-dot ${statusTone(appointment.status)}`}
+                  <StatusBadge
+                    label={appointment.status}
+                    tone={statusTone(appointment.status)}
                   />
-                  {appointment.status}
                 </span>
                 <span>{appointment.type}</span>
               </div>

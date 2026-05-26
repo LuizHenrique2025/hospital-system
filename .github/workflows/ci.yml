@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: hospital_system
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d hospital_system"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+
+      - run: npm ci
+      - run: npm --prefix frontend ci
+      - run: npx prisma generate
+      - run: npm run build
+      - run: npm run build:front
+      - run: npm test -- --runInBand
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5433/hospital_system?schema=public&connection_limit=5&pool_timeout=20
+          JWT_SECRET: ci-secret

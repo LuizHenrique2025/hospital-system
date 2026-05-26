@@ -6,7 +6,7 @@ import {
   type Dispatch,
   type SetStateAction,
 } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 
 import type { Session } from '../../contexts/AuthContext';
 import {
@@ -20,6 +20,7 @@ import {
 } from '../../config/navigation';
 import { roleLabel } from '../../lib/roles';
 import type { Role } from '../../lib/types';
+import { PageErrorBoundary } from './PageErrorBoundary';
 import { RouteFallback } from './RouteFallback';
 
 type Notice = {
@@ -54,6 +55,8 @@ export function WorkspaceLayout({
   session,
   transitionEnvironment,
 }: WorkspaceLayoutProps) {
+  const location = useLocation();
+
   return (
     <main className="app-shell">
       <section className="workspace-shell">
@@ -151,9 +154,11 @@ export function WorkspaceLayout({
           </aside>
 
           <section className="workspace-content">
-            <Suspense fallback={<RouteFallback />}>
-              <Outlet />
-            </Suspense>
+            <PageErrorBoundary key={location.pathname}>
+              <Suspense fallback={<RouteFallback />}>
+                <Outlet />
+              </Suspense>
+            </PageErrorBoundary>
           </section>
         </section>
       </section>

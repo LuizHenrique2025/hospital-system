@@ -1,0 +1,9 @@
+node_modules
+frontend/node_modules
+dist
+frontend/dist
+coverage
+.git
+.env
+*.log
+.codex-logs
