@@ -11,7 +11,10 @@ import { PaginationDto, PaginatedResponseDto } from './dto/pagination.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserResponseDto } from './dto/user-response.dto';
 
-type AuthUser = Pick<User, 'id' | 'username' | 'email' | 'password' | 'role'>;
+type AuthUser = Pick<
+  User,
+  'id' | 'username' | 'email' | 'password' | 'role' | 'active'
+>;
 
 @Injectable()
 export class UsersService {
@@ -26,6 +29,7 @@ export class UsersService {
         email: true,
         password: true,
         role: true,
+        active: true,
       },
     });
   }
@@ -39,6 +43,7 @@ export class UsersService {
         email: true,
         password: true,
         role: true,
+        active: true,
       },
     });
   }
@@ -56,12 +61,13 @@ export class UsersService {
 
     const [users, total] = await Promise.all([
       this.prisma.user.findMany({
+        where: { active: true },
         skip,
         take: limit,
         select: this.safeUserSelect(),
         orderBy: { createdAt: 'desc' },
       }),
-      this.prisma.user.count(),
+      this.prisma.user.count({ where: { active: true } }),
     ]);
 
     return {
@@ -74,8 +80,8 @@ export class UsersService {
   }
 
   async findById(id: string): Promise<UserResponseDto | null> {
-    return this.prisma.user.findUnique({
-      where: { id },
+    return this.prisma.user.findFirst({
+      where: { id, active: true },
       select: this.safeUserSelect(),
     });
   }
@@ -164,8 +170,17 @@ export class UsersService {
       throw new NotFoundException('Usuario nao encontrado');
     }
 
-    await this.prisma.user.delete({
+    await this.prisma.user.update({
       where: { id },
+      data: { active: false },
+    });
+
+    await this.prisma.refreshToken.updateMany({
+      where: {
+        userId: id,
+        revokedAt: null,
+      },
+      data: { revokedAt: new Date() },
     });
   }
 
@@ -176,6 +191,7 @@ export class UsersService {
       username: true,
       email: true,
       role: true,
+      active: true,
       createdAt: true,
       updatedAt: true,
     };

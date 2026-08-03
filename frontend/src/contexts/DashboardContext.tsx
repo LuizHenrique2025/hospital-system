@@ -7,9 +7,9 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 
-import { apiRequest } from '../lib/api';
+import { apiRequest, isUnauthorizedError } from '../lib/api';
 import type {
   Appointment,
   AuditSummary,
@@ -37,8 +37,13 @@ type DashboardCache = {
 
 type DashboardContextValue = DashboardCache & {
   isDashboardBusy: boolean;
-  loadDashboard: (token: string) => Promise<void>;
+  loadDashboard: (token: string, refreshToken?: string) => Promise<void>;
   resetDashboard: () => void;
+};
+
+type AuthRefreshResponse = {
+  access_token: string;
+  refresh_token: string;
 };
 
 export const emptyCommunicationDashboard: CommunicationDashboard = {
@@ -124,17 +129,19 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
   }, [queryClient]);
 
   const loadDashboard = useCallback(
-    async (token: string) => {
+    async (token: string, refreshToken?: string) => {
       setIsDashboardBusy(true);
 
       try {
-        const { nextDashboard, profile } = await queryClient.fetchQuery({
-          queryKey: ['dashboard', token],
-          queryFn: () => fetchDashboard(token),
-        });
+        const { effectiveRefreshToken, effectiveToken, nextDashboard, profile } =
+          await loadDashboardWithFreshSession(queryClient, token, refreshToken);
 
         startTransition(() => {
-          setSession({ token, profile });
+          setSession({
+            token: effectiveToken,
+            refreshToken: effectiveRefreshToken,
+            profile,
+          });
           setUsers(nextDashboard.users);
           setPatients(nextDashboard.patients);
           setPatientTotal(nextDashboard.patientTotal);
@@ -194,6 +201,49 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
       {children}
     </DashboardContext.Provider>
   );
+}
+
+async function loadDashboardWithFreshSession(
+  queryClient: QueryClient,
+  token: string,
+  refreshToken?: string,
+) {
+  try {
+    const { nextDashboard, profile } = await queryClient.fetchQuery({
+      queryKey: ['dashboard', token],
+      queryFn: () => fetchDashboard(token),
+    });
+
+    return {
+      effectiveRefreshToken: refreshToken,
+      effectiveToken: token,
+      nextDashboard,
+      profile,
+    };
+  } catch (error) {
+    if (!refreshToken || !isUnauthorizedError(error)) {
+      throw error;
+    }
+
+    const refreshedSession = await apiRequest<AuthRefreshResponse>(
+      '/auth/refresh',
+      {
+        body: { refreshToken },
+      },
+    );
+
+    const { nextDashboard, profile } = await queryClient.fetchQuery({
+      queryKey: ['dashboard', refreshedSession.access_token],
+      queryFn: () => fetchDashboard(refreshedSession.access_token),
+    });
+
+    return {
+      effectiveRefreshToken: refreshedSession.refresh_token,
+      effectiveToken: refreshedSession.access_token,
+      nextDashboard,
+      profile,
+    };
+  }
 }
 
 async function fetchDashboard(token: string) {

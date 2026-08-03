@@ -44,12 +44,18 @@ describe('AuthController', () => {
   });
 
   it('should call login', async () => {
-    mockAuthService.login.mockResolvedValue({ access_token: 'token' });
+    mockAuthService.login.mockResolvedValue({
+      access_token: 'token',
+      refresh_token: 'refresh-token',
+    });
     const result = await controller.login({
       username: 'test',
       password: '123456',
     });
-    expect(result).toEqual({ access_token: 'token' });
+    expect(result).toEqual({
+      access_token: 'token',
+      refresh_token: 'refresh-token',
+    });
     expect(mockAuthService.login).toHaveBeenCalledWith({
       username: 'test',
       password: '123456',

@@ -16,6 +16,7 @@ type RequestUser = {
 
 type AuditedRequest = {
   baseUrl?: string;
+  body?: Record<string, unknown>;
   headers?: Record<string, string | string[] | undefined>;
   ip?: string;
   method?: string;
@@ -96,6 +97,7 @@ export class AuditInterceptor implements NestInterceptor {
         queryKeys,
       },
       method,
+      patientId: this.resolvePatientId(request),
       resource: this.resolveResource(route),
       resourceId: this.resolveResourceId(request.params),
       route,
@@ -141,6 +143,19 @@ export class AuditInterceptor implements NestInterceptor {
       params.procedureId ??
       params.codigo
     );
+  }
+
+  private resolvePatientId(request: AuditedRequest) {
+    const bodyPatientId =
+      typeof request.body?.patientId === 'string'
+        ? request.body.patientId
+        : undefined;
+    const queryPatientId =
+      typeof request.query?.patientId === 'string'
+        ? request.query.patientId
+        : undefined;
+
+    return request.params?.patientId ?? bodyPatientId ?? queryPatientId;
   }
 
   private resolvePurpose(route: string) {

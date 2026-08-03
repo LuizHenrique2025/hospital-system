@@ -34,6 +34,12 @@ export class UserResponseDto {
   role: Role;
 
   @ApiProperty({
+    description: 'Indica se o usuario esta ativo no sistema',
+    example: true,
+  })
+  active: boolean;
+
+  @ApiProperty({
     description: 'Data de criação',
     example: '2024-01-01T00:00:00.000Z',
   })

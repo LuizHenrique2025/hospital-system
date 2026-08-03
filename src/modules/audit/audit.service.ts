@@ -13,6 +13,7 @@ type AuditRecordInput = {
   ipAddress?: string;
   metadata?: Prisma.InputJsonValue;
   method: string;
+  patientId?: string;
   resource: string;
   resourceId?: string;
   route: string;
@@ -33,6 +34,7 @@ export class AuditService {
         ipAddress: input.ipAddress,
         metadata: input.metadata ?? Prisma.JsonNull,
         method: input.method,
+        patientId: input.patientId,
         resource: input.resource,
         resourceId: input.resourceId,
         route: input.route,

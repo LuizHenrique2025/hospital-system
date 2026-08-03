@@ -32,7 +32,9 @@ export class AppointmentsService {
     const limit = Math.min(Math.max(query.limit ?? 25, 1), 100);
     const skip = (page - 1) * limit;
     const search = query.q?.trim();
-    const where: Prisma.AppointmentWhereInput = {};
+    const where: Prisma.AppointmentWhereInput = query.status
+      ? {}
+      : { status: { not: 'CANCELADA' } };
 
     if (query.status) {
       where.status = query.status;
@@ -188,11 +190,15 @@ export class AppointmentsService {
   async deleteAppointment(id: string) {
     await this.findOne(id);
 
-    await this.prisma.appointment.delete({
+    await this.prisma.appointment.update({
       where: { id },
+      data: {
+        status: 'CANCELADA',
+        notes: 'Atendimento cancelado por exclusao administrativa',
+      },
     });
 
-    return { message: 'Consulta excluida com sucesso' };
+    return { message: 'Consulta cancelada com sucesso' };
   }
 
   private async ensurePatientExists(patientId: string) {

@@ -7,6 +7,16 @@ type RequestOptions = {
   method?: string;
 };
 
+export class ApiRequestError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiRequestError';
+    this.status = status;
+  }
+}
+
 export async function apiRequest<T>(
   path: string,
   options: RequestOptions = {},
@@ -39,7 +49,7 @@ export async function apiRequest<T>(
       message = `Erro ${response.status}`;
     }
 
-    throw new Error(message);
+    throw new ApiRequestError(message, response.status);
   }
 
   if (response.status === 204) {
@@ -47,4 +57,8 @@ export async function apiRequest<T>(
   }
 
   return (await response.json()) as T;
+}
+
+export function isUnauthorizedError(error: unknown) {
+  return error instanceof ApiRequestError && error.status === 401;
 }

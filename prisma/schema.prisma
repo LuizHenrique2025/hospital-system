@@ -179,6 +179,7 @@ model User {
   email     String   @unique
   password  String
   role      Role     @default(ATENDENTE)
+  active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -187,6 +188,7 @@ model User {
   sentInternalMessages     InternalMessage[]      @relation("SentInternalMessages")
   receivedInternalMessages InternalMessage[]      @relation("ReceivedInternalMessages")
   auditLogs                AuditLog[]
+  refreshTokens            RefreshToken[]
   createdBillingGuides     BillingGuide[]         @relation("CreatedBillingGuides")
   updatedBillingGuides     BillingGuide[]         @relation("UpdatedBillingGuides")
   guideMovements           BillingGuideMovement[] @relation("BillingGuideMovementResponsible")
@@ -243,6 +245,7 @@ model Doctor {
   zipCode     String?
   documents   String[] @default([])
   bio         String?
+  active      Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -267,6 +270,7 @@ model Nurse {
   state     String?
   zipCode   String?
   documents String[] @default([])
+  active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -721,6 +725,7 @@ model AuditLog {
   action     AuditAction
   resource   String
   resourceId String?
+  patientId  String?
   route      String
   method     String
   ipAddress  String?
@@ -734,5 +739,22 @@ model AuditLog {
   @@index([actorId, createdAt])
   @@index([action, createdAt])
   @@index([resource, resourceId])
+  @@index([patientId, createdAt])
   @@map("audit_logs")
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
 }

@@ -554,6 +554,17 @@ function App() {
   const [appointmentForm, setAppointmentForm] = useState(
     initialAppointmentForm,
   );
+
+  const handleDashboardSyncError = useCallback((error: unknown) => {
+    const fallbackMessage = 'Sessao expirada. Entre novamente.';
+    const message = error instanceof Error ? error.message : fallbackMessage;
+
+    setNotice({
+      kind: 'info',
+      text: message === 'Unauthorized' ? fallbackMessage : message,
+    });
+  }, []);
+
   useEffect(() => {
     if (!session?.token || !restoredSessionToken) {
       return;
@@ -564,11 +575,19 @@ function App() {
     }
 
     const syncTimer = window.setTimeout(() => {
-      void loadDashboard(session.token);
+      void loadDashboard(session.token, session.refreshToken).catch(
+        handleDashboardSyncError,
+      );
     }, 0);
 
     return () => window.clearTimeout(syncTimer);
-  }, [loadDashboard, restoredSessionToken, session?.token]);
+  }, [
+    handleDashboardSyncError,
+    loadDashboard,
+    restoredSessionToken,
+    session?.refreshToken,
+    session?.token,
+  ]);
 
   useEffect(() => {
     if (!session?.token) {
@@ -578,7 +597,9 @@ function App() {
     const queueEvents = new EventSource(`${API_URL}/realtime/queue`);
 
     queueEvents.onmessage = () => {
-      void loadDashboard(session.token);
+      void loadDashboard(session.token, session.refreshToken).catch(
+        handleDashboardSyncError,
+      );
     };
 
     queueEvents.onerror = () => {
@@ -586,18 +607,26 @@ function App() {
     };
 
     return () => queueEvents.close();
-  }, [loadDashboard, session?.token]);
+  }, [
+    handleDashboardSyncError,
+    loadDashboard,
+    session?.refreshToken,
+    session?.token,
+  ]);
 
   async function handleLogin(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsSubmitting(true);
 
     try {
-      const auth = await apiRequest<{ access_token: string }>('/auth/login', {
+      const auth = await apiRequest<{
+        access_token: string;
+        refresh_token: string;
+      }>('/auth/login', {
         body: loginForm,
       });
 
-      await loadDashboard(auth.access_token);
+      await loadDashboard(auth.access_token, auth.refresh_token);
       navigate(location.pathname === '/' ? '/central' : location.pathname, {
         replace: true,
       });
@@ -640,7 +669,7 @@ function App() {
       });
 
       setUserForm(initialUserForm);
-      await loadDashboard(session.token);
+      await loadDashboard(session.token, session.refreshToken);
       setNotice({
         kind: 'success',
         text: 'Usuario cadastrado com login unico.',
@@ -659,7 +688,19 @@ function App() {
     }
   }
 
-  function handleLogout() {
+  async function handleLogout() {
+    const refreshToken = session?.refreshToken;
+
+    if (refreshToken) {
+      try {
+        await apiRequest<{ message: string }>('/auth/logout', {
+          body: { refreshToken },
+        });
+      } catch {
+        // Mesmo se a revogacao remota falhar, a sessao local precisa encerrar.
+      }
+    }
+
     clearSession();
     resetDashboard();
     setPatientForm(initialPatientForm);
@@ -699,7 +740,7 @@ function App() {
 
       setPatientForm(initialPatientForm);
       setEditingPatientId(null);
-      await loadDashboard(session.token);
+      await loadDashboard(session.token, session.refreshToken);
       setNotice({
         kind: 'success',
         text: isEditingPatient
@@ -778,7 +819,7 @@ function App() {
       });
 
       setDoctorForm(initialDoctorForm);
-      await loadDashboard(session.token);
+      await loadDashboard(session.token, session.refreshToken);
       setNotice({
         kind: 'success',
         text: 'Medico cadastrado e liberado para agenda.',
@@ -836,7 +877,7 @@ function App() {
       });
 
       setNurseForm(initialNurseForm);
-      await loadDashboard(session.token);
+      await loadDashboard(session.token, session.refreshToken);
       setNotice({
         kind: 'success',
         text: 'Enfermeiro cadastrado com sucesso.',
@@ -876,7 +917,7 @@ function App() {
       });
 
       setSectorForm(initialSectorForm);
-      await loadDashboard(session.token);
+      await loadDashboard(session.token, session.refreshToken);
       setNotice({
         kind: 'success',
         text: 'Setor cadastrado com sucesso.',
@@ -917,7 +958,7 @@ function App() {
       });
 
       setAppointmentForm(initialAppointmentForm);
-      await loadDashboard(session.token);
+      await loadDashboard(session.token, session.refreshToken);
       setNotice({
         kind: 'success',
         text: 'Consulta registrada com sucesso.',
@@ -994,7 +1035,7 @@ function App() {
         },
       });
 
-      await loadDashboard(session.token);
+      await loadDashboard(session.token, session.refreshToken);
       setNotice({
         kind: 'success',
         text: 'Entrada de Pronto Atendimento aberta e enviada para triagem.',
@@ -1035,7 +1076,7 @@ function App() {
         },
       });
 
-      await loadDashboard(session.token);
+      await loadDashboard(session.token, session.refreshToken);
       setNotice({
         kind: 'success',
         text: 'Atendimento atualizado com sucesso.',
@@ -1195,7 +1236,11 @@ function App() {
             <OverviewPage
               appointments={appointments}
               communicationDashboard={communicationDashboard}
-              onDashboardRefresh={() => loadDashboard(session.token)}
+              onDashboardRefresh={() =>
+                loadDashboard(session.token, session.refreshToken).catch(
+                  handleDashboardSyncError,
+                )
+              }
               patientTotal={patientTotal}
               sessionToken={session.token}
             />

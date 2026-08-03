@@ -4,6 +4,7 @@ import {
   IsEmail,
   IsOptional,
   IsEnum,
+  IsBoolean,
   Matches,
   MinLength,
   MaxLength,
@@ -69,4 +70,13 @@ export class UpdateUserDto {
   @IsOptional()
   @IsEnum(Role)
   role?: Role;
+
+  @ApiProperty({
+    description: 'Define se o usuario esta ativo',
+    example: true,
+    required: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  active?: boolean;
 }

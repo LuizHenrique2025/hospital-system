@@ -11,6 +11,7 @@ import type { UserProfile } from '../lib/types';
 
 export type Session = {
   token: string;
+  refreshToken?: string;
   profile: UserProfile;
 };
 

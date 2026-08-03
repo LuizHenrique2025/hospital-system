@@ -13,6 +13,7 @@ export type UserProfile = {
   username: string;
   email: string;
   role: Role;
+  active?: boolean;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -43,6 +44,7 @@ export type AuditLog = {
   action: AuditAction;
   resource: string;
   resourceId?: string | null;
+  patientId?: string | null;
   route: string;
   method: string;
   ipAddress?: string | null;

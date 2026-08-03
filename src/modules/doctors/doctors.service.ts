@@ -50,6 +50,7 @@ export class DoctorsService {
       data: {
         ...dto,
         documents: dto.documents ?? [],
+        active: true,
       },
       include: this.defaultInclude(),
     });
@@ -57,14 +58,15 @@ export class DoctorsService {
 
   async findAll() {
     return this.prisma.doctor.findMany({
+      where: { active: true },
       include: this.defaultInclude(),
       orderBy: { createdAt: 'desc' },
     });
   }
 
   async findOne(id: string) {
-    const doctor = await this.prisma.doctor.findUnique({
-      where: { id },
+    const doctor = await this.prisma.doctor.findFirst({
+      where: { id, active: true },
       include: this.defaultInclude(),
     });
 
@@ -76,8 +78,8 @@ export class DoctorsService {
   }
 
   async findByUserId(userId: string) {
-    const doctor = await this.prisma.doctor.findUnique({
-      where: { userId },
+    const doctor = await this.prisma.doctor.findFirst({
+      where: { userId, active: true },
       include: this.defaultInclude(),
     });
 
@@ -115,11 +117,12 @@ export class DoctorsService {
   async deleteDoctor(id: string) {
     await this.findOne(id);
 
-    await this.prisma.doctor.delete({
+    await this.prisma.doctor.update({
       where: { id },
+      data: { active: false },
     });
 
-    return { message: 'Medico excluido com sucesso' };
+    return { message: 'Medico inativado com sucesso' };
   }
 
   private async ensureSectorExists(sectorId: string) {
@@ -141,6 +144,7 @@ export class DoctorsService {
           username: true,
           email: true,
           role: true,
+          active: true,
         },
       },
       sector: {

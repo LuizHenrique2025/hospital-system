@@ -50,6 +50,7 @@ export class NursesService {
       data: {
         ...dto,
         documents: dto.documents ?? [],
+        active: true,
       },
       include: this.defaultInclude(),
     });
@@ -57,14 +58,15 @@ export class NursesService {
 
   async findAll() {
     return this.prisma.nurse.findMany({
+      where: { active: true },
       include: this.defaultInclude(),
       orderBy: { createdAt: 'desc' },
     });
   }
 
   async findOne(id: string) {
-    const nurse = await this.prisma.nurse.findUnique({
-      where: { id },
+    const nurse = await this.prisma.nurse.findFirst({
+      where: { id, active: true },
       include: this.defaultInclude(),
     });
 
@@ -76,8 +78,8 @@ export class NursesService {
   }
 
   async findByUserId(userId: string) {
-    const nurse = await this.prisma.nurse.findUnique({
-      where: { userId },
+    const nurse = await this.prisma.nurse.findFirst({
+      where: { userId, active: true },
       include: this.defaultInclude(),
     });
 
@@ -115,11 +117,12 @@ export class NursesService {
   async deleteNurse(id: string) {
     await this.findOne(id);
 
-    await this.prisma.nurse.delete({
+    await this.prisma.nurse.update({
       where: { id },
+      data: { active: false },
     });
 
-    return { message: 'Enfermeiro excluido com sucesso' };
+    return { message: 'Enfermeiro inativado com sucesso' };
   }
 
   private async ensureSectorExists(sectorId: string) {
@@ -141,6 +144,7 @@ export class NursesService {
           username: true,
           email: true,
           role: true,
+          active: true,
         },
       },
       sector: {

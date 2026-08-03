@@ -42,7 +42,9 @@ export class ExamOrdersService {
     const limit = Math.min(Math.max(query.limit ?? 25, 1), 100);
     const skip = (page - 1) * limit;
     const search = query.q?.trim();
-    const where: Prisma.ExamOrderWhereInput = {};
+    const where: Prisma.ExamOrderWhereInput = query.status
+      ? {}
+      : { status: { not: 'CANCELED' } };
 
     if (query.status) {
       where.status = query.status;
@@ -161,11 +163,15 @@ export class ExamOrdersService {
   async deleteExamOrder(id: string) {
     await this.findOne(id);
 
-    await this.prisma.examOrder.delete({
+    await this.prisma.examOrder.update({
       where: { id },
+      data: {
+        status: 'CANCELED',
+        notes: 'Pedido cancelado por exclusao administrativa',
+      },
     });
 
-    return { message: 'Pedido de exames excluido com sucesso' };
+    return { message: 'Pedido de exames cancelado com sucesso' };
   }
 
   private async validateReferences(
